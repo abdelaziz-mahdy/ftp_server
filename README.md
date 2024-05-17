@@ -10,6 +10,9 @@ This package provides a simple FTP server implementation in Dart. It supports bo
 - **Read-Only Mode**: Disable write operations for enhanced security.
 - **Authentication**: Basic username and password authentication.
 
+## Compatibility
+
+This package has been tested on macOS. It may not work as expected on Windows. If you encounter any issues, feel free to open an issue, and we will check it out.
 
 ## Usage
 
