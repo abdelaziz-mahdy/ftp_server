@@ -201,6 +201,16 @@ class FtpSession {
     }
   }
 
+  void changeToParentDirectory() {
+    var parentDir = Directory(currentDirectory).parent;
+    if (_isPathAllowed(parentDir.path) && parentDir.existsSync()) {
+      currentDirectory = parentDir.path;
+      sendResponse('250 Directory changed to $currentDirectory');
+    } else {
+      sendResponse('550 Access denied or directory not found');
+    }
+  }
+
   void makeDirectory(String dirname) async {
     String newDirPath = '$currentDirectory/$dirname';
     if (!_isPathAllowed(newDirPath)) {

@@ -50,6 +50,7 @@ The server supports the following FTP commands:
 - `RETR <filename>`: Retrieve the specified file.
 - `STOR <filename>`: Store a file (disabled in read-only mode).
 - `CWD <directory>`: Change the current directory.
+- `CDUP`: Change to the parent directory.
 - `MKD <directory>`: Make a new directory (disabled in read-only mode).
 - `RMD <directory>`: Remove a directory (disabled in read-only mode).
 - `DELE <filename>`: Delete a file (disabled in read-only mode).

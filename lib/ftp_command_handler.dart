@@ -57,6 +57,9 @@ class FTPCommandHandler {
       case 'CWD':
         session.changeDirectory(argument);
         break;
+      case 'CDUP':
+        session.changeToParentDirectory();
+        break;
       case 'MKD':
         if (session.serverType == ServerType.readOnly) {
           session.sendResponse('550 Command not allowed in read-only mode');
