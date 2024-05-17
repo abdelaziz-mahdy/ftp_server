@@ -24,6 +24,17 @@ class _MyAppState extends State<MyApp> {
   Isolate? _isolate;
   ReceivePort? _receivePort;
 
+  Future<String> _getIpAddress() async {
+    for (var interface in await NetworkInterface.list()) {
+      for (var addr in interface.addresses) {
+        if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+          return addr.address;
+        }
+      }
+    }
+    return 'Unknown IP';
+  }
+
   Future<void> _toggleServer() async {
     setState(() {
       _isLoading = true;
@@ -37,12 +48,10 @@ class _MyAppState extends State<MyApp> {
       Future serverFuture = server.start();
 
       _ftpServer = server;
-      var address = InternetAddress
-          .anyIPv4; // Modify this to retrieve the correct network interface
+      var address = await _getIpAddress(); // Get the real IP address
       setState(() {
         _serverStatus = 'Server is running';
-        _connectionInfo =
-            'Connect using IP: ${address.address}, Port: ${_ftpServer!.port}';
+        _connectionInfo = 'Connect using FTP client:\nftp://$address:21';
         _isLoading = false;
       });
       await serverFuture;
