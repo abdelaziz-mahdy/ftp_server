@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:intl/intl.dart';
 import 'ftp_command_handler.dart';
 
@@ -128,21 +129,43 @@ class FtpSession {
       sendResponse('425 Can\'t open data connection');
       return;
     }
-    String fullPath = filename;
-    if (!_isPathAllowed(fullPath)) {
-      sendResponse('550 Access denied');
-      return;
-    }
 
-    File file = File(fullPath);
-    if (await file.exists()) {
-      Stream<List<int>> fileStream = file.openRead();
-      await fileStream.pipe(dataSocket!);
-      dataSocket!.close();
-      dataSocket = null;
-      sendResponse('226 Transfer complete');
-    } else {
-      sendResponse('550 File not found');
+    try {
+      String fullPath = filename;
+      if (!_isPathAllowed(fullPath)) {
+        sendResponse('550 Access denied');
+        return;
+      }
+
+      File file = File(fullPath);
+      if (await file.exists()) {
+        sendResponse('150 Sending file');
+        Stream<List<int>> fileStream = file.openRead();
+        await fileStream.pipe(dataSocket!);
+        await dataSocket!.flush();
+        dataSocket!.close();
+        // final socket = dataSocket!;
+
+        // final transform = fileStream.transform<Uint8List>(
+        //   StreamTransformer.fromHandlers(
+        //     handleData: (data, sink) {
+        //       sink.add(Uint8List.fromList(data));
+        //     },
+        //   ),
+        // );
+
+        // await socket.addStream(transform);
+        // await socket.flush();
+        dataSocket = null;
+        sendResponse('226 Transfer complete');
+      } else {
+        sendResponse('550 File not found');
+      }
+    } catch (e) {
+      sendResponse('550 File transfer failed');
+      if (dataSocket != null) {
+        dataSocket = null;
+      }
     }
   }
 
