@@ -2,13 +2,16 @@ import 'dart:io';
 import 'dart:isolate';
 import 'package:flutter/material.dart';
 import 'package:ftp_server/ftp_server.dart';
+import 'package:ftp_server/server_type.dart';
 import 'package:path_provider/path_provider.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
   @override
   _MyAppState createState() => _MyAppState();
 }
@@ -29,7 +32,8 @@ class _MyAppState extends State<MyApp> {
     if (_ftpServer == null) {
       var server = FtpServer(21,
           startingDirectory: (await getDownloadsDirectory())!.path,
-          allowedDirectories: [(await getDownloadsDirectory())!.path]);
+          allowedDirectories: [(await getDownloadsDirectory())!.path],
+          serverType: ServerType.readOnly);
       Future serverFuture = server.start();
 
       _ftpServer = server;
@@ -65,18 +69,18 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(
-          title: Text('Flutter FTP Server'),
+          title: const Text('Flutter FTP Server'),
         ),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
               Text(_serverStatus),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               Text(_connectionInfo),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               _isLoading
-                  ? CircularProgressIndicator()
+                  ? const CircularProgressIndicator()
                   : ElevatedButton(
                       onPressed: _toggleServer,
                       child: Text(

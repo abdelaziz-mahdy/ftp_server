@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:async';
-import 'dart:typed_data';
+import 'package:ftp_server/server_type.dart';
 import 'package:intl/intl.dart';
 import 'ftp_command_handler.dart';
 
@@ -16,12 +16,13 @@ class FtpSession {
   String? cachedUsername;
   final List<String> allowedDirectories;
   final String startingDirectory;
-
+  final ServerType serverType;
   FtpSession(this.controlSocket,
       {this.username,
       this.password,
       required this.allowedDirectories,
-      required this.startingDirectory})
+      required this.startingDirectory,
+      required this.serverType})
       : currentDirectory = startingDirectory,
         commandHandler = FTPCommandHandler(controlSocket) {
     sendResponse('220 Welcome to the FTP server');
@@ -87,7 +88,7 @@ class FtpSession {
         String permissions = _formatPermissions(stat);
         String fileSize = stat.size.toString();
         String modificationTime = _formatModificationTime(stat.modified);
-        String fileName = entity.path.replaceFirst(dir.path + '/', '');
+        String fileName = entity.path.replaceFirst('${dir.path}/', '');
 
         // if (stat.type == FileSystemEntityType.directory) {
         //   fileName += '/';
@@ -144,18 +145,6 @@ class FtpSession {
         await fileStream.pipe(dataSocket!);
         await dataSocket!.flush();
         dataSocket!.close();
-        // final socket = dataSocket!;
-
-        // final transform = fileStream.transform<Uint8List>(
-        //   StreamTransformer.fromHandlers(
-        //     handleData: (data, sink) {
-        //       sink.add(Uint8List.fromList(data));
-        //     },
-        //   ),
-        // );
-
-        // await socket.addStream(transform);
-        // await socket.flush();
         dataSocket = null;
         sendResponse('226 Transfer complete');
       } else {
