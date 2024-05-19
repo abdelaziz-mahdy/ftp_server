@@ -1,8 +1,17 @@
 library ftp_server;
 
 import 'dart:io';
-import 'package:ftp_server/ftp_session.dart';
 import 'package:ftp_server/server_type.dart';
+
+import 'command_handler/ftp_command_handler.dart';
+import 'session/concrete_ftp_session.dart';
+import 'session/context/session_context.dart';
+
+import 'dart:io';
+import 'package:ftp_server/server_type.dart';
+import 'session/concrete_ftp_session.dart';
+import 'session/context/session_context.dart';
+import 'file_operations/concrete_file_operations.dart';
 
 class FtpServer {
   ServerSocket? _server;
@@ -13,12 +22,14 @@ class FtpServer {
   final String startingDirectory;
   final ServerType serverType;
 
-  FtpServer(this.port,
-      {this.username,
-      this.password,
-      required this.allowedDirectories,
-      required this.startingDirectory,
-      required this.serverType});
+  FtpServer(
+    this.port, {
+    this.username,
+    this.password,
+    required this.allowedDirectories,
+    required this.startingDirectory,
+    required this.serverType,
+  });
 
   Future<void> start() async {
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
@@ -26,12 +37,19 @@ class FtpServer {
     await for (var client in _server!) {
       print(
           'New client connected from ${client.remoteAddress.address}:${client.remotePort}');
-      FtpSession(client,
+      ConcreteFtpSession(
+        SessionContext(
+          controlSocket: client,
+          currentDirectory: startingDirectory,
+          allowedDirectories: allowedDirectories,
+          serverType: serverType,
+          startingDirectory: startingDirectory,
           username: username,
           password: password,
-          allowedDirectories: allowedDirectories,
-          startingDirectory: startingDirectory,
-          serverType: serverType);
+        ),
+        commandHandler: ConcreteFTPCommandHandler(client),
+        fileOperations: ConcreteFileOperations(),
+      );
     }
   }
 

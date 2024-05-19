@@ -1,13 +1,19 @@
 import 'dart:io';
-import 'package:ftp_server/ftp_session.dart';
+import 'package:ftp_server/session/abstract_session.dart';
 import 'package:ftp_server/server_type.dart';
-// Import the enum
+import 'abstract_command_handler.dart';
 
-class FTPCommandHandler {
+import 'dart:io';
+import 'package:ftp_server/session/abstract_session.dart';
+import 'package:ftp_server/server_type.dart';
+import 'package:ftp_server/command_handler/abstract_command_handler.dart';
+
+class ConcreteFTPCommandHandler implements CommandHandler {
   final Socket controlSocket;
 
-  FTPCommandHandler(this.controlSocket);
+  ConcreteFTPCommandHandler(this.controlSocket);
 
+  @override
   void handleCommand(String commandLine, FtpSession session) {
     List<String> parts = commandLine.split(' ');
     String command = parts[0].toUpperCase();
@@ -16,16 +22,16 @@ class FTPCommandHandler {
 
     switch (command) {
       case 'USER':
-        session.cachedUsername = argument;
-        session.isAuthenticated =
-            false; // Reset authentication status pending password check
+        session.setCachedUsername(argument);
+        session.setAuthenticated(
+            false); // Reset authentication status pending password check
         session.sendResponse('331 Password required for $argument');
         break;
       case 'PASS':
-        if ((session.username == null && session.password == null) ||
-            (session.cachedUsername == session.username &&
-                argument == session.password)) {
-          session.isAuthenticated = true;
+        if ((session.getUsername() == null && session.getPassword() == null) ||
+            (session.getCachedUsername() == session.getUsername() &&
+                argument == session.getPassword())) {
+          session.setAuthenticated(true);
           session.sendResponse('230 User logged in, proceed');
         } else {
           session.sendResponse('530 Not logged in');
@@ -33,7 +39,7 @@ class FTPCommandHandler {
         break;
       case 'QUIT':
         session.sendResponse('221 Service closing control connection');
-        session.controlSocket.close();
+        session.closeControlSocket();
         break;
       case 'PASV':
         session.enterPassiveMode();
@@ -48,7 +54,7 @@ class FTPCommandHandler {
         session.retrieveFile(argument);
         break;
       case 'STOR':
-        if (session.serverType == ServerType.readOnly) {
+        if (session.getServerType() == ServerType.readOnly) {
           session.sendResponse('550 Command not allowed in read-only mode');
         } else {
           session.storeFile(argument);
@@ -61,21 +67,21 @@ class FTPCommandHandler {
         session.changeToParentDirectory();
         break;
       case 'MKD':
-        if (session.serverType == ServerType.readOnly) {
+        if (session.getServerType() == ServerType.readOnly) {
           session.sendResponse('550 Command not allowed in read-only mode');
         } else {
           session.makeDirectory(argument);
         }
         break;
       case 'RMD':
-        if (session.serverType == ServerType.readOnly) {
+        if (session.getServerType() == ServerType.readOnly) {
           session.sendResponse('550 Command not allowed in read-only mode');
         } else {
           session.removeDirectory(argument);
         }
         break;
       case 'DELE':
-        if (session.serverType == ServerType.readOnly) {
+        if (session.getServerType() == ServerType.readOnly) {
           session.sendResponse('550 Command not allowed in read-only mode');
         } else {
           session.deleteFile(argument);
