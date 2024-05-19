@@ -1,6 +1,5 @@
 import '../session/context/session_context.dart';
 
-
 abstract class FileOperations {
   Future<void> listDirectory(String path, SessionContext context);
   Future<void> retrieveFile(String filename, SessionContext context);

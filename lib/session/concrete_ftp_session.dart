@@ -2,28 +2,11 @@ import 'dart:io';
 import 'dart:async';
 
 import 'package:ftp_server/server_type.dart';
-import 'package:intl/intl.dart';
 
 import '../command_handler/abstract_command_handler.dart';
 import '../file_operations/abstract_file_operations.dart';
 import 'abstract_session.dart';
 import 'context/session_context.dart';
-
-import 'dart:io';
-import 'dart:async';
-import 'package:ftp_server/server_type.dart';
-import 'package:intl/intl.dart';
-
-import 'abstract_session.dart';
-import 'context/session_context.dart';
-import 'dart:io';
-import 'dart:async';
-import 'package:ftp_server/server_type.dart';
-import 'package:intl/intl.dart';
-import 'package:ftp_server/command_handler/abstract_command_handler.dart';
-import 'package:ftp_server/file_operations/abstract_file_operations.dart';
-import 'package:ftp_server/session/abstract_session.dart';
-import 'package:ftp_server/session/context/session_context.dart';
 
 class ConcreteFtpSession implements FtpSession {
   final SessionContext context;
@@ -143,7 +126,8 @@ class ConcreteFtpSession implements FtpSession {
   @override
   Future<void> changeToParentDirectory() async {
     var parentDir = Directory(context.currentDirectory).parent;
-    if (_isPathAllowed(parentDir.path, context.allowedDirectories) && parentDir.existsSync()) {
+    if (_isPathAllowed(parentDir.path, context.allowedDirectories) &&
+        parentDir.existsSync()) {
       context.currentDirectory = parentDir.path;
       sendResponse('250 Directory changed to ${context.currentDirectory}');
     } else {
