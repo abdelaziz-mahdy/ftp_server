@@ -104,7 +104,7 @@ class ConcreteFtpSession implements FtpSession {
   }
 
   @override
-  void listDirectory(String path) {
+  void listDirectory(String path, {bool isMachineReadable = false}) {
     fileOperations.listDirectory(path, context);
   }
 
@@ -155,7 +155,100 @@ class ConcreteFtpSession implements FtpSession {
     fileOperations.fileSize(filePath, context);
   }
 
+  @override
+  void reinitialize() {
+    context.isAuthenticated = false;
+    context.cachedUsername = null;
+    sendResponse('220 Service ready for new user');
+  }
+
+  @override
+  void abort() {
+    context.dataSocket?.destroy();
+    sendResponse('426 Connection closed; transfer aborted');
+  }
+
+  @override
+  void renameFrom(String from) {
+    context.cachedUsername =
+        from; // Using cachedUsername temporarily to store "from" filename
+    sendResponse('350 Requested file action pending further information');
+  }
+
+  @override
+  void renameTo(String to) {
+    if (context.cachedUsername == null) {
+      sendResponse('503 Bad sequence of commands');
+      return;
+    }
+    fileOperations.rename(context.cachedUsername!, to, context);
+    context.cachedUsername = null;
+  }
+
+  @override
+  void restart(String marker) {
+    //TODO: Restart functionality is often implemented using custom logic and file operations support for partial reads/writes
+    sendResponse(
+        '350 Restarting at marker $marker. Send STORE or RETRIEVE to initiate transfer');
+  }
+
+  @override
+  void storeUnique(String filename) {
+    String uniqueFilename = _generateUniqueFilename(filename);
+    storeFile(uniqueFilename);
+  }
+
+  @override
+  void listSingle(String filename) {
+    fileOperations.listDirectory(filename, context);
+  }
+
+  @override
+  void printWorkingDirectory() {
+    sendResponse('257 "${context.currentDirectory}" is the current directory');
+  }
+
+  @override
+  void setOptions(String options) {
+    //TODO: Implement options logic
+    sendResponse('200 Command okay');
+  }
+
+  @override
+  void setHost(String host) {
+    //TODO: Implement host logic
+    sendResponse('200 Command okay');
+  }
+
+  @override
+  void modifyTime(String filename) {
+    //TODO: Implement modify time logic
+    sendResponse('213 Modification time is [timestamp]');
+  }
+
+  @override
+  void featureList() {
+    sendResponse('211-Features:\r\n PASV\r\n SIZE\r\n MDTM\r\n211 End');
+  }
+
+  @override
+  void systemStatus() {
+    sendResponse('211 System status ok');
+  }
+
+  @override
+  void authenticate(String mechanism) {
+    //TODO: Implement authenticate logic
+    sendResponse('334 Authentication mechanism accepted');
+  }
+
   bool _isPathAllowed(String path, List<String> allowedDirectories) {
     return allowedDirectories.any((allowedDir) => path.startsWith(allowedDir));
+  }
+
+  String _generateUniqueFilename(String filename) {
+    // Generate a unique filename by appending a timestamp or UUID
+    String uniqueSuffix = DateTime.now().millisecondsSinceEpoch.toString();
+    return '$filename.$uniqueSuffix';
   }
 }

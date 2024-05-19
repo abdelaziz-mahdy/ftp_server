@@ -11,7 +11,7 @@ class ConcreteFileOperations implements FileOperations {
       return;
     }
 
-    String fullPath = context.currentDirectory + (path.isEmpty ? '' : '/$path');
+    String fullPath = constructFullPath(context.currentDirectory, path);
     if (!_isPathAllowed(fullPath, context.allowedDirectories)) {
       context.controlSocket.write('550 Access denied\r\n');
       return;
@@ -46,7 +46,7 @@ class ConcreteFileOperations implements FileOperations {
     }
 
     try {
-      String fullPath = filename;
+      String fullPath = constructFullPath(context.currentDirectory, filename);
       if (!_isPathAllowed(fullPath, context.allowedDirectories)) {
         context.controlSocket.write('550 Access denied\r\n');
         return;
@@ -79,7 +79,7 @@ class ConcreteFileOperations implements FileOperations {
       return;
     }
 
-    String fullPath = filename;
+    String fullPath = constructFullPath(context.currentDirectory, filename);
     if (!_isPathAllowed(fullPath, context.allowedDirectories)) {
       context.controlSocket.write('550 Access denied\r\n');
       return;
@@ -103,7 +103,7 @@ class ConcreteFileOperations implements FileOperations {
 
   @override
   Future<void> changeDirectory(String dirname, SessionContext context) async {
-    String newDirPath = dirname;
+    String newDirPath = constructFullPath(context.currentDirectory, dirname);
     if (!_isPathAllowed(newDirPath, context.allowedDirectories)) {
       context.controlSocket.write('550 Access denied\r\n');
       return;
@@ -121,7 +121,7 @@ class ConcreteFileOperations implements FileOperations {
 
   @override
   Future<void> makeDirectory(String dirname, SessionContext context) async {
-    String newDirPath = '${context.currentDirectory}/$dirname';
+    String newDirPath = constructFullPath(context.currentDirectory, dirname);
     if (!_isPathAllowed(newDirPath, context.allowedDirectories)) {
       context.controlSocket.write('550 Access denied\r\n');
       return;
@@ -138,7 +138,7 @@ class ConcreteFileOperations implements FileOperations {
 
   @override
   Future<void> removeDirectory(String dirname, SessionContext context) async {
-    String dirPath = '${context.currentDirectory}/$dirname';
+    String dirPath = constructFullPath(context.currentDirectory, dirname);
     if (!_isPathAllowed(dirPath, context.allowedDirectories)) {
       context.controlSocket.write('550 Access denied\r\n');
       return;
@@ -155,7 +155,7 @@ class ConcreteFileOperations implements FileOperations {
 
   @override
   Future<void> deleteFile(String filePath, SessionContext context) async {
-    String fullPath = filePath;
+    String fullPath = constructFullPath(context.currentDirectory, filePath);
     if (!_isPathAllowed(fullPath, context.allowedDirectories)) {
       context.controlSocket.write('550 Access denied\r\n');
       return;
@@ -172,7 +172,7 @@ class ConcreteFileOperations implements FileOperations {
 
   @override
   Future<void> fileSize(String filePath, SessionContext context) async {
-    String fullPath = filePath;
+    String fullPath = constructFullPath(context.currentDirectory, filePath);
     if (!_isPathAllowed(fullPath, context.allowedDirectories)) {
       context.controlSocket.write('550 Access denied\r\n');
       return;
@@ -185,6 +185,55 @@ class ConcreteFileOperations implements FileOperations {
     } else {
       context.controlSocket.write('550 File not found\r\n');
     }
+  }
+
+  @override
+  Future<void> rename(String from, String to, SessionContext context) async {
+    String fullPathFrom = constructFullPath(context.currentDirectory, from);
+    String fullPathTo = constructFullPath(context.currentDirectory, to);
+
+    if (!_isPathAllowed(fullPathFrom, context.allowedDirectories) ||
+        !_isPathAllowed(fullPathTo, context.allowedDirectories)) {
+      context.controlSocket.write('550 Access denied\r\n');
+      return;
+    }
+
+    var fileFrom = File(fullPathFrom);
+    if (await fileFrom.exists()) {
+      await fileFrom.rename(fullPathTo);
+      context.controlSocket.write('250 File renamed\r\n');
+    } else {
+      context.controlSocket.write('550 File not found\r\n');
+    }
+  }
+
+  @override
+  Future<void> storeUnique(String filename, SessionContext context) async {
+    if (context.dataSocket == null) {
+      context.controlSocket.write('425 Can\'t open data connection\r\n');
+      return;
+    }
+
+    String fullPath = constructFullPath(context.currentDirectory, filename);
+    if (!_isPathAllowed(fullPath, context.allowedDirectories)) {
+      context.controlSocket.write('550 Access denied\r\n');
+      return;
+    }
+
+    File file = File(fullPath);
+    IOSink fileSink = file.openWrite(mode: FileMode.writeOnlyAppend);
+    await context.dataSocket!.listen((data) {
+      fileSink.add(data);
+    }, onDone: () async {
+      await fileSink.close();
+      context.dataSocket!.close();
+      context.dataSocket = null;
+      context.controlSocket.write('226 Transfer complete\r\n');
+    }, onError: (error) {
+      context.controlSocket
+          .write('426 Connection closed; transfer aborted\r\n');
+      fileSink.close();
+    }).asFuture();
   }
 
   bool _isPathAllowed(String path, List<String> allowedDirectories) {
@@ -209,4 +258,11 @@ class ConcreteFileOperations implements FileOperations {
   String _formatModificationTime(DateTime dateTime) {
     return DateFormat('MMM dd HH:mm').format(dateTime);
   }
+}
+
+String constructFullPath(String basePath, String relativePath) {
+  if (relativePath.startsWith(basePath)) {
+    return relativePath;
+  }
+  return '$basePath/$relativePath';
 }

@@ -9,4 +9,6 @@ abstract class FileOperations {
   Future<void> removeDirectory(String dirname, SessionContext context);
   Future<void> deleteFile(String filePath, SessionContext context);
   Future<void> fileSize(String filePath, SessionContext context);
+  Future<void> rename(String from, String to, SessionContext context);
+  Future<void> storeUnique(String filename, SessionContext context);
 }

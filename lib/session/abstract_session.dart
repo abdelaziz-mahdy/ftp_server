@@ -14,7 +14,7 @@ abstract class FtpSession {
   ServerType getServerType();
   void enterPassiveMode();
   void enterActiveMode(String argument);
-  void listDirectory(String path);
+  void listDirectory(String path, {bool isMachineReadable = false});
   void retrieveFile(String filename);
   void storeFile(String filename);
   void changeDirectory(String dirname);
@@ -23,4 +23,18 @@ abstract class FtpSession {
   void removeDirectory(String dirname);
   void deleteFile(String filePath);
   void fileSize(String filePath);
+  void reinitialize();
+  void abort();
+  void renameFrom(String from);
+  void renameTo(String to);
+  void restart(String marker);
+  void storeUnique(String filename);
+  void listSingle(String filename);
+  void printWorkingDirectory();
+  void setOptions(String options);
+  void setHost(String host);
+  void modifyTime(String filename);
+  void featureList();
+  void systemStatus();
+  void authenticate(String mechanism);
 }
