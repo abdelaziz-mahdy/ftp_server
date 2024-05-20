@@ -1,9 +1,11 @@
 library ftp_server;
 
 import 'dart:io';
+import 'package:ftp_server/file_operations/in_memory_file_operations.dart';
 import 'package:ftp_server/server_type.dart';
 
 import 'command_handler/ftp_command_handler.dart';
+import 'file_system/in_memory_file_system.dart';
 import 'session/concrete_ftp_session.dart';
 import 'session/context/session_context.dart';
 
@@ -30,6 +32,8 @@ class FtpServer {
   Future<void> start() async {
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
     print('FTP Server is running on port $port');
+    var rootDirectory = InMemoryFtpDirectory('/');
+
     await for (var client in _server!) {
       print(
           'New client connected from ${client.remoteAddress.address}:${client.remotePort}');
@@ -45,6 +49,8 @@ class FtpServer {
         ),
         commandHandler: ConcreteFTPCommandHandler(client),
         fileOperations: ConcreteFileOperations(),
+        // memory one can be used too
+        //fileOperations: InMemoryFileOperations(rootDirectory),
       );
     }
   }
