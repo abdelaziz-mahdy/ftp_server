@@ -33,6 +33,8 @@ dependencies:
   ftp_server:
     path: ../
   path_provider: ^2.1.3
+  shared_preferences: ^2.0.16
+  file_picker: ^5.2.5
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.6

@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:isolate';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const MyApp());
@@ -13,18 +15,35 @@ class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   @override
-  _MyAppState createState() => _MyAppState();
+  MyAppState createState() => MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
-  FtpServer? _ftpServer;
-  String _serverStatus = 'Server is not running';
-  String _connectionInfo = 'No connection info';
-  bool _isLoading = false;
-  Isolate? _isolate;
-  ReceivePort? _receivePort;
+class MyAppState extends State<MyApp> {
+  FtpServer? ftpServer;
+  String serverStatus = 'Server is not running';
+  String connectionInfo = 'No connection info';
+  String directoryPath = 'No directory chosen';
+  bool isLoading = false;
+  Isolate? isolate;
+  ReceivePort? receivePort;
 
-  Future<String> _getIpAddress() async {
+  @override
+  void initState() {
+    super.initState();
+    _loadDirectory();
+  }
+
+  Future<void> _loadDirectory() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? savedDirectory = prefs.getString('serverDirectory');
+    if (savedDirectory != null) {
+      setState(() {
+        directoryPath = savedDirectory;
+      });
+    }
+  }
+
+  Future<String> getIpAddress() async {
     for (var interface in await NetworkInterface.list()) {
       for (var addr in interface.addresses) {
         if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
@@ -35,41 +54,72 @@ class _MyAppState extends State<MyApp> {
     return 'Unknown IP';
   }
 
-  Future<void> _toggleServer() async {
+  Future<String?> pickDirectory() async {
+    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+    if (selectedDirectory != null) {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString('serverDirectory', selectedDirectory);
+      setState(() {
+        directoryPath = selectedDirectory;
+      });
+    }
+    return selectedDirectory;
+  }
+
+  Future<void> toggleServer() async {
     setState(() {
-      _isLoading = true;
+      isLoading = true;
     });
 
-    if (_ftpServer == null) {
-      var server = FtpServer(21,
-          startingDirectory: (await getDownloadsDirectory())!.path,
-          allowedDirectories: [(await getDownloadsDirectory())!.path],
-          serverType: ServerType.readOnly);
-      Future serverFuture = server.start();
+    if (ftpServer == null) {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      String? serverDirectory = prefs.getString('serverDirectory');
 
-      _ftpServer = server;
-      var address = await _getIpAddress(); // Get the real IP address
+      if (serverDirectory == null) {
+        serverDirectory = await pickDirectory();
+        if (serverDirectory != null) {
+          await prefs.setString('serverDirectory', serverDirectory);
+        } else {
+          setState(() {
+            isLoading = false;
+          });
+          return;
+        }
+      }
+
+      var server = FtpServer(
+        21,
+        startingDirectory: serverDirectory,
+        allowedDirectories: [serverDirectory],
+        serverType: ServerType.readOnly,
+      );
+
+      Future serverFuture = server.start();
+      ftpServer = server;
+      var address = await getIpAddress();
+
       setState(() {
-        _serverStatus = 'Server is running';
-        _connectionInfo = 'Connect using FTP client:\nftp://$address:21';
-        _isLoading = false;
+        serverStatus = 'Server is running';
+        connectionInfo = 'Connect using FTP client:\nftp://$address:21';
+        isLoading = false;
       });
+
       await serverFuture;
     } else {
-      await _ftpServer!.stop();
-      _ftpServer = null;
+      await ftpServer!.stop();
+      ftpServer = null;
       setState(() {
-        _serverStatus = 'Server is not running';
-        _connectionInfo = 'No connection info';
-        _isLoading = false;
+        serverStatus = 'Server is not running';
+        connectionInfo = 'No connection info';
+        isLoading = false;
       });
     }
   }
 
   @override
   void dispose() {
-    _receivePort?.close();
-    _isolate?.kill(priority: Isolate.immediate);
+    receivePort?.close();
+    isolate?.kill(priority: Isolate.immediate);
     super.dispose();
   }
 
@@ -84,16 +134,29 @@ class _MyAppState extends State<MyApp> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              Text(_serverStatus),
+              Text(serverStatus),
               const SizedBox(height: 20),
-              Text(_connectionInfo),
+              Text(connectionInfo),
               const SizedBox(height: 20),
-              _isLoading
+              Text('Directory: $directoryPath'),
+              const SizedBox(height: 20),
+              isLoading
                   ? const CircularProgressIndicator()
-                  : ElevatedButton(
-                      onPressed: _toggleServer,
-                      child: Text(
-                          _ftpServer == null ? 'Start Server' : 'Stop Server'),
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton(
+                          onPressed: toggleServer,
+                          child: Text(
+                            ftpServer == null ? 'Start Server' : 'Stop Server',
+                          ),
+                        ),
+                        const SizedBox(width: 20),
+                        ElevatedButton(
+                          onPressed: pickDirectory,
+                          child: const Text('Pick Directory'),
+                        ),
+                      ],
                     ),
             ],
           ),
