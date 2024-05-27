@@ -101,7 +101,7 @@ class FtpSession {
         String permissions = _formatPermissions(stat);
         String fileSize = stat.size.toString();
         String modificationTime = _formatModificationTime(stat.modified);
-        String fileName = entity.path.replaceFirst('${dir.path}/', '');
+        String fileName = entity.path;
         String entry =
             '$permissions 1 ftp ftp $fileSize $modificationTime $fileName\r\n';
         dataSocket!.write(entry);
