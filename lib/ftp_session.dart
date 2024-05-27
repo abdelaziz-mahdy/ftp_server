@@ -17,13 +17,15 @@ class FtpSession {
   final List<String> allowedDirectories;
   final String startingDirectory;
   final ServerType serverType;
-  FtpSession(this.controlSocket,
-      {this.username,
-      this.password,
-      required this.allowedDirectories,
-      required this.startingDirectory,
-      required this.serverType})
-      : currentDirectory = startingDirectory,
+
+  FtpSession(
+    this.controlSocket, {
+    this.username,
+    this.password,
+    required this.allowedDirectories,
+    required this.startingDirectory,
+    required this.serverType,
+  })  : currentDirectory = startingDirectory,
         commandHandler = FTPCommandHandler(controlSocket) {
     sendResponse('220 Welcome to the FTP server');
     controlSocket.listen(processCommand, onDone: closeConnection);
@@ -33,12 +35,20 @@ class FtpSession {
     return allowedDirectories.any((allowedDir) => path.startsWith(allowedDir));
   }
 
+  String _getFullPath(String path) {
+    if (path.startsWith(currentDirectory)) {
+      return path;
+    }
+    return '$currentDirectory/$path';
+  }
+
   void processCommand(List<int> data) {
     String commandLine = String.fromCharCodes(data).trim();
     commandHandler.handleCommand(commandLine, this);
   }
 
   void sendResponse(String message) {
+    print('Response: $message');
     controlSocket.write("$message\r\n");
   }
 
@@ -74,7 +84,10 @@ class FtpSession {
       sendResponse('425 Can\'t open data connection');
       return;
     }
-    String fullPath = currentDirectory + (path.isEmpty ? '' : '/$path');
+
+    String fullPath = _getFullPath(path);
+    print('Listing directory: $fullPath');
+
     if (!_isPathAllowed(fullPath)) {
       sendResponse('550 Access denied');
       return;
@@ -89,11 +102,6 @@ class FtpSession {
         String fileSize = stat.size.toString();
         String modificationTime = _formatModificationTime(stat.modified);
         String fileName = entity.path.replaceFirst('${dir.path}/', '');
-
-        // if (stat.type == FileSystemEntityType.directory) {
-        //   fileName += '/';
-        // }
-
         String entry =
             '$permissions 1 ftp ftp $fileSize $modificationTime $fileName\r\n';
         dataSocket!.write(entry);
@@ -102,7 +110,7 @@ class FtpSession {
       dataSocket = null;
       sendResponse('226 Transfer complete');
     } else {
-      sendResponse('550 Directory not found');
+      sendResponse('550 Directory not found ${fullPath}');
     }
   }
 
@@ -132,7 +140,7 @@ class FtpSession {
     }
 
     try {
-      String fullPath = filename;
+      String fullPath = _getFullPath(filename);
       if (!_isPathAllowed(fullPath)) {
         sendResponse('550 Access denied');
         return;
@@ -163,7 +171,7 @@ class FtpSession {
       sendResponse('425 Can\'t open data connection');
       return;
     }
-    String fullPath = filename;
+    String fullPath = _getFullPath(filename);
     if (!_isPathAllowed(fullPath)) {
       sendResponse('550 Access denied');
       return;
@@ -172,32 +180,31 @@ class FtpSession {
     File file = File(fullPath);
     IOSink fileSink = file.openWrite();
     await dataSocket!.listen((data) {
-      fileSink.add(data); // Add data to the file sink directly
+      fileSink.add(data);
     }, onDone: () async {
-      await fileSink
-          .close(); // Ensure to close the file sink to finalize the file
+      await fileSink.close();
       dataSocket!.close();
       dataSocket = null;
       sendResponse('226 Transfer complete');
     }, onError: (error) {
       sendResponse('426 Connection closed; transfer aborted');
-      fileSink.close(); // Close the sink even on error
+      fileSink.close();
     }).asFuture();
   }
 
   void changeDirectory(String dirname) {
-    String newDirPath = dirname;
-    if (!_isPathAllowed(newDirPath)) {
+    String fullPath = _getFullPath(dirname);
+    if (!_isPathAllowed(fullPath)) {
       sendResponse('550 Access denied');
       return;
     }
 
-    var newDir = Directory(newDirPath);
+    var newDir = Directory(fullPath);
     if (newDir.existsSync()) {
       currentDirectory = newDir.path;
       sendResponse('250 Directory changed to $currentDirectory');
     } else {
-      sendResponse('550 Directory not found');
+      sendResponse('550 Directory not found ${fullPath}');
     }
   }
 
@@ -212,7 +219,7 @@ class FtpSession {
   }
 
   void makeDirectory(String dirname) async {
-    String newDirPath = '$currentDirectory/$dirname';
+    String newDirPath = _getFullPath(dirname);
     if (!_isPathAllowed(newDirPath)) {
       sendResponse('550 Access denied');
       return;
@@ -228,7 +235,7 @@ class FtpSession {
   }
 
   void removeDirectory(String dirname) async {
-    String dirPath = '$currentDirectory/$dirname';
+    String dirPath = _getFullPath(dirname);
     if (!_isPathAllowed(dirPath)) {
       sendResponse('550 Access denied');
       return;
@@ -244,7 +251,7 @@ class FtpSession {
   }
 
   void deleteFile(String filePath) async {
-    String fullPath = filePath;
+    String fullPath = _getFullPath(filePath);
     if (!_isPathAllowed(fullPath)) {
       sendResponse('550 Access denied');
       return;
@@ -260,7 +267,7 @@ class FtpSession {
   }
 
   Future<void> fileSize(String filePath) async {
-    String fullPath = filePath;
+    String fullPath = _getFullPath(filePath);
     if (!_isPathAllowed(fullPath)) {
       sendResponse('550 Access denied');
       return;
