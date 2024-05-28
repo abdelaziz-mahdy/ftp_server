@@ -9,7 +9,8 @@ void main() {
   final List<String> allowedDirectories = ["/tmp/ftp_test"];
   late FtpServer server;
   late Process ftpClient;
-  final int port = 2125;
+  final int port = 2126;
+  final String logFilePath = 'ftpsession.log';
 
   Future<bool> isFtpAvailable() async {
     try {
@@ -23,7 +24,8 @@ void main() {
   Future<void> installFtp() async {
     if (Platform.isLinux) {
       await Process.run('sudo', ['apt-get', 'update'], runInShell: true);
-      await Process.run('sudo', ['apt-get', 'install', '-y', 'ftp'], runInShell: true);
+      await Process.run('sudo', ['apt-get', 'install', '-y', 'ftp'],
+          runInShell: true);
     } else if (Platform.isMacOS) {
       await Process.run('brew', ['install', 'inetutils'], runInShell: true);
     } else if (Platform.isWindows) {
@@ -39,7 +41,8 @@ void main() {
       }
 
       if (!await isFtpAvailable()) {
-        throw Exception('FTP command is not available and could not be installed.');
+        throw Exception(
+            'FTP command is not available and could not be installed.');
       }
 
       // Create the allowed directory and start the FTP server
@@ -62,9 +65,15 @@ void main() {
     });
 
     setUp(() async {
-      ftpClient = await Process.start('ftp', ['-n'], runInShell: true);
+      ftpClient = await Process.start(
+        'bash',
+        ['-c', 'ftp -n -v -i 127.0.0.1 $port >> $logFilePath'],
+        runInShell: true,
+      );
+      File(logFilePath).writeAsStringSync(''); // Clear the log file
       ftpClient.stdin.writeln('open 127.0.0.1 $port');
       ftpClient.stdin.writeln('user test password');
+
       await ftpClient.stdin.flush();
     });
 
@@ -72,13 +81,17 @@ void main() {
       ftpClient.kill();
     });
 
+    Future<String> readAllOutput() async {
+      await Future.delayed(Duration(milliseconds: 500)); // Wait for log to be written
+      return File(logFilePath).readAsStringSync();
+    }
+
     test('Authentication Success', () async {
       ftpClient.stdin.writeln('user test password');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
-      await Future.delayed(Duration(milliseconds: 500)); // Allow some time for the server to respond
 
-      final output = await ftpClient.stdout.transform(utf8.decoder).join();
+      final output = await readAllOutput();
       expect(output, contains('230 User logged in, proceed'));
     });
 
@@ -86,9 +99,8 @@ void main() {
       ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
-      await Future.delayed(Duration(milliseconds: 500)); // Allow some time for the server to respond
 
-      final output = await ftpClient.stdout.transform(utf8.decoder).join();
+      final output = await readAllOutput();
       expect(output, contains('226 Transfer complete'));
     });
 
@@ -96,9 +108,8 @@ void main() {
       ftpClient.stdin.writeln('cd /tmp/ftp_test');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
-      await Future.delayed(Duration(milliseconds: 500)); // Allow some time for the server to respond
 
-      final output = await ftpClient.stdout.transform(utf8.decoder).join();
+      final output = await readAllOutput();
       expect(output, contains('250 Directory changed'));
     });
 
@@ -106,9 +117,8 @@ void main() {
       ftpClient.stdin.writeln('mkdir test_dir');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
-      await Future.delayed(Duration(milliseconds: 500)); // Allow some time for the server to respond
 
-      final output = await ftpClient.stdout.transform(utf8.decoder).join();
+      final output = await readAllOutput();
       expect(output, contains('257 "test_dir" created'));
       expect(Directory('/tmp/ftp_test/test_dir').existsSync(), isTrue);
     });
@@ -118,60 +128,61 @@ void main() {
       ftpClient.stdin.writeln('rmdir test_dir');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
-      await Future.delayed(Duration(milliseconds: 500)); // Allow some time for the server to respond
 
-      final output = await ftpClient.stdout.transform(utf8.decoder).join();
+      final output = await readAllOutput();
       expect(output, contains('250 Directory deleted'));
       expect(Directory('/tmp/ftp_test/test_dir').existsSync(), isFalse);
     });
 
     test('Store File', () async {
-      final testFile = File('/tmp/ftp_test/test_file.txt')..writeAsStringSync('Hello, FTP!');
+      final testFile = File('/tmp/ftp_test/test_file.txt')
+        ..writeAsStringSync('Hello, FTP!');
 
       ftpClient.stdin.writeln('put /tmp/ftp_test/test_file.txt');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
-      await Future.delayed(Duration(milliseconds: 500)); // Allow some time for the server to respond
 
-      final output = await ftpClient.stdout.transform(utf8.decoder).join();
+      final output = await readAllOutput();
+      await Future.delayed(Duration(milliseconds: 500));
       expect(output, contains('226 Transfer complete'));
     });
 
     test('Retrieve File', () async {
-      final testFile = File('/tmp/ftp_test/test_file.txt')..writeAsStringSync('Hello, FTP!');
+      final testFile = File('/tmp/ftp_test/test_file.txt')
+        ..writeAsStringSync('Hello, FTP!');
 
-      ftpClient.stdin.writeln('get /tmp/ftp_test/test_file.txt /tmp/ftp_test/retrieved_file.txt');
+      ftpClient.stdin.writeln(
+          'get /tmp/ftp_test/test_file.txt /tmp/ftp_test/retrieved_file.txt');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
-      await Future.delayed(Duration(milliseconds: 500)); // Allow some time for the server to respond
 
-      final output = await ftpClient.stdout.transform(utf8.decoder).join();
+      final output = await readAllOutput();
       expect(output, contains('226 Transfer complete'));
       expect(File('/tmp/ftp_test/retrieved_file.txt').existsSync(), isTrue);
     });
 
     test('Delete File', () async {
-      final testFile = File('/tmp/ftp_test/test_file.txt')..writeAsStringSync('Hello, FTP!');
+      final testFile = File('/tmp/ftp_test/test_file.txt')
+        ..writeAsStringSync('Hello, FTP!');
 
       ftpClient.stdin.writeln('delete /tmp/ftp_test/test_file.txt');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
-      await Future.delayed(Duration(milliseconds: 500)); // Allow some time for the server to respond
 
-      final output = await ftpClient.stdout.transform(utf8.decoder).join();
+      final output = await readAllOutput();
       expect(output, contains('250 File deleted'));
       expect(testFile.existsSync(), isFalse);
     });
 
     test('File Size', () async {
-      final testFile = File('/tmp/ftp_test/test_file.txt')..writeAsStringSync('Hello, FTP!');
+      final testFile = File('/tmp/ftp_test/test_file.txt')
+        ..writeAsStringSync('Hello, FTP!');
 
       ftpClient.stdin.writeln('size /tmp/ftp_test/test_file.txt');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
-      await Future.delayed(Duration(milliseconds: 500)); // Allow some time for the server to respond
 
-      final output = await ftpClient.stdout.transform(utf8.decoder).join();
+      final output = await readAllOutput();
       expect(output, contains('213 12')); // File size is 12 bytes
     });
 
@@ -179,9 +190,8 @@ void main() {
       ftpClient.stdin.writeln('passive');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
-      await Future.delayed(Duration(milliseconds: 500)); // Allow some time for the server to respond
 
-      final output = await ftpClient.stdout.transform(utf8.decoder).join();
+      final output = await readAllOutput();
       expect(output, contains('227 Entering Passive Mode'));
     });
 
@@ -189,9 +199,8 @@ void main() {
       ftpClient.stdin.writeln('port 127,0,0,1,14,178');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
-      await Future.delayed(Duration(milliseconds: 500)); // Allow some time for the server to respond
 
-      final output = await ftpClient.stdout.transform(utf8.decoder).join();
+      final output = await readAllOutput();
       expect(output, contains('200 Active mode connection established'));
     });
 
@@ -199,9 +208,8 @@ void main() {
       ftpClient.stdin.writeln('syst');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
-      await Future.delayed(Duration(milliseconds: 500)); // Allow some time for the server to respond
 
-      final output = await ftpClient.stdout.transform(utf8.decoder).join();
+      final output = await readAllOutput();
       expect(output, contains('215 UNIX Type: L8'));
     });
 
@@ -209,9 +217,8 @@ void main() {
       ftpClient.stdin.writeln('noop');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
-      await Future.delayed(Duration(milliseconds: 500)); // Allow some time for the server to respond
 
-      final output = await ftpClient.stdout.transform(utf8.decoder).join();
+      final output = await readAllOutput();
       expect(output, contains('200 NOOP command successful'));
     });
 
@@ -219,9 +226,8 @@ void main() {
       ftpClient.stdin.writeln('type I');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
-      await Future.delayed(Duration(milliseconds: 500)); // Allow some time for the server to respond
 
-      final output = await ftpClient.stdout.transform(utf8.decoder).join();
+      final output = await readAllOutput();
       expect(output, contains('200 Type set to I'));
     });
   });
