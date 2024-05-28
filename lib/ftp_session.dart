@@ -50,9 +50,10 @@ class FtpSession {
     commandHandler.handleCommand(commandLine, this);
   }
 
-  void sendResponse(String message) {
+  Future<void> sendResponse(String message) async {
     logger.logResponse(message);
     controlSocket.write("$message\r\n");
+    await controlSocket.flush();
   }
 
   void closeConnection() {
@@ -104,7 +105,7 @@ class FtpSession {
         String permissions = _formatPermissions(stat);
         String fileSize = stat.size.toString();
         String modificationTime = _formatModificationTime(stat.modified);
-        String fileName = entity.path;
+        String fileName = entity.path.split('/').last;
         String entry =
             '$permissions 1 ftp ftp $fileSize $modificationTime $fileName\r\n';
         dataSocket!.write(entry);
@@ -151,7 +152,7 @@ class FtpSession {
 
       File file = File(fullPath);
       if (await file.exists()) {
-        sendResponse('150 Sending file');
+        sendResponse('150 Opening data connection');
         Stream<List<int>> fileStream = file.openRead();
         await fileStream.pipe(dataSocket!);
         await dataSocket!.flush();

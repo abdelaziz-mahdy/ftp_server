@@ -29,16 +29,34 @@ class FtpServer {
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
     print('FTP Server is running on port $port');
     await for (var client in _server!) {
-      print(
-          'New client connected from ${client.remoteAddress.address}:${client.remotePort}');
-      FtpSession(client,
-          username: username,
-          password: password,
-          allowedDirectories: allowedDirectories,
-          startingDirectory: startingDirectory,
-          serverType: serverType,
-          logger: logger);
+      print('New client connected from ${client.remoteAddress.address}:${client.remotePort}');
+      FtpSession(
+        client,
+        username: username,
+        password: password,
+        allowedDirectories: allowedDirectories,
+        startingDirectory: startingDirectory,
+        serverType: serverType,
+        logger: logger,
+      );
     }
+  }
+
+  Future<void> startInBackground() async {
+    _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
+    print('FTP Server is running on port $port');
+    _server!.listen((client) {
+      print('New client connected from ${client.remoteAddress.address}:${client.remotePort}');
+      FtpSession(
+        client,
+        username: username,
+        password: password,
+        allowedDirectories: allowedDirectories,
+        startingDirectory: startingDirectory,
+        serverType: serverType,
+        logger: logger,
+      );
+    });
   }
 
   Future<void> stop() async {
