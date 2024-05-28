@@ -10,7 +10,7 @@ class LoggerHandler {
   }
 
   void logResponse(String response) {
-    if (logFunction == null) {
+    if (logFunction != null) {
       logFunction!('Response: $response');
     }
   }

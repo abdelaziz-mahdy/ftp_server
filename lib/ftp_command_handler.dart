@@ -93,7 +93,6 @@ class FTPCommandHandler {
 
   Future<void> handleQuit(FtpSession session) async {
     session.sendResponse('221 Service closing control connection');
-    await session.controlSocket.flush();
     await session.controlSocket.close();
   }
 

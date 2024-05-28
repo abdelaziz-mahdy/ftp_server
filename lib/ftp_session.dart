@@ -53,7 +53,6 @@ class FtpSession {
   Future<void> sendResponse(String message) async {
     logger.logResponse(message);
     controlSocket.write("$message\r\n");
-    await controlSocket.flush();
   }
 
   void closeConnection() {
@@ -155,7 +154,6 @@ class FtpSession {
         sendResponse('150 Opening data connection');
         Stream<List<int>> fileStream = file.openRead();
         await fileStream.pipe(dataSocket!);
-        await dataSocket!.flush();
         dataSocket!.close();
         dataSocket = null;
         sendResponse('226 Transfer complete');
