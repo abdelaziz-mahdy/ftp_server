@@ -3,12 +3,13 @@ import 'dart:async';
 import 'package:ftp_server/server_type.dart';
 import 'package:intl/intl.dart';
 import 'ftp_command_handler.dart';
+import 'logger_handler.dart';
 
 class FtpSession {
   final Socket controlSocket;
   String currentDirectory;
   bool isAuthenticated = false;
-  FTPCommandHandler commandHandler;
+  final FTPCommandHandler commandHandler;
   ServerSocket? dataListener;
   Socket? dataSocket;
   final String? username;
@@ -17,6 +18,7 @@ class FtpSession {
   final List<String> allowedDirectories;
   final String startingDirectory;
   final ServerType serverType;
+  final LoggerHandler logger;
 
   FtpSession(
     this.controlSocket, {
@@ -25,8 +27,9 @@ class FtpSession {
     required this.allowedDirectories,
     required this.startingDirectory,
     required this.serverType,
+    required this.logger,
   })  : currentDirectory = startingDirectory,
-        commandHandler = FTPCommandHandler(controlSocket) {
+        commandHandler = FTPCommandHandler(controlSocket, logger) {
     sendResponse('220 Welcome to the FTP server');
     controlSocket.listen(processCommand, onDone: closeConnection);
   }
@@ -36,7 +39,7 @@ class FtpSession {
   }
 
   String _getFullPath(String path) {
-    if (path.startsWith(currentDirectory)) {
+    if (path.startsWith('/')) {
       return path;
     }
     return '$currentDirectory/$path';
@@ -48,7 +51,7 @@ class FtpSession {
   }
 
   void sendResponse(String message) {
-    print('Response: $message');
+    logger.logResponse(message);
     controlSocket.write("$message\r\n");
   }
 
@@ -110,7 +113,7 @@ class FtpSession {
       dataSocket = null;
       sendResponse('226 Transfer complete');
     } else {
-      sendResponse('550 Directory not found ${fullPath}');
+      sendResponse('550 Directory not found $fullPath');
     }
   }
 
@@ -160,9 +163,7 @@ class FtpSession {
       }
     } catch (e) {
       sendResponse('550 File transfer failed');
-      if (dataSocket != null) {
-        dataSocket = null;
-      }
+      dataSocket = null;
     }
   }
 
@@ -204,7 +205,7 @@ class FtpSession {
       currentDirectory = newDir.path;
       sendResponse('250 Directory changed to $currentDirectory');
     } else {
-      sendResponse('550 Directory not found ${fullPath}');
+      sendResponse('550 Directory not found $fullPath');
     }
   }
 

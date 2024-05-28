@@ -3,6 +3,7 @@ library ftp_server;
 import 'dart:io';
 import 'package:ftp_server/ftp_session.dart';
 import 'package:ftp_server/server_type.dart';
+import 'logger_handler.dart';
 
 class FtpServer {
   ServerSocket? _server;
@@ -12,13 +13,17 @@ class FtpServer {
   final List<String> allowedDirectories;
   final String startingDirectory;
   final ServerType serverType;
+  final LoggerHandler logger;
 
-  FtpServer(this.port,
-      {this.username,
-      this.password,
-      required this.allowedDirectories,
-      required this.startingDirectory,
-      required this.serverType});
+  FtpServer(
+    this.port, {
+    this.username,
+    this.password,
+    required this.allowedDirectories,
+    required this.startingDirectory,
+    required this.serverType,
+    Function(String)? logFunction,
+  }) : logger = LoggerHandler(logFunction);
 
   Future<void> start() async {
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
@@ -31,7 +36,8 @@ class FtpServer {
           password: password,
           allowedDirectories: allowedDirectories,
           startingDirectory: startingDirectory,
-          serverType: serverType);
+          serverType: serverType,
+          logger: logger);
     }
   }
 
