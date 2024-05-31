@@ -68,6 +68,9 @@ class FTPCommandHandler {
       case 'SIZE':
         handleSize(argument, session);
         break;
+      case 'PWD':
+        handleCurPath(argument, session);
+        break;
       default:
         session.sendResponse('502 Command not implemented');
         break;
@@ -170,5 +173,9 @@ class FTPCommandHandler {
 
   void handleSize(String argument, FtpSession session) {
     session.fileSize(argument);
+  }
+
+  void handleCurPath(String argument, FtpSession session) {
+    session.currentPath();
   }
 }

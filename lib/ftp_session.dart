@@ -36,15 +36,22 @@ class FtpSession {
   }
 
   bool _isPathAllowed(String path) {
-    return allowedDirectories.any((allowedDir) => path.startsWith(allowedDir));
+    return allowedDirectories.any((allowedDir) => path.startsWith(allowedDir) || path.startsWith("$allowedDir/"));
   }
 
   String _getFullPath(String path) {
-    // it seems like file provide filename, while folder provide relative path
-    if (path.startsWith("/")) {
-      return "$startingDirectory$path";
+    // todo support argument
+    path = path.split("-")[0];
+
+    if (Platform.isWindows) {
+      return path.isEmpty || path.startsWith("/")? currentDirectory: path;
     }
-    return "$currentDirectory$path";
+
+    if (path.startsWith(startingDirectory)) {
+      return path;
+    }
+    path = path.replaceAll("/", " ").trim().replaceAll(" ", "/");
+    return "$currentDirectory${currentDirectory.endsWith("/")? path: "/$path"}";
   }
 
   void processCommand(List<int> data) {
@@ -70,7 +77,7 @@ class FtpSession {
     int port = dataListener!.port;
     int p1 = port >> 8;
     int p2 = port & 0xFF;
-    String address = controlSocket.remoteAddress.host.replaceAll('.', ',');
+    String address = controlSocket.address.address.replaceAll('.', ',');
 
     // I'm not sure what happened here, the client shows nothing if I comment out this line.
     await Future.delayed(const Duration(milliseconds: 100));
@@ -286,5 +293,9 @@ class FtpSession {
     } else {
       sendResponse('550 File not found');
     }
+  }
+
+  void currentPath() {
+    sendResponse('257 "$currentDirectory" is current directory');
   }
 }
