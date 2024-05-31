@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 import 'package:ftp_server/server_type.dart';
@@ -39,14 +40,23 @@ class FtpSession {
   }
 
   String _getFullPath(String path) {
-    if (path.startsWith('/')) {
+    // todo support argument
+    path = path.split("-")[0];
+
+    if (Platform.isWindows) {
+      return path.isEmpty || path.startsWith("/")? currentDirectory: path;
+    }
+
+    if (path.startsWith(startingDirectory)) {
       return path;
     }
-    return '$currentDirectory/$path';
+    path = path.replaceAll("/", " ").trim().replaceAll(" ", "/");
+    return "$currentDirectory${currentDirectory.endsWith("/")? path: "/$path"}";
   }
 
   void processCommand(List<int> data) {
-    String commandLine = String.fromCharCodes(data).trim();
+    // avoid '烫烫烫'
+    String commandLine = utf8.decode(data).trim();
     commandHandler.handleCommand(commandLine, this);
   }
 
@@ -68,6 +78,9 @@ class FtpSession {
     int p1 = port >> 8;
     int p2 = port & 0xFF;
     String address = controlSocket.address.address.replaceAll('.', ',');
+
+    // I'm not sure what happened here, the client shows nothing if I comment out this line.
+    await Future.delayed(const Duration(milliseconds: 100));
     sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
     dataListener!.first.then((socket) {
       dataSocket = socket;
@@ -280,5 +293,9 @@ class FtpSession {
     } else {
       sendResponse('550 File not found');
     }
+  }
+
+  void currentPath() {
+    sendResponse('257 "$currentDirectory" is current directory');
   }
 }
