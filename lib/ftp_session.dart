@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 import 'package:ftp_server/server_type.dart';
@@ -39,14 +40,16 @@ class FtpSession {
   }
 
   String _getFullPath(String path) {
-    if (path.startsWith('/')) {
-      return path;
+    // it seems like file provide filename, while folder provide relative path
+    if (path.startsWith("/")) {
+      return "$startingDirectory$path";
     }
-    return '$currentDirectory/$path';
+    return "$currentDirectory$path";
   }
 
   void processCommand(List<int> data) {
-    String commandLine = String.fromCharCodes(data).trim();
+    // avoid '烫烫烫'
+    String commandLine = utf8.decode(data).trim();
     commandHandler.handleCommand(commandLine, this);
   }
 
@@ -67,7 +70,10 @@ class FtpSession {
     int port = dataListener!.port;
     int p1 = port >> 8;
     int p2 = port & 0xFF;
-    String address = controlSocket.address.address.replaceAll('.', ',');
+    String address = controlSocket.remoteAddress.host.replaceAll('.', ',');
+
+    // I'm not sure what happened here, the client shows nothing if I comment out this line.
+    await Future.delayed(const Duration(milliseconds: 100));
     sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
     dataListener!.first.then((socket) {
       dataSocket = socket;
