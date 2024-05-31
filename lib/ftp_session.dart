@@ -69,7 +69,7 @@ class FtpSession {
     controlSocket.close();
     dataSocket?.close();
     dataListener?.close();
-    print('Connection closed');
+    logger.generalLog('Connection closed');
   }
 
   Future<void> enterPassiveMode() async {
@@ -102,7 +102,7 @@ class FtpSession {
     }
 
     String fullPath = _getFullPath(path);
-    print('Listing directory: $fullPath');
+    logger.generalLog('Listing directory: $fullPath');
 
     if (!_isPathAllowed(fullPath)) {
       sendResponse('550 Access denied');

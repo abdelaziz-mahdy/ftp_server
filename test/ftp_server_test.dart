@@ -1,5 +1,3 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ftp_server/ftp_server.dart';
@@ -9,8 +7,8 @@ void main() {
   final List<String> allowedDirectories = ["/tmp/ftp_test"];
   late FtpServer server;
   late Process ftpClient;
-  final int port = 2126;
-  final String logFilePath = 'ftpsession.log';
+  const int port = 2126;
+  const String logFilePath = 'ftpsession.log';
 
   Future<bool> isFtpAvailable() async {
     try {
@@ -83,7 +81,7 @@ void main() {
 
     Future<String> readAllOutput() async {
       await Future.delayed(
-          Duration(milliseconds: 500)); // Wait for log to be written
+          const Duration(milliseconds: 500)); // Wait for log to be written
       return File(logFilePath).readAsStringSync();
     }
 

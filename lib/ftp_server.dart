@@ -27,9 +27,10 @@ class FtpServer {
 
   Future<void> start() async {
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
-    print('FTP Server is running on port $port');
+    logger.generalLog('FTP Server is running on port $port');
     await for (var client in _server!) {
-      print('New client connected from ${client.remoteAddress.address}:${client.remotePort}');
+      logger.generalLog(
+          'New client connected from ${client.remoteAddress.address}:${client.remotePort}');
       FtpSession(
         client,
         username: username,
@@ -44,9 +45,10 @@ class FtpServer {
 
   Future<void> startInBackground() async {
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
-    print('FTP Server is running on port $port');
+    logger.generalLog('FTP Server is running on port $port');
     _server!.listen((client) {
-      print('New client connected from ${client.remoteAddress.address}:${client.remotePort}');
+      logger.generalLog(
+          'New client connected from ${client.remoteAddress.address}:${client.remotePort}');
       FtpSession(
         client,
         username: username,
@@ -61,6 +63,6 @@ class FtpServer {
 
   Future<void> stop() async {
     await _server?.close();
-    print('FTP Server stopped');
+    logger.generalLog('FTP Server stopped');
   }
 }
