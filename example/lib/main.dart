@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -29,7 +30,16 @@ class MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    if (Platform.isAndroid) {
+      _requestPermission();
+    }
     _loadDirectory();
+  }
+
+  Future<void> _requestPermission() async {
+    if (await Permission.manageExternalStorage.isDenied) {
+      await Permission.manageExternalStorage.request();
+    }
   }
 
   Future<void> _loadDirectory() async {
