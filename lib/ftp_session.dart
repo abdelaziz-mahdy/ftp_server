@@ -36,7 +36,7 @@ class FtpSession {
   }
 
   bool _isPathAllowed(String path) {
-    return allowedDirectories.any((allowedDir) => path.startsWith(allowedDir) || path.startsWith("$allowedDir/"));
+    return allowedDirectories.any((allowedDir) => path.startsWith(allowedDir));
   }
 
   String _getFullPath(String path) {
