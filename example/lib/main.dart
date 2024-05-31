@@ -1,10 +1,11 @@
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -26,11 +27,20 @@ class MyAppState extends State<MyApp> {
   bool isLoading = false;
   Isolate? isolate;
   ReceivePort? receivePort;
-
+  int? port;
   @override
   void initState() {
     super.initState();
+    if (Platform.isAndroid) {
+      _requestPermission();
+    }
     _loadDirectory();
+  }
+
+  Future<void> _requestPermission() async {
+    if (await Permission.manageExternalStorage.isDenied) {
+      await Permission.manageExternalStorage.request();
+    }
   }
 
   Future<void> _loadDirectory() async {
@@ -88,10 +98,10 @@ class MyAppState extends State<MyApp> {
       }
 
       var server = FtpServer(
-        21,
+        port ?? Random().nextInt(65535),
         startingDirectory: serverDirectory,
         allowedDirectories: [serverDirectory],
-        serverType: ServerType.readOnly,
+        serverType: ServerType.readAndWrite,
       );
 
       Future serverFuture = server.start();
@@ -100,7 +110,8 @@ class MyAppState extends State<MyApp> {
 
       setState(() {
         serverStatus = 'Server is running';
-        connectionInfo = 'Connect using FTP client:\nftp://$address:21';
+        connectionInfo =
+            'Connect using FTP client:\nftp://$address:${server.port}';
         isLoading = false;
       });
 

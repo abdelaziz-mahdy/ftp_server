@@ -32,6 +32,7 @@ dependencies:
     sdk: flutter
   ftp_server:
     path: ../
+  permission_handler: ^11.3.1
   path_provider: ^2.1.3
   shared_preferences: ^2.0.16
   file_picker: ^5.2.5

@@ -1,106 +1,181 @@
 import 'dart:io';
 import 'package:ftp_server/ftp_session.dart';
 import 'package:ftp_server/server_type.dart';
-// Import the enum
+import 'logger_handler.dart';
 
 class FTPCommandHandler {
   final Socket controlSocket;
+  final LoggerHandler logger;
 
-  FTPCommandHandler(this.controlSocket);
+  FTPCommandHandler(this.controlSocket, this.logger);
 
   void handleCommand(String commandLine, FtpSession session) {
     List<String> parts = commandLine.split(' ');
     String command = parts[0].toUpperCase();
     String argument = parts.length > 1 ? parts.sublist(1).join(' ').trim() : '';
-    print('Command: $command, Argument: $argument');
+
+    logger.logCommand(command, argument);
 
     switch (command) {
       case 'USER':
-        session.cachedUsername = argument;
-        session.isAuthenticated =
-            false; // Reset authentication status pending password check
-        session.sendResponse('331 Password required for $argument');
+        handleUser(argument, session);
         break;
       case 'PASS':
-        if ((session.username == null && session.password == null) ||
-            (session.cachedUsername == session.username &&
-                argument == session.password)) {
-          session.isAuthenticated = true;
-          session.sendResponse('230 User logged in, proceed');
-        } else {
-          session.sendResponse('530 Not logged in');
-        }
+        handlePass(argument, session);
         break;
       case 'QUIT':
-        session.sendResponse('221 Service closing control connection');
-        session.controlSocket.close();
+        handleQuit(session);
         break;
       case 'PASV':
-        session.enterPassiveMode();
+        handlePasv(session);
         break;
       case 'PORT':
-        session.enterActiveMode(argument);
+        handlePort(argument, session);
         break;
       case 'LIST':
-        session.listDirectory(argument);
+        handleList(argument, session);
         break;
       case 'RETR':
-        session.retrieveFile(argument);
+        handleRetr(argument, session);
         break;
       case 'STOR':
-        if (session.serverType == ServerType.readOnly) {
-          session.sendResponse('550 Command not allowed in read-only mode');
-        } else {
-          session.storeFile(argument);
-        }
+        handleStor(argument, session);
         break;
       case 'CWD':
-        session.changeDirectory(argument);
+        handleCwd(argument, session);
         break;
       case 'CDUP':
-        session.changeToParentDirectory();
+        handleCdup(session);
         break;
       case 'MKD':
-        if (session.serverType == ServerType.readOnly) {
-          session.sendResponse('550 Command not allowed in read-only mode');
-        } else {
-          session.makeDirectory(argument);
-        }
+        handleMkd(argument, session);
         break;
       case 'RMD':
-        if (session.serverType == ServerType.readOnly) {
-          session.sendResponse('550 Command not allowed in read-only mode');
-        } else {
-          session.removeDirectory(argument);
-        }
+        handleRmd(argument, session);
         break;
       case 'DELE':
-        if (session.serverType == ServerType.readOnly) {
-          session.sendResponse('550 Command not allowed in read-only mode');
-        } else {
-          session.deleteFile(argument);
-        }
+        handleDele(argument, session);
         break;
       case 'SYST':
-        session.sendResponse(
-            '215 UNIX Type: L8'); // Assuming a UNIX-type system for simplicity
+        handleSyst(session);
         break;
       case 'NOOP':
-        session.sendResponse('200 NOOP command successful');
+        handleNoop(session);
         break;
       case 'TYPE':
-        if (argument == 'A' || argument == 'I') {
-          session.sendResponse('200 Type set to $argument');
-        } else {
-          session.sendResponse('500 Syntax error, command unrecognized');
-        }
+        handleType(argument, session);
         break;
       case 'SIZE':
-        session.fileSize(argument);
+        handleSize(argument, session);
+        break;
+      case 'PWD':
+        handleCurPath(argument, session);
         break;
       default:
         session.sendResponse('502 Command not implemented');
         break;
     }
+  }
+
+  void handleUser(String argument, FtpSession session) {
+    session.cachedUsername = argument;
+    session.isAuthenticated = false;
+    session.sendResponse('331 Password required for $argument');
+  }
+
+  void handlePass(String argument, FtpSession session) {
+    if ((session.username == null && session.password == null) ||
+        (session.cachedUsername == session.username &&
+            argument == session.password)) {
+      session.isAuthenticated = true;
+      session.sendResponse('230 User logged in, proceed');
+    } else {
+      session.sendResponse('530 Not logged in');
+    }
+  }
+
+  Future<void> handleQuit(FtpSession session) async {
+    session.sendResponse('221 Service closing control connection');
+    await session.controlSocket.close();
+  }
+
+  void handlePasv(FtpSession session) {
+    session.enterPassiveMode();
+  }
+
+  void handlePort(String argument, FtpSession session) {
+    session.enterActiveMode(argument);
+  }
+
+  void handleList(String argument, FtpSession session) {
+    session.listDirectory(argument);
+  }
+
+  void handleRetr(String argument, FtpSession session) {
+    session.retrieveFile(argument);
+  }
+
+  void handleStor(String argument, FtpSession session) {
+    if (session.serverType == ServerType.readOnly) {
+      session.sendResponse('550 Command not allowed in read-only mode');
+    } else {
+      session.storeFile(argument);
+    }
+  }
+
+  void handleCwd(String argument, FtpSession session) {
+    session.changeDirectory(argument);
+  }
+
+  void handleCdup(FtpSession session) {
+    session.changeToParentDirectory();
+  }
+
+  void handleMkd(String argument, FtpSession session) {
+    if (session.serverType == ServerType.readOnly) {
+      session.sendResponse('550 Command not allowed in read-only mode');
+    } else {
+      session.makeDirectory(argument);
+    }
+  }
+
+  void handleRmd(String argument, FtpSession session) {
+    if (session.serverType == ServerType.readOnly) {
+      session.sendResponse('550 Command not allowed in read-only mode');
+    } else {
+      session.removeDirectory(argument);
+    }
+  }
+
+  void handleDele(String argument, FtpSession session) {
+    if (session.serverType == ServerType.readOnly) {
+      session.sendResponse('550 Command not allowed in read-only mode');
+    } else {
+      session.deleteFile(argument);
+    }
+  }
+
+  void handleSyst(FtpSession session) {
+    session.sendResponse('215 UNIX Type: L8');
+  }
+
+  void handleNoop(FtpSession session) {
+    session.sendResponse('200 NOOP command successful');
+  }
+
+  void handleType(String argument, FtpSession session) {
+    if (argument == 'A' || argument == 'I') {
+      session.sendResponse('200 Type set to $argument');
+    } else {
+      session.sendResponse('500 Syntax error, command unrecognized');
+    }
+  }
+
+  void handleSize(String argument, FtpSession session) {
+    session.fileSize(argument);
+  }
+
+  void handleCurPath(String argument, FtpSession session) {
+    session.currentPath();
   }
 }
