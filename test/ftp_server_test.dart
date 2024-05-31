@@ -143,7 +143,6 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      await Future.delayed(Duration(milliseconds: 500));
       final output = await readAllOutput();
 
       expect(output, contains('226 Transfer complete'));
