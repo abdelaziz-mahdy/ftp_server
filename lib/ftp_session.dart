@@ -44,14 +44,14 @@ class FtpSession {
     path = path.split("-")[0];
 
     if (Platform.isWindows) {
-      return path.isEmpty || path.startsWith("/")? currentDirectory: path;
+      return path.isEmpty || path.startsWith("/") ? currentDirectory : path;
     }
 
     if (path.startsWith(startingDirectory)) {
       return path;
     }
     path = path.replaceAll("/", " ").trim().replaceAll(" ", "/");
-    return "$currentDirectory${currentDirectory.endsWith("/")? path: "/$path"}";
+    return "$currentDirectory${currentDirectory.endsWith("/") ? path : "/$path"}";
   }
 
   void processCommand(List<int> data) {
@@ -80,7 +80,7 @@ class FtpSession {
     String address = controlSocket.address.address.replaceAll('.', ',');
 
     // I'm not sure what happened here, the client shows nothing if I comment out this line.
-    await Future.delayed(const Duration(milliseconds: 100));
+    await Future.delayed(const Duration(microseconds: 100));
     sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
     dataListener!.first.then((socket) {
       dataSocket = socket;
@@ -184,25 +184,38 @@ class FtpSession {
       sendResponse('425 Can\'t open data connection');
       return;
     }
+
     String fullPath = _getFullPath(filename);
+
     if (!_isPathAllowed(fullPath)) {
       sendResponse('550 Access denied');
       return;
     }
 
-    File file = File(fullPath);
-    IOSink fileSink = file.openWrite();
-    await dataSocket!.listen((data) {
-      fileSink.add(data);
-    }, onDone: () async {
-      await fileSink.close();
-      dataSocket!.close();
-      dataSocket = null;
-      sendResponse('226 Transfer complete');
-    }, onError: (error) {
-      sendResponse('426 Connection closed; transfer aborted');
-      fileSink.close();
-    }).asFuture();
+    try {
+      // Create the directory if it doesn't exist
+      final directory = Directory(fullPath).parent;
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+
+      File file = File(fullPath);
+      IOSink fileSink = file.openWrite();
+
+      await dataSocket!.listen((data) {
+        fileSink.add(data);
+      }, onDone: () async {
+        await fileSink.close();
+        await dataSocket!.close();
+        dataSocket = null;
+        sendResponse('226 Transfer complete');
+      }, onError: (error) async {
+        sendResponse('426 Connection closed; transfer aborted');
+        await fileSink.close();
+      }).asFuture();
+    } catch (e) {
+      sendResponse('550 Error creating file or directory $e');
+    }
   }
 
   void changeDirectory(String dirname) {

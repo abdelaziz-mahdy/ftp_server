@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:ftp_server/ftp_server.dart';
@@ -26,7 +27,7 @@ class MyAppState extends State<MyApp> {
   bool isLoading = false;
   Isolate? isolate;
   ReceivePort? receivePort;
-
+  int? port;
   @override
   void initState() {
     super.initState();
@@ -97,10 +98,10 @@ class MyAppState extends State<MyApp> {
       }
 
       var server = FtpServer(
-        21,
+        port ?? Random().nextInt(65535),
         startingDirectory: serverDirectory,
         allowedDirectories: [serverDirectory],
-        serverType: ServerType.readOnly,
+        serverType: ServerType.readAndWrite,
       );
 
       Future serverFuture = server.start();
@@ -109,7 +110,8 @@ class MyAppState extends State<MyApp> {
 
       setState(() {
         serverStatus = 'Server is running';
-        connectionInfo = 'Connect using FTP client:\nftp://$address:21';
+        connectionInfo =
+            'Connect using FTP client:\nftp://$address:${server.port}';
         isLoading = false;
       });
 
