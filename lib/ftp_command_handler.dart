@@ -71,6 +71,9 @@ class FTPCommandHandler {
       case 'PWD':
         handleCurPath(argument, session);
         break;
+      case 'OPTS':
+        handleOptions(argument, session);
+        break;
       case 'FEAT':
         handleFeat(session);
         break;
@@ -183,6 +186,20 @@ class FTPCommandHandler {
 
   void handleCurPath(String argument, FtpSession session) {
     session.currentPath();
+  }
+
+  void handleOptions(String argument, FtpSession session) {
+    var args = argument.split(" ");
+    var option = args[0].toUpperCase();
+    switch (option) {
+      case "UTF8":
+        var mode = args[1].toUpperCase() == "ON";
+        session.sendResponse("200 UTF8 mode ${mode ? 'enable' : 'disable'}");
+        break;
+      default:
+        session.sendResponse('502 Command not implemented');
+        break;
+    }
   }
 
   void handleFeat(FtpSession session) {
