@@ -52,14 +52,14 @@ class FtpSession {
 
   String _getFullPath(String path) {
     // todo support order argument, eg: ubuntu file manager send: LIST -a
-    if(path == "-a") {
+    if (path == "-a") {
       path = "";
     }
     if (path == "/") {
       return startingDirectory;
     }
 
-    if(path.isEmpty) {
+    if (path.isEmpty) {
       return currentDirectory;
     }
 
