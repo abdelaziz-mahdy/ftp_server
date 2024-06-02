@@ -32,6 +32,35 @@ void main() {
     }
   }
 
+  Future<void> connectAndAuthenticate() async {
+    ftpClient = await Process.start(
+      Platform.isWindows ? 'cmd' : 'bash',
+      Platform.isWindows
+          ? ['/c', 'ftp', '-n', '-v', '-i', '127.0.0.1', port.toString()]
+          : ['-c', 'ftp -n -v -i 127.0.0.1 $port'],
+      runInShell: true,
+    );
+    File(logFilePath).writeAsStringSync(''); // Clear the log file
+    ftpClient.stdout.listen((data) {
+      File(logFilePath)
+          .writeAsStringSync(String.fromCharCodes(data), mode: FileMode.append);
+    });
+    ftpClient.stderr.listen((data) {
+      File(logFilePath)
+          .writeAsStringSync(String.fromCharCodes(data), mode: FileMode.append);
+    });
+    ftpClient.stdin.writeln('open 127.0.0.1 $port');
+    await ftpClient.stdin.flush();
+    ftpClient.stdin.writeln('user test password');
+    await ftpClient.stdin.flush();
+  }
+
+  Future<String> readAllOutput() async {
+    await Future.delayed(
+        const Duration(milliseconds: 500)); // Wait for log to be written
+    return File(logFilePath).readAsStringSync();
+  }
+
   group('FTP Server Tests', () {
     setUpAll(() async {
       // Ensure the ftp command is available
@@ -64,43 +93,19 @@ void main() {
     });
 
     setUp(() async {
-      ftpClient = await Process.start(
-        Platform.isWindows ? 'cmd' : 'bash',
-        Platform.isWindows
-            ? ['/c', 'ftp', '-n', '-v', '-i', '127.0.0.1', port.toString()]
-            : ['-c', 'ftp -n -v -i 127.0.0.1 $port'],
-        runInShell: true,
-      );
-      File(logFilePath).writeAsStringSync(''); // Clear the log file
-      ftpClient.stdout.listen((data) {
-        File(logFilePath).writeAsStringSync(String.fromCharCodes(data),
-            mode: FileMode.append);
-      });
-      ftpClient.stderr.listen((data) {
-        File(logFilePath).writeAsStringSync(String.fromCharCodes(data),
-            mode: FileMode.append);
-      });
-      ftpClient.stdin.writeln('open 127.0.0.1 $port');
-      ftpClient.stdin.writeln('user test password');
-      await ftpClient.stdin.flush();
+      await connectAndAuthenticate();
     });
 
     tearDown(() async {
       ftpClient.kill();
     });
 
-    Future<String> readAllOutput() async {
-      await Future.delayed(
-          const Duration(milliseconds: 500)); // Wait for log to be written
-      return File(logFilePath).readAsStringSync();
-    }
-
     test('Authentication Success', () async {
-      ftpClient.stdin.writeln('user test password');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
+
       expect(output, contains('230 User logged in, proceed'));
     });
 
@@ -110,6 +115,7 @@ void main() {
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
+
       expect(output, contains('226 Transfer complete'));
     });
 
@@ -119,6 +125,7 @@ void main() {
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
+
       expect(output, contains('250 Directory changed'));
     });
 
@@ -128,6 +135,7 @@ void main() {
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
+
       expect(output, contains('257 "test_dir" created'));
       expect(Directory('${tempDir.path}/test_dir').existsSync(), isTrue);
     });
@@ -139,6 +147,7 @@ void main() {
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
+
       expect(output, contains('250 Directory deleted'));
       expect(Directory('${tempDir.path}/test_dir').existsSync(), isFalse);
     });
@@ -152,6 +161,7 @@ void main() {
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
+
       expect(output, contains('226 Transfer complete'));
     });
 
@@ -165,21 +175,9 @@ void main() {
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
+
       expect(output, contains('226 Transfer complete'));
       expect(File('${tempDir.path}/retrieved_file.txt').existsSync(), isTrue);
-    });
-
-    test('Delete File', () async {
-      final testFile = File('${tempDir.path}/test_file.txt')
-        ..writeAsStringSync('Hello, FTP!');
-
-      ftpClient.stdin.writeln('delete ${testFile.path}');
-      ftpClient.stdin.writeln('quit');
-      await ftpClient.stdin.flush();
-
-      final output = await readAllOutput();
-      expect(output, contains('250 File deleted'));
-      expect(testFile.existsSync(), isFalse);
     });
 
     test('File Size', () async {
@@ -191,7 +189,22 @@ void main() {
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
+
       expect(output, contains('213 11')); // File size is 11 bytes
+    });
+
+    test('Delete File', () async {
+      final testFile = File('${tempDir.path}/test_file.txt')
+        ..writeAsStringSync('Hello, FTP!');
+
+      ftpClient.stdin.writeln('delete ${testFile.path}');
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      final output = await readAllOutput();
+
+      expect(output, contains('250 File deleted'));
+      expect(testFile.existsSync(), isFalse);
     });
 
     test('System Command', () async {
@@ -200,16 +213,18 @@ void main() {
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
+
       expect(output, contains('215 UNIX Type: L8'));
     });
 
-    test('No Operation Command', () async {
-      ftpClient.stdin.writeln('noop');
+    test('Print Working Directory Command', () async {
+      ftpClient.stdin.writeln('pwd');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
-      expect(output, contains('200 NOOP command successful'));
+
+      expect(output, contains('257 "${tempDir.path}" is current directory'));
     });
   });
 }
