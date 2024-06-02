@@ -23,7 +23,8 @@ void main() {
   Future<void> installFtp() async {
     if (Platform.isLinux) {
       await Process.run('sudo', ['apt-get', 'update'], runInShell: true);
-      await Process.run('sudo', ['apt-get', 'install', '-y', 'ftp'], runInShell: true);
+      await Process.run('sudo', ['apt-get', 'install', '-y', 'ftp'],
+          runInShell: true);
     } else if (Platform.isMacOS) {
       await Process.run('brew', ['install', 'inetutils'], runInShell: true);
     } else if (Platform.isWindows) {
@@ -39,7 +40,7 @@ void main() {
       }
       if (!await isFtpAvailable()) {
         throw Exception(
-          'FTP command is not available and could not be installed.');
+            'FTP command is not available and could not be installed.');
       }
 
       // Create the allowed directory and start the FTP server
@@ -65,8 +66,19 @@ void main() {
     setUp(() async {
       ftpClient = await Process.start(
         Platform.isWindows ? 'cmd' : 'bash',
-        Platform.isWindows ? ['/c', 'ftp', '-n', '-v', '-i', '127.0.0.1', port.toString(), '>>', logFilePath]
-                           : ['-c', 'ftp -n -v -i 127.0.0.1 $port >> $logFilePath'],
+        Platform.isWindows
+            ? [
+                '/c',
+                'ftp',
+                '-n',
+                '-v',
+                '-i',
+                '127.0.0.1',
+                port.toString(),
+                '>>',
+                logFilePath
+              ]
+            : ['-c', 'ftp -n -v -i 127.0.0.1 $port >> $logFilePath'],
         runInShell: true,
       );
       File(logFilePath).writeAsStringSync(''); // Clear the log file
@@ -81,7 +93,8 @@ void main() {
     });
 
     Future<String> readAllOutput() async {
-      await Future.delayed(const Duration(milliseconds: 500)); // Wait for log to be written
+      await Future.delayed(
+          const Duration(milliseconds: 500)); // Wait for log to be written
       return File(logFilePath).readAsStringSync();
     }
 
@@ -149,7 +162,8 @@ void main() {
       final testFile = File('${tempDir.path}/test_file.txt')
         ..writeAsStringSync('Hello, FTP!');
 
-      ftpClient.stdin.writeln('get ${testFile.path} ${tempDir.path}/retrieved_file.txt');
+      ftpClient.stdin
+          .writeln('get ${testFile.path} ${tempDir.path}/retrieved_file.txt');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
