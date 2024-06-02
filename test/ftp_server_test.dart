@@ -110,6 +110,11 @@ void main() {
 
     test('List Directory', () async {
       ftpClient.stdin.writeln('ls');
+      if (Platform.isLinux) {
+        ftpClient.stdin.writeln('passive on');
+        ftpClient.stdin.writeln('ls');
+        ftpClient.stdin.writeln('passive off');
+      }
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
@@ -197,7 +202,12 @@ void main() {
 
       final output = await readAllOutput();
 
-      expect(output, contains('213 11')); // File size is 11 bytes
+      var expectText = '213 11';
+      if (Platform.isLinux) {
+        expectText = '\t11';
+      }
+
+      expect(output, contains(expectText)); // File size is 11 bytes
       expect(output, contains('test_file.txt'));
     });
 
@@ -234,7 +244,12 @@ void main() {
 
       final output = await readAllOutput();
 
-      expect(output, contains('257 "${tempDir.path}" is current directory'));
+      var expectText = '257 "${tempDir.path}" is current directory';
+      if (Platform.isLinux) {
+        expectText = 'Remote directory: ${tempDir.path}';
+      }
+
+      expect(output, contains(expectText));
     });
   });
 }
