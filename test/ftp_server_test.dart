@@ -4,7 +4,8 @@ import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
 
 void main() {
-  final List<String> allowedDirectories = ["/tmp/ftp_test"];
+  final Directory tempDir = Directory.systemTemp.createTempSync('ftp_test');
+  final List<String> allowedDirectories = [tempDir.path];
   late FtpServer server;
   late Process ftpClient;
   const int port = 2126;
@@ -22,8 +23,7 @@ void main() {
   Future<void> installFtp() async {
     if (Platform.isLinux) {
       await Process.run('sudo', ['apt-get', 'update'], runInShell: true);
-      await Process.run('sudo', ['apt-get', 'install', '-y', 'ftp'],
-          runInShell: true);
+      await Process.run('sudo', ['apt-get', 'install', '-y', 'ftp'], runInShell: true);
     } else if (Platform.isMacOS) {
       await Process.run('brew', ['install', 'inetutils'], runInShell: true);
     } else if (Platform.isWindows) {
@@ -37,14 +37,13 @@ void main() {
       if (!await isFtpAvailable()) {
         await installFtp();
       }
-
       if (!await isFtpAvailable()) {
         throw Exception(
-            'FTP command is not available and could not be installed.');
+          'FTP command is not available and could not be installed.');
       }
 
       // Create the allowed directory and start the FTP server
-      Directory(allowedDirectories.first).createSync(recursive: true);
+      tempDir.createSync(recursive: true);
       server = FtpServer(
         port,
         username: 'test',
@@ -59,13 +58,14 @@ void main() {
 
     tearDownAll(() async {
       await server.stop();
-      Directory(allowedDirectories.first).deleteSync(recursive: true);
+      tempDir.deleteSync(recursive: true);
     });
 
     setUp(() async {
       ftpClient = await Process.start(
-        'bash',
-        ['-c', 'ftp -n -v -i 127.0.0.1 $port >> $logFilePath'],
+        Platform.isWindows ? 'cmd' : 'bash',
+        Platform.isWindows ? ['/c', 'ftp', '-n', '-v', '-i', '127.0.0.1', port.toString(), '>>', logFilePath]
+                           : ['-c', 'ftp -n -v -i 127.0.0.1 $port >> $logFilePath'],
         runInShell: true,
       );
       File(logFilePath).writeAsStringSync(''); // Clear the log file
@@ -80,8 +80,7 @@ void main() {
     });
 
     Future<String> readAllOutput() async {
-      await Future.delayed(
-          const Duration(milliseconds: 500)); // Wait for log to be written
+      await Future.delayed(const Duration(milliseconds: 500)); // Wait for log to be written
       return File(logFilePath).readAsStringSync();
     }
 
@@ -104,7 +103,7 @@ void main() {
     });
 
     test('Change Directory', () async {
-      ftpClient.stdin.writeln('cd /tmp/ftp_test');
+      ftpClient.stdin.writeln('cd ${tempDir.path}');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
@@ -119,7 +118,7 @@ void main() {
 
       final output = await readAllOutput();
       expect(output, contains('257 "test_dir" created'));
-      expect(Directory('/tmp/ftp_test/test_dir').existsSync(), isTrue);
+      expect(Directory('${tempDir.path}/test_dir').existsSync(), isTrue);
     });
 
     test('Remove Directory', () async {
@@ -130,41 +129,39 @@ void main() {
 
       final output = await readAllOutput();
       expect(output, contains('250 Directory deleted'));
-      expect(Directory('/tmp/ftp_test/test_dir').existsSync(), isFalse);
+      expect(Directory('${tempDir.path}/test_dir').existsSync(), isFalse);
     });
 
     test('Store File', () async {
-      final testFile = File('/tmp/ftp_test/test_file.txt')
+      final testFile = File('${tempDir.path}/test_file.txt')
         ..writeAsStringSync('Hello, FTP!');
 
-      ftpClient.stdin.writeln('put /tmp/ftp_test/test_file.txt');
+      ftpClient.stdin.writeln('put ${testFile.path}');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
-
       expect(output, contains('226 Transfer complete'));
     });
 
     test('Retrieve File', () async {
-      final testFile = File('/tmp/ftp_test/test_file.txt')
+      final testFile = File('${tempDir.path}/test_file.txt')
         ..writeAsStringSync('Hello, FTP!');
 
-      ftpClient.stdin.writeln(
-          'get /tmp/ftp_test/test_file.txt /tmp/ftp_test/retrieved_file.txt');
+      ftpClient.stdin.writeln('get ${testFile.path} ${tempDir.path}/retrieved_file.txt');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
       expect(output, contains('226 Transfer complete'));
-      expect(File('/tmp/ftp_test/retrieved_file.txt').existsSync(), isTrue);
+      expect(File('${tempDir.path}/retrieved_file.txt').existsSync(), isTrue);
     });
 
     test('Delete File', () async {
-      final testFile = File('/tmp/ftp_test/test_file.txt')
+      final testFile = File('${tempDir.path}/test_file.txt')
         ..writeAsStringSync('Hello, FTP!');
 
-      ftpClient.stdin.writeln('delete /tmp/ftp_test/test_file.txt');
+      ftpClient.stdin.writeln('delete ${testFile.path}');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
@@ -174,15 +171,15 @@ void main() {
     });
 
     test('File Size', () async {
-      final testFile = File('/tmp/ftp_test/test_file.txt')
+      final testFile = File('${tempDir.path}/test_file.txt')
         ..writeAsStringSync('Hello, FTP!');
 
-      ftpClient.stdin.writeln('size /tmp/ftp_test/test_file.txt');
+      ftpClient.stdin.writeln('size ${testFile.path}');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
-      expect(output, contains('213 11')); // File size is 12 bytes
+      expect(output, contains('213 11')); // File size is 11 bytes
     });
 
     test('System Command', () async {
