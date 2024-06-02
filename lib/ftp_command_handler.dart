@@ -71,6 +71,12 @@ class FTPCommandHandler {
       case 'PWD':
         handleCurPath(argument, session);
         break;
+      case 'FEAT':
+        handleFeat(session);
+        break;
+      case 'EPSV':
+        handleEpsv(session);
+        break;
       default:
         session.sendResponse('502 Command not implemented');
         break;
@@ -85,8 +91,7 @@ class FTPCommandHandler {
 
   void handlePass(String argument, FtpSession session) {
     if ((session.username == null && session.password == null) ||
-        (session.cachedUsername == session.username &&
-            argument == session.password)) {
+        (session.cachedUsername == session.username && argument == session.password)) {
       session.isAuthenticated = true;
       session.sendResponse('230 User logged in, proceed');
     } else {
@@ -177,5 +182,18 @@ class FTPCommandHandler {
 
   void handleCurPath(String argument, FtpSession session) {
     session.currentPath();
+  }
+
+  void handleFeat(FtpSession session) {
+    session.sendResponse('211-Features:');
+    session.sendResponse(' SIZE');
+    session.sendResponse(' MDTM');
+    session.sendResponse(' EPSV');
+    session.sendResponse(' PASV');
+    session.sendResponse('211 End');
+  }
+
+  void handleEpsv(FtpSession session) {
+    session.enterExtendedPassiveMode();
   }
 }
