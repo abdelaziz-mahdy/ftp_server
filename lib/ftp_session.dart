@@ -78,12 +78,10 @@ class FtpSession {
     int p1 = port >> 8;
     int p2 = port & 0xFF;
     String address = controlSocket.address.address.replaceAll('.', ',');
-
-    // I'm not sure what happened here, the client shows nothing if I comment out this line.
-    await Future.delayed(const Duration(microseconds: 100));
-    sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
     dataListener!.first.then((socket) {
       dataSocket = socket;
+
+      sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
     });
   }
 
@@ -150,8 +148,7 @@ class FtpSession {
   }
 
   Future<void> retrieveFile(String filename) async {
-    if (dataSocket == null) {
-      sendResponse('425 Can\'t open data connection');
+    if (!openDataConnection()) {
       return;
     }
 
@@ -164,7 +161,6 @@ class FtpSession {
 
       File file = File(fullPath);
       if (await file.exists()) {
-        sendResponse('150 Opening data connection');
         Stream<List<int>> fileStream = file.openRead();
         await fileStream.pipe(dataSocket!);
         dataSocket!.close();
@@ -179,12 +175,19 @@ class FtpSession {
     }
   }
 
-  Future<void> storeFile(String filename) async {
+  bool openDataConnection() {
     if (dataSocket == null) {
       sendResponse('425 Can\'t open data connection');
+      return false;
+    }
+    sendResponse('150 Opening data connection');
+    return true;
+  }
+
+  Future<void> storeFile(String filename) async {
+    if (!openDataConnection()) {
       return;
     }
-
     String fullPath = _getFullPath(filename);
 
     if (!_isPathAllowed(fullPath)) {
@@ -200,9 +203,6 @@ class FtpSession {
       }
 
       File file = File(fullPath);
-
-      // Send 150 response to indicate the server is ready to receive the file
-      sendResponse('150 Opening data connection');
 
       IOSink fileSink = file.openWrite();
 
@@ -327,9 +327,9 @@ class FtpSession {
   Future<void> enterExtendedPassiveMode() async {
     dataListener = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
     int port = dataListener!.port;
-    sendResponse('229 Entering Extended Passive Mode (|||$port|)');
     dataListener!.first.then((socket) {
       dataSocket = socket;
+      sendResponse('229 Entering Extended Passive Mode (|||$port|)');
     });
   }
 }
