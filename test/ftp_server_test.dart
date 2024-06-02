@@ -9,7 +9,7 @@ void main() {
   late FtpServer server;
   late Process ftpClient;
   const int port = 2126;
-  const String logFilePath = 'ftpsession.log';
+  final String logFilePath = '${tempDir.path}/ftpsession.log';
 
   Future<bool> isFtpAvailable() async {
     try {
@@ -67,24 +67,21 @@ void main() {
       ftpClient = await Process.start(
         Platform.isWindows ? 'cmd' : 'bash',
         Platform.isWindows
-            ? [
-                '/c',
-                'ftp',
-                '-n',
-                '-v',
-                '-i',
-                '127.0.0.1',
-                port.toString(),
-                '>>',
-                logFilePath
-              ]
-            : ['-c', 'ftp -n -v -i 127.0.0.1 $port >> $logFilePath'],
+            ? ['/c', 'ftp', '-n', '-v', '-i', '127.0.0.1', port.toString()]
+            : ['-c', 'ftp -n -v -i 127.0.0.1 $port'],
         runInShell: true,
       );
       File(logFilePath).writeAsStringSync(''); // Clear the log file
+      ftpClient.stdout.listen((data) {
+        File(logFilePath).writeAsStringSync(String.fromCharCodes(data),
+            mode: FileMode.append);
+      });
+      ftpClient.stderr.listen((data) {
+        File(logFilePath).writeAsStringSync(String.fromCharCodes(data),
+            mode: FileMode.append);
+      });
       ftpClient.stdin.writeln('open 127.0.0.1 $port');
       ftpClient.stdin.writeln('user test password');
-
       await ftpClient.stdin.flush();
     });
 
