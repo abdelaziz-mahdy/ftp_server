@@ -77,10 +77,10 @@ class FtpSession {
     int port = dataListener!.port;
     int p1 = port >> 8;
     int p2 = port & 0xFF;
-    String address = controlSocket.address.address.replaceAll('.', ',');
-
+    // String address = controlSocket.address.address.replaceAll('.', ',');
     // I'm not sure what happened here, the client shows nothing if I comment out this line.
-    await Future.delayed(const Duration(microseconds: 100));
+    // await Future.delayed(const Duration(microseconds: 0));
+    var address = (await _getIpAddress()).replaceAll('.', ',');
     sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
     dataListener!.first.then((socket) {
       dataSocket = socket;
@@ -112,6 +112,7 @@ class FtpSession {
     Directory dir = Directory(fullPath);
     if (await dir.exists()) {
       List<FileSystemEntity> entities = dir.listSync();
+      sendResponse('150 Opening data connection');
       for (FileSystemEntity entity in entities) {
         var stat = await entity.stat();
         String permissions = _formatPermissions(stat);
