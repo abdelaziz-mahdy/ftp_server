@@ -35,23 +35,56 @@ class FtpSession {
     controlSocket.listen(processCommand, onDone: closeConnection);
   }
 
+  Future<String> _getIpAddress() async {
+    for (var interface in await NetworkInterface.list()) {
+      for (var addr in interface.addresses) {
+        if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+          return addr.address;
+        }
+      }
+    }
+    return '0.0.0.0';
+  }
+
   bool _isPathAllowed(String path) {
     return allowedDirectories.any((allowedDir) => path.startsWith(allowedDir));
   }
 
   String _getFullPath(String path) {
-    // todo support argument
-    path = path.split("-")[0];
+    // todo support order argument, eg: ubuntu file manager send: LIST -a
+    if(path == "-a") {
+      path = "";
+    }
+    if (path == "/") {
+      return startingDirectory;
+    }
 
-    if (Platform.isWindows) {
-      return path.isEmpty || path.startsWith("/") ? currentDirectory : path;
+    if(path.isEmpty) {
+      return currentDirectory;
     }
 
     if (path.startsWith(startingDirectory)) {
       return path;
     }
-    path = path.replaceAll("/", " ").trim().replaceAll(" ", "/");
-    return "$currentDirectory${currentDirectory.endsWith("/") ? path : "/$path"}";
+
+    if (Platform.isWindows) {
+      if (path.startsWith("/:")) {
+        return currentDirectory;
+      }
+      if (path.startsWith("/") && path.contains(":")) {
+        return path.replaceFirst("/", "");
+      }
+      path = path.replaceAll("/", "\\");
+      if (path.startsWith("\\")) {
+        return "$startingDirectory\\$path".replaceAll("\\\\", "\\");
+      }
+      return "$currentDirectory\\$path".replaceAll("\\\\", "\\");
+    }
+
+    if (path.startsWith("/")) {
+      return "$startingDirectory/$path".replaceAll("//", "/");
+    }
+    return "$currentDirectory/$path".replaceAll("//", "/");
   }
 
   void processCommand(List<int> data) {
@@ -119,6 +152,9 @@ class FtpSession {
         String fileSize = stat.size.toString();
         String modificationTime = _formatModificationTime(stat.modified);
         String fileName = entity.path.split('/').last;
+        if (Platform.isWindows) {
+          fileName = fileName.split("\\").last;
+        }
         String entry =
             '$permissions 1 ftp ftp $fileSize $modificationTime $fileName\r\n';
         dataSocket!.write(entry);
