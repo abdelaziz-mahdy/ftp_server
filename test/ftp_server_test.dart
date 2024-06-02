@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ftp_server/ftp_server.dart';
@@ -41,13 +42,11 @@ void main() {
       runInShell: true,
     );
     File(logFilePath).writeAsStringSync(''); // Clear the log file
-    ftpClient.stdout.listen((data) {
-      File(logFilePath)
-          .writeAsStringSync(String.fromCharCodes(data), mode: FileMode.append);
+    ftpClient.stdout.transform(utf8.decoder).listen((data) {
+      File(logFilePath).writeAsStringSync(data, mode: FileMode.append);
     });
-    ftpClient.stderr.listen((data) {
-      File(logFilePath)
-          .writeAsStringSync(String.fromCharCodes(data), mode: FileMode.append);
+    ftpClient.stderr.transform(utf8.decoder).listen((data) {
+      File(logFilePath).writeAsStringSync(data, mode: FileMode.append);
     });
     ftpClient.stdin.writeln('open 127.0.0.1 $port');
     await ftpClient.stdin.flush();
@@ -71,7 +70,6 @@ void main() {
         throw Exception(
             'FTP command is not available and could not be installed.');
       }
-
       // Create the allowed directory and start the FTP server
       tempDir.createSync(recursive: true);
       server = FtpServer(
@@ -131,24 +129,28 @@ void main() {
 
     test('Make Directory', () async {
       ftpClient.stdin.writeln('mkdir test_dir');
+      ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
 
       expect(output, contains('257 "test_dir" created'));
+      expect(output, contains('test_dir'));
       expect(Directory('${tempDir.path}/test_dir').existsSync(), isTrue);
     });
 
     test('Remove Directory', () async {
       ftpClient.stdin.writeln('mkdir test_dir');
       ftpClient.stdin.writeln('rmdir test_dir');
+      ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
 
       expect(output, contains('250 Directory deleted'));
+      expect(output, isNot(contains('test_dir')));
       expect(Directory('${tempDir.path}/test_dir').existsSync(), isFalse);
     });
 
@@ -157,12 +159,14 @@ void main() {
         ..writeAsStringSync('Hello, FTP!');
 
       ftpClient.stdin.writeln('put ${testFile.path}');
+      ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
 
       expect(output, contains('226 Transfer complete'));
+      expect(output, contains('test_file.txt'));
     });
 
     test('Retrieve File', () async {
@@ -171,6 +175,7 @@ void main() {
 
       ftpClient.stdin
           .writeln('get ${testFile.path} ${tempDir.path}/retrieved_file.txt');
+      ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
@@ -185,12 +190,14 @@ void main() {
         ..writeAsStringSync('Hello, FTP!');
 
       ftpClient.stdin.writeln('size ${testFile.path}');
+      ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
 
       expect(output, contains('213 11')); // File size is 11 bytes
+      expect(output, contains('test_file.txt'));
     });
 
     test('Delete File', () async {
@@ -198,12 +205,14 @@ void main() {
         ..writeAsStringSync('Hello, FTP!');
 
       ftpClient.stdin.writeln('delete ${testFile.path}');
+      ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
       final output = await readAllOutput();
 
       expect(output, contains('250 File deleted'));
+      expect(output, isNot(contains('test_file.txt')));
       expect(testFile.existsSync(), isFalse);
     });
 
