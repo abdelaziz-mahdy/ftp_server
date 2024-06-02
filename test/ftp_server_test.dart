@@ -51,6 +51,7 @@ void main() {
         allowedDirectories: allowedDirectories,
         startingDirectory: allowedDirectories.first,
         serverType: ServerType.readAndWrite,
+        // ignore: avoid_print
         logFunction: (String message) => print(message),
       );
       await server.startInBackground();
