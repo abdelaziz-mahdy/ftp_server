@@ -29,7 +29,7 @@ jobs:
       run: flutter analyze
 
     - name: Run Flutter format check
-      run: flutter format --set-exit-if-changed .
+      run: dart format --set-exit-if-changed .
 
     - name: Run tests
       run: flutter test
@@ -54,7 +54,7 @@ jobs:
       run: flutter analyze
 
     - name: Run Flutter format check
-      run: flutter format --set-exit-if-changed .
+      run: dart format --set-exit-if-changed .
 
     - name: Run tests
       run: flutter test
@@ -79,7 +79,7 @@ jobs:
       run: flutter analyze
 
     - name: Run Flutter format check
-      run: flutter format --set-exit-if-changed .
+      run: dart format --set-exit-if-changed .
 
     - name: Run tests
       run: flutter test
