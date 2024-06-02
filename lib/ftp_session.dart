@@ -360,4 +360,13 @@ class FtpSession {
   void currentPath() {
     sendResponse('257 "$currentDirectory" is current directory');
   }
+
+  Future<void> enterExtendedPassiveMode() async {
+    dataListener = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
+    int port = dataListener!.port;
+    sendResponse('229 Entering Extended Passive Mode (|||$port|)');
+    dataListener!.first.then((socket) {
+      dataSocket = socket;
+    });
+  }
 }
