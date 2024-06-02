@@ -94,8 +94,7 @@ class FtpSession {
   }
 
   Future<void> listDirectory(String path) async {
-    if (dataSocket == null) {
-      sendResponse('425 Can\'t open data connection');
+    if (!openDataConnection()) {
       return;
     }
 
