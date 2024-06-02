@@ -35,8 +35,8 @@ void main() {
 
   Future<void> connectAndAuthenticate() async {
     ftpClient = await Process.start(
-      Platform.isWindows ? 'cmd' : 'bash',
-      Platform.isWindows ? [] : ['-c', 'ftp -n -v'],
+      Platform.isWindows ? 'ftp' : 'bash',
+      Platform.isWindows ? ['-n', '-v'] : ['-c', 'ftp -n -v'],
       runInShell: true,
     );
 
@@ -48,11 +48,8 @@ void main() {
       File(logFilePath).writeAsStringSync(data, mode: FileMode.append);
     });
 
-    if (Platform.isWindows) {
-      ftpClient.stdin.writeln('ftp -n -v 127.0.0.1 $port');
-    } else {
-      ftpClient.stdin.writeln('open 127.0.0.1 $port');
-    }
+    ftpClient.stdin.writeln('open 127.0.0.1 $port');
+
     await ftpClient.stdin.flush();
     ftpClient.stdin.writeln('user test password');
     await ftpClient.stdin.flush();
