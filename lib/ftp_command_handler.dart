@@ -91,7 +91,8 @@ class FTPCommandHandler {
 
   void handlePass(String argument, FtpSession session) {
     if ((session.username == null && session.password == null) ||
-        (session.cachedUsername == session.username && argument == session.password)) {
+        (session.cachedUsername == session.username &&
+            argument == session.password)) {
       session.isAuthenticated = true;
       session.sendResponse('230 User logged in, proceed');
     } else {
