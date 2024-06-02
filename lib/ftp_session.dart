@@ -179,44 +179,57 @@ class FtpSession {
     }
   }
 
-  Future<void> storeFile(String filename) async {
-    if (dataSocket == null) {
-      sendResponse('425 Can\'t open data connection');
-      return;
+Future<void> storeFile(String filename) async {
+  if (dataSocket == null) {
+    sendResponse('425 Can\'t open data connection');
+    return;
+  }
+
+  String fullPath = _getFullPath(filename);
+
+  if (!_isPathAllowed(fullPath)) {
+    sendResponse('550 Access denied');
+    return;
+  }
+
+  try {
+    // Create the directory if it doesn't exist
+    final directory = Directory(fullPath).parent;
+    if (!await directory.exists()) {
+      await directory.create(recursive: true);
     }
 
-    String fullPath = _getFullPath(filename);
+    File file = File(fullPath);
 
-    if (!_isPathAllowed(fullPath)) {
-      sendResponse('550 Access denied');
-      return;
-    }
+    // Send 150 response to indicate the server is ready to receive the file
+    sendResponse('150 Opening data connection');
 
-    try {
-      // Create the directory if it doesn't exist
-      final directory = Directory(fullPath).parent;
-      if (!await directory.exists()) {
-        await directory.create(recursive: true);
-      }
+    IOSink fileSink = file.openWrite();
 
-      File file = File(fullPath);
-      IOSink fileSink = file.openWrite();
-
-      await dataSocket!.listen((data) {
+    dataSocket!.listen(
+      (data) {
         fileSink.add(data);
-      }, onDone: () async {
+      },
+      onDone: () async {
         await fileSink.close();
         await dataSocket!.close();
         dataSocket = null;
         sendResponse('226 Transfer complete');
-      }, onError: (error) async {
+      },
+      onError: (error) async {
         sendResponse('426 Connection closed; transfer aborted');
         await fileSink.close();
-      }).asFuture();
-    } catch (e) {
-      sendResponse('550 Error creating file or directory $e');
-    }
+        await dataSocket!.close();
+        dataSocket = null;
+      },
+      cancelOnError: true, // This will cancel the subscription on error
+    );
+  } catch (e) {
+    sendResponse('550 Error creating file or directory $e');
+    dataSocket = null;
   }
+}
+
 
   void changeDirectory(String dirname) {
     String fullPath = _getFullPath(dirname);
