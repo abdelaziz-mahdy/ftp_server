@@ -144,7 +144,6 @@ class FtpSession {
     Directory dir = Directory(fullPath);
     if (await dir.exists()) {
       List<FileSystemEntity> entities = dir.listSync();
-      sendResponse('150 Opening data connection');
       for (FileSystemEntity entity in entities) {
         var stat = await entity.stat();
         String permissions = _formatPermissions(stat);
