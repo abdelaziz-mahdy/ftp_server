@@ -1,0 +1,85 @@
+name: Flutter CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-linux:
+    name: Build on Linux
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+          channel: stable
+
+    - name: Install dependencies
+      run: flutter pub get
+
+    - name: Run Flutter analyzer
+      run: flutter analyze
+
+    - name: Run Flutter format check
+      run: dart format --set-exit-if-changed .
+
+    - name: Run tests
+      run: flutter test
+
+  build-macos:
+    name: Build on macOS
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+          channel: stable
+
+    - name: Install dependencies
+      run: flutter pub get
+
+    - name: Run Flutter analyzer
+      run: flutter analyze
+
+    - name: Run Flutter format check
+      run: dart format --set-exit-if-changed .
+
+    - name: Run tests
+      run: flutter test
+
+  build-windows:
+    name: Build on Windows
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+          channel: stable
+
+    - name: Install dependencies
+      run: flutter pub get
+
+    - name: Run Flutter analyzer
+      run: flutter analyze
+
+    - name: Run Flutter format check
+      run: dart format --set-exit-if-changed .
+
+    - name: Run tests
+      run: flutter test

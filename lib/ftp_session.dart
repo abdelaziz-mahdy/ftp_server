@@ -237,21 +237,33 @@ class FtpSession {
       }
 
       File file = File(fullPath);
+
+      // Send 150 response to indicate the server is ready to receive the file
+      sendResponse('150 Opening data connection');
+
       IOSink fileSink = file.openWrite();
 
-      await dataSocket!.listen((data) {
-        fileSink.add(data);
-      }, onDone: () async {
-        await fileSink.close();
-        await dataSocket!.close();
-        dataSocket = null;
-        sendResponse('226 Transfer complete');
-      }, onError: (error) async {
-        sendResponse('426 Connection closed; transfer aborted');
-        await fileSink.close();
-      }).asFuture();
+      dataSocket!.listen(
+        (data) {
+          fileSink.add(data);
+        },
+        onDone: () async {
+          await fileSink.close();
+          await dataSocket!.close();
+          dataSocket = null;
+          sendResponse('226 Transfer complete');
+        },
+        onError: (error) async {
+          sendResponse('426 Connection closed; transfer aborted');
+          await fileSink.close();
+          await dataSocket!.close();
+          dataSocket = null;
+        },
+        cancelOnError: true, // This will cancel the subscription on error
+      );
     } catch (e) {
       sendResponse('550 Error creating file or directory $e');
+      dataSocket = null;
     }
   }
 
