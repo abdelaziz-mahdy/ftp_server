@@ -103,7 +103,11 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      final output = await readAllOutput();
+      var output = await readAllOutput();
+
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin("quit");
+      }
 
       expect(output, contains('230 User logged in, proceed'));
     });
@@ -118,7 +122,11 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      final output = await readAllOutput();
+      var output = await readAllOutput();
+
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin("dir");
+      }
 
       expect(output, contains('226 Transfer complete'));
     });
@@ -128,7 +136,11 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      final output = await readAllOutput();
+      var output = await readAllOutput();
+
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin("cd ${tempDir.path}");
+      }
 
       expect(output, contains('250 Directory changed'));
     });
@@ -139,7 +151,11 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      final output = await readAllOutput();
+      var output = await readAllOutput();
+
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin("mkdir ${tempDir.path}\ndir");
+      }
 
       expect(output, contains('257 "test_dir" created'));
       expect(output, contains('test_dir'));
@@ -153,7 +169,12 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      final output = await readAllOutput();
+      var output = await readAllOutput();
+
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin(
+            "mkdir ${tempDir.path}\nrmdir ${tempDir.path}");
+      }
 
       expect(output, contains('250 Directory deleted'));
       expect(output, isNot(contains('test_dir')));
@@ -169,9 +190,16 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      final output = await readAllOutput();
+      var output = await readAllOutput();
 
-      expect(output, contains('226 Transfer complete'));
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin("put ${testFile.path}");
+        expect(output, contains('226 Transfer complete'));
+        output = await execFTPCmdOnWin("dir");
+      } else {
+        expect(output, contains('226 Transfer complete'));
+      }
+
       expect(output, contains('test_file.txt'));
     });
 
@@ -185,9 +213,16 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      final output = await readAllOutput();
+      var output = await readAllOutput();
 
-      expect(output, contains('226 Transfer complete'));
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin(
+            'get ${testFile.path} ${tempDir.path}/retrieved_file.txt');
+        expect(output, contains('226 Transfer complete'));
+        output = await execFTPCmdOnWin('dir');
+      } else {
+        expect(output, contains('226 Transfer complete'));
+      }
       expect(File('${tempDir.path}/retrieved_file.txt').existsSync(), isTrue);
     });
 
@@ -200,7 +235,11 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      final output = await readAllOutput();
+      var output = await readAllOutput();
+
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin('size ${testFile.path}');
+      }
 
       var expectText = '213 11';
       if (Platform.isLinux) {
@@ -220,9 +259,14 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      final output = await readAllOutput();
-
-      expect(output, contains('250 File deleted'));
+      var output = await readAllOutput();
+      if (Platform.isWindows) {
+        output = (await execFTPCmdOnWin('delete ${testFile.path}'));
+        expect(output, contains('250 File deleted'));
+        output = (await execFTPCmdOnWin('dir'));
+      } else {
+        expect(output, contains('250 File deleted'));
+      }
       expect(output, isNot(contains('test_file.txt')));
       expect(testFile.existsSync(), isFalse);
     });
@@ -232,7 +276,10 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      final output = await readAllOutput();
+      var output = await readAllOutput();
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin('syst');
+      }
 
       expect(output, contains('215 UNIX Type: L8'));
     });
@@ -242,7 +289,11 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      final output = await readAllOutput();
+      var output = await readAllOutput();
+
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin('pwd');
+      }
 
       var expectText = '257 "${tempDir.path}" is current directory';
       if (Platform.isLinux) {
@@ -252,4 +303,41 @@ void main() {
       expect(output, contains(expectText));
     });
   });
+}
+
+Future<String> execFTPCmdOnWin(String commands) async {
+  // FTP 服务器的地址、用户名和密码
+  const String ftpHost = '127.0.0.1 2126';
+  const String user = 'test';
+  const String password = 'password';
+  // Shell 命令连接 FTP 服务器并执行操作
+  String command = '''
+open $ftpHost
+$user
+$password
+
+$commands
+quit
+''';
+
+  // 创建临时脚本文件
+  File scriptFile = File('ftp_win_script.txt');
+  await scriptFile.writeAsString(command);
+
+  try {
+    // 运行 FTP 命令
+    ProcessResult result = await Process.run(
+        'ftp', ['-n', '-v', '-s:ftp_win_script.txt'],
+        runInShell: true);
+
+    // 输出结果
+    return result.stdout + result.stderr;
+  } catch (e) {
+    // print('Error: $e');
+  } finally {
+    // 删除临时脚本文件
+    await scriptFile.delete();
+  }
+
+  return "";
 }
