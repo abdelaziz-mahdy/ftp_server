@@ -11,6 +11,42 @@ void main() {
   late Process ftpClient;
   const int port = 2126;
   final String logFilePath = '${tempDir.path}/ftpsession.log';
+  Future<String> execFTPCmdOnWin(String commands) async {
+    // FTP 服务器的地址、用户名和密码
+    const String ftpHost = '127.0.0.1 $port';
+    const String user = 'test';
+    const String password = 'password';
+    // Shell 命令连接 FTP 服务器并执行操作
+    String command = '''
+open $ftpHost
+user $user
+$password
+
+$commands
+quit
+''';
+
+    // 创建临时脚本文件
+    File scriptFile = File('ftp_win_script.txt');
+    await scriptFile.writeAsString(command);
+
+    try {
+      // 运行 FTP 命令
+      ProcessResult result = await Process.run(
+          'ftp', ['-n', '-v', '-s:ftp_win_script.txt'],
+          runInShell: true);
+
+      // 输出结果
+      return result.stdout + result.stderr;
+    } catch (e) {
+      // print('Error: $e');
+    } finally {
+      // 删除临时脚本文件
+      await scriptFile.delete();
+    }
+
+    return "";
+  }
 
   Future<bool> isFtpAvailable() async {
     try {
@@ -300,41 +336,4 @@ void main() {
       expect(output, contains(expectText));
     });
   });
-}
-
-Future<String> execFTPCmdOnWin(String commands) async {
-  // FTP 服务器的地址、用户名和密码
-  const String ftpHost = '127.0.0.1 2126';
-  const String user = 'test';
-  const String password = 'password';
-  // Shell 命令连接 FTP 服务器并执行操作
-  String command = '''
-open $ftpHost
-user $user
-$password
-
-$commands
-quit
-''';
-
-  // 创建临时脚本文件
-  File scriptFile = File('ftp_win_script.txt');
-  await scriptFile.writeAsString(command);
-
-  try {
-    // 运行 FTP 命令
-    ProcessResult result = await Process.run(
-        'ftp', ['-n', '-v', '-s:ftp_win_script.txt'],
-        runInShell: true);
-
-    // 输出结果
-    return result.stdout + result.stderr;
-  } catch (e) {
-    // print('Error: $e');
-  } finally {
-    // 删除临时脚本文件
-    await scriptFile.delete();
-  }
-
-  return "";
 }
