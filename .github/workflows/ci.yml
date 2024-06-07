@@ -1,4 +1,4 @@
-name: Flutter CI
+name: Tests on platfroms
 
 on:
   push:
@@ -9,8 +9,8 @@ on:
       - main
 
 jobs:
-  build-linux:
-    name: Build on Linux
+  linux:
+    name: Linux
     runs-on: ubuntu-latest
 
     steps:
@@ -34,8 +34,8 @@ jobs:
     - name: Run tests
       run: flutter test
 
-  build-macos:
-    name: Build on macOS
+  macos:
+    name: macOS
     runs-on: macos-latest
 
     steps:
@@ -59,8 +59,8 @@ jobs:
     - name: Run tests
       run: flutter test
 
-  build-windows:
-    name: Build on Windows
+  windows:
+    name: Windows
     runs-on: windows-latest
 
     steps:
