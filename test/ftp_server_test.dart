@@ -207,11 +207,10 @@ void main() {
     });
 
     test('Retrieve File', () async {
-      final testFile = File('${tempDir.path}/test_file.txt')
-        ..writeAsStringSync('Hello, FTP!');
+      final testPath = '${tempDir.path}/test_file_ret.txt';
+      final testFile = File(testPath)..writeAsStringSync('Hello, FTP!');
 
-      ftpClient.stdin
-          .writeln('get ${testFile.path} ${tempDir.path}/retrieved_file.txt');
+      ftpClient.stdin.writeln('get ${testFile.path} $testPath');
       ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
@@ -219,14 +218,13 @@ void main() {
       var output = await readAllOutput();
 
       if (Platform.isWindows) {
-        output = await execFTPCmdOnWin(
-            'get ${testFile.path} ${tempDir.path}/retrieved_file.txt');
+        output = await execFTPCmdOnWin('get ${testFile.path} $testPath');
         expect(output, contains('226 Transfer complete'));
         output = await execFTPCmdOnWin('dir');
       } else {
         expect(output, contains('226 Transfer complete'));
       }
-      expect(File('${tempDir.path}/retrieved_file.txt').existsSync(), isTrue);
+      expect(File(testPath).existsSync(), isTrue);
     });
 
     test('Delete File', () async {
