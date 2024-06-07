@@ -88,9 +88,13 @@ class FtpSession {
   }
 
   void processCommand(List<int> data) {
-    // avoid '烫烫烫'
-    String commandLine = utf8.decode(data).trim();
-    commandHandler.handleCommand(commandLine, this);
+    try {
+      // avoid '烫烫烫'
+      String commandLine = utf8.decode(data).trim();
+      commandHandler.handleCommand(commandLine, this);
+    }catch (e){
+      logger.generalLog(e.toString());
+    }
   }
 
   Future<void> sendResponse(String message) async {
