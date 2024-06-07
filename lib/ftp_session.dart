@@ -88,9 +88,13 @@ class FtpSession {
   }
 
   void processCommand(List<int> data) {
-    // avoid '烫烫烫'
-    String commandLine = utf8.decode(data).trim();
-    commandHandler.handleCommand(commandLine, this);
+    try {
+      // avoid '烫烫烫'
+      String commandLine = utf8.decode(data).trim();
+      commandHandler.handleCommand(commandLine, this);
+    } catch (e) {
+      logger.generalLog(e.toString());
+    }
   }
 
   Future<void> sendResponse(String message) async {
@@ -114,9 +118,10 @@ class FtpSession {
     // I'm not sure what happened here, the client shows nothing if I comment out this line.
     // await Future.delayed(const Duration(microseconds: 0));
     var address = (await _getIpAddress()).replaceAll('.', ',');
+    sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
     dataListener!.first.then((socket) {
       dataSocket = socket;
-      sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
+      // sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
     });
   }
 
@@ -364,9 +369,10 @@ class FtpSession {
   Future<void> enterExtendedPassiveMode() async {
     dataListener = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
     int port = dataListener!.port;
+    sendResponse('229 Entering Extended Passive Mode (|||$port|)');
     dataListener!.first.then((socket) {
       dataSocket = socket;
-      sendResponse('229 Entering Extended Passive Mode (|||$port|)');
+      // sendResponse('229 Entering Extended Passive Mode (|||$port|)');
     });
   }
 }

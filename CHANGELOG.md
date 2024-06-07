@@ -1,3 +1,6 @@
+## 0.0.6
+* linux fix hang and test cases fixes thanks to [lawnvi](https://github.com/lawnvi) pr [#4](https://github.com/abdelaziz-mahdy/ftp_server/pull/4) 
+
 ## 0.0.5
 * General cleanup and fixes
 * Implemented Feat and mspv
