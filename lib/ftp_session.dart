@@ -92,7 +92,7 @@ class FtpSession {
       // avoid '烫烫烫'
       String commandLine = utf8.decode(data).trim();
       commandHandler.handleCommand(commandLine, this);
-    }catch (e){
+    } catch (e) {
       logger.generalLog(e.toString());
     }
   }
