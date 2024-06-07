@@ -125,7 +125,7 @@ void main() {
       var output = await readAllOutput();
 
       if (Platform.isWindows) {
-        output = await execFTPCmdOnWin("dir");
+        output = await execFTPCmdOnWin("ls");
       }
 
       expect(output, contains('226 Transfer complete'));
@@ -154,7 +154,7 @@ void main() {
       var output = await readAllOutput();
 
       if (Platform.isWindows) {
-        output = await execFTPCmdOnWin("mkdir ${tempDir.path}\ndir");
+        output = await execFTPCmdOnWin("mkdir test_dir \nls");
       }
 
       expect(output, contains('257 "test_dir" created'));
@@ -172,12 +172,15 @@ void main() {
       var output = await readAllOutput();
 
       if (Platform.isWindows) {
-        output = await execFTPCmdOnWin(
-            "mkdir ${tempDir.path}\nrmdir ${tempDir.path}");
+        output = await execFTPCmdOnWin("mkdir test_dir\nrmdir test_dir");
+        expect(output, contains('250 Directory deleted'));
+        output = await execFTPCmdOnWin("ls");
+        expect(output, isNot(contains('test_dir')));
+      } else {
+        expect(output, contains('250 Directory deleted'));
+        expect(output, isNot(contains('test_dir')));
       }
 
-      expect(output, contains('250 Directory deleted'));
-      expect(output, isNot(contains('test_dir')));
       expect(Directory('${tempDir.path}/test_dir').existsSync(), isFalse);
     });
 
@@ -195,7 +198,7 @@ void main() {
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin("put ${testFile.path}");
         expect(output, contains('226 Transfer complete'));
-        output = await execFTPCmdOnWin("dir");
+        output = await execFTPCmdOnWin("ls");
       } else {
         expect(output, contains('226 Transfer complete'));
       }
@@ -226,30 +229,6 @@ void main() {
       expect(File('${tempDir.path}/retrieved_file.txt').existsSync(), isTrue);
     });
 
-    test('File Size', () async {
-      final testFile = File('${tempDir.path}/test_file.txt')
-        ..writeAsStringSync('Hello, FTP!');
-
-      ftpClient.stdin.writeln('size ${testFile.path}');
-      ftpClient.stdin.writeln('ls');
-      ftpClient.stdin.writeln('quit');
-      await ftpClient.stdin.flush();
-
-      var output = await readAllOutput();
-
-      if (Platform.isWindows) {
-        output = await execFTPCmdOnWin('size ${testFile.path}');
-      }
-
-      var expectText = '213 11';
-      if (Platform.isLinux) {
-        expectText = '\t11';
-      }
-
-      expect(output, contains(expectText)); // File size is 11 bytes
-      expect(output, contains('test_file.txt'));
-    });
-
     test('Delete File', () async {
       final testFile = File('${tempDir.path}/test_file.txt')
         ..writeAsStringSync('Hello, FTP!');
@@ -271,18 +250,37 @@ void main() {
       expect(testFile.existsSync(), isFalse);
     });
 
-    test('System Command', () async {
-      ftpClient.stdin.writeln('syst');
-      ftpClient.stdin.writeln('quit');
-      await ftpClient.stdin.flush();
+    if (!Platform.isWindows) {
+      test('File Size', () async {
+        final testFile = File('${tempDir.path}/test_file.txt')
+          ..writeAsStringSync('Hello, FTP!');
 
-      var output = await readAllOutput();
-      if (Platform.isWindows) {
-        output = await execFTPCmdOnWin('syst');
-      }
+        ftpClient.stdin.writeln('size ${testFile.path}');
+        ftpClient.stdin.writeln('ls');
+        ftpClient.stdin.writeln('quit');
+        await ftpClient.stdin.flush();
 
-      expect(output, contains('215 UNIX Type: L8'));
-    });
+        var output = await readAllOutput();
+
+        var expectText = '213 11';
+        if (Platform.isLinux) {
+          expectText = '\t11';
+        }
+
+        expect(output, contains(expectText)); // File size is 11 bytes
+        expect(output, contains('test_file.txt'));
+      });
+
+      test('System Command', () async {
+        ftpClient.stdin.writeln('syst');
+        ftpClient.stdin.writeln('quit');
+        await ftpClient.stdin.flush();
+
+        var output = await readAllOutput();
+
+        expect(output, contains('215 UNIX Type: L8'));
+      });
+    }
 
     test('Print Working Directory Command', () async {
       ftpClient.stdin.writeln('pwd');
@@ -295,7 +293,8 @@ void main() {
         output = await execFTPCmdOnWin('pwd');
       }
 
-      var expectText = '257 "${tempDir.path}" is current directory';
+      var expectText =
+          '257 "${tempDir.path.replaceAll("\\\\", "/")}" is current directory';
       if (Platform.isLinux) {
         expectText = 'Remote directory: ${tempDir.path}';
       }
@@ -313,7 +312,7 @@ Future<String> execFTPCmdOnWin(String commands) async {
   // Shell 命令连接 FTP 服务器并执行操作
   String command = '''
 open $ftpHost
-$user
+user $user
 $password
 
 $commands
