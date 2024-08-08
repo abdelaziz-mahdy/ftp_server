@@ -1,3 +1,5 @@
+## 0.0.7
+* update dependencies 
 ## 0.0.6
 * linux fix hang and test cases fixes thanks to [lawnvi](https://github.com/lawnvi) pr [#4](https://github.com/abdelaziz-mahdy/ftp_server/pull/4) 
 
