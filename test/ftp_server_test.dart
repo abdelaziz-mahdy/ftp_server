@@ -395,7 +395,7 @@ quit
         // Normalize paths for Windows (replace / with \)
         final windowsOuterDir = expectedOuterDir.replaceAll("/", "\\");
         final windowsInnerDir = expectedInnerDir.replaceAll("/", "\\");
-
+        output = output.replaceAll("/", "\\");
         expect(output, contains('250 Directory changed to $windowsOuterDir'));
         expect(output, contains('257 "$windowsOuterDir" is current directory'));
         expect(output, contains('inner_dir'));
