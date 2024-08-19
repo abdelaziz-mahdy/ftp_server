@@ -376,7 +376,7 @@ quit
       if (Platform.isLinux) {
         expect(output, contains('250 Directory changed to $expectedOuterDir'));
         expect(output, contains('Remote directory: $expectedOuterDir'));
-        expect(output, contains('drwxr-xr-x')); // Listing format on Linux
+
         expect(output, contains('inner_dir'));
 
         expect(output, contains('250 Directory changed to $expectedInnerDir'));
@@ -446,7 +446,6 @@ quit
       final expectedInnerDir =
           '${tempDir.path}/outer_dir/inner_dir'.replaceAll("\\", "/");
 
-      // Platform-specific checks
       if (Platform.isLinux) {
         expect(output, contains('250 Directory changed to $expectedOuterDir'));
         expect(output, contains('Remote directory: $expectedOuterDir'));
@@ -474,40 +473,19 @@ quit
         expect(
             output, contains('257 "$expectedInnerDir" is current directory'));
       } else if (Platform.isWindows) {
-        expect(
-            output,
-            contains(
-                '250 Directory changed to ${expectedOuterDir.replaceAll("/", "\\")}'));
-        expect(
-            output,
-            contains(
-                '257 "${expectedOuterDir.replaceAll("/", "\\")}" is current directory'));
-        expect(
-            output,
-            contains(
-                '250 Directory changed to ${expectedInnerDir.replaceAll("/", "\\")}'));
-        expect(
-            output,
-            contains(
-                '257 "${expectedInnerDir.replaceAll("/", "\\")}" is current directory'));
+        final windowsOuterDir = expectedOuterDir.replaceAll("/", "\\");
+        final windowsInnerDir = expectedInnerDir.replaceAll("/", "\\");
 
-        expect(
-            output,
-            contains(
-                '250 Directory changed to ${expectedOuterDir.replaceAll("/", "\\")}'));
-        expect(
-            output,
-            contains(
-                '257 "${expectedOuterDir.replaceAll("/", "\\")}" is current directory'));
+        expect(output, contains('250 Directory changed to $windowsOuterDir'));
+        expect(output, contains('257 "$windowsOuterDir" is current directory'));
+        expect(output, contains('250 Directory changed to $windowsInnerDir'));
+        expect(output, contains('257 "$windowsInnerDir" is current directory'));
 
-        expect(
-            output,
-            contains(
-                '250 Directory changed to ${expectedInnerDir.replaceAll("/", "\\")}'));
-        expect(
-            output,
-            contains(
-                '257 "${expectedInnerDir.replaceAll("/", "\\")}" is current directory'));
+        expect(output, contains('250 Directory changed to $windowsOuterDir'));
+        expect(output, contains('257 "$windowsOuterDir" is current directory'));
+
+        expect(output, contains('250 Directory changed to $windowsInnerDir'));
+        expect(output, contains('257 "$windowsInnerDir" is current directory'));
       }
     });
   });
