@@ -335,5 +335,50 @@ quit
 
       expect(output, contains(expectText));
     });
+    test('List Nested Directories', () async {
+      // Step 1: Create nested directories
+      final nestedDirPath = '${tempDir.path}/outer_dir/inner_dir';
+      Directory(nestedDirPath).createSync(recursive: true);
+
+      // Step 2: Change directory to the outer directory
+      ftpClient.stdin.writeln('cd ${tempDir.path}/outer_dir');
+      ftpClient.stdin.writeln('pwd'); // To check we're in the right directory
+
+      // Step 3: List directories inside the outer directory
+      ftpClient.stdin.writeln('ls');
+
+      // Step 4: Change directory to the inner directory
+      ftpClient.stdin.writeln('cd inner_dir');
+      ftpClient.stdin.writeln('pwd'); // To check we're in the right directory
+
+      // Step 5: List directories inside the inner directory
+      ftpClient.stdin.writeln('ls');
+
+      // Step 6: Quit FTP session
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      // Step 7: Read the output log
+      var output = await readAllOutput();
+
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin(
+            'cd ${tempDir.path}/outer_dir\npwd\nls\ncd inner_dir\npwd\nls');
+      }
+
+      // Expected directory paths
+      final expectedOuterDir =
+          '${tempDir.path.replaceAll("\\", "/")}/outer_dir';
+      final expectedInnerDir =
+          '${tempDir.path.replaceAll("\\", "/")}/outer_dir/inner_dir';
+
+      // Step 8: Check that the output contains the expected directories
+      expect(output, contains('250 Directory changed'));
+      expect(output, contains('257 "$expectedOuterDir" is current directory'));
+      expect(output, contains('inner_dir'));
+
+      expect(output, contains('250 Directory changed'));
+      expect(output, contains('257 "$expectedInnerDir" is current directory'));
+    });
   });
 }
