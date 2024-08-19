@@ -347,7 +347,7 @@ quit
       // Step 3: List directories inside the outer directory
       ftpClient.stdin.writeln('ls');
 
-      // Step 4: Change directory to the inner directory
+      // Step 4: Change directory to the inner directory using relative path
       ftpClient.stdin.writeln('cd inner_dir');
       ftpClient.stdin.writeln('pwd'); // To check we're in the right directory
 
@@ -366,19 +366,149 @@ quit
             'cd ${tempDir.path}/outer_dir\npwd\nls\ncd inner_dir\npwd\nls');
       }
 
-      // Expected directory paths
+      // Expected directory paths including "outer_dir" and "inner_dir"
       final expectedOuterDir =
-          '${tempDir.path.replaceAll("\\", "/")}/outer_dir';
+          '${tempDir.path}/outer_dir'.replaceAll("\\", "/");
       final expectedInnerDir =
-          '${tempDir.path.replaceAll("\\", "/")}/outer_dir/inner_dir';
+          '${tempDir.path}/outer_dir/inner_dir'.replaceAll("\\", "/");
 
-      // Step 8: Check that the output contains the expected directories
-      expect(output, contains('250 Directory changed'));
-      expect(output, contains('257 "$expectedOuterDir" is current directory'));
-      expect(output, contains('inner_dir'));
+      // Platform-specific checks
+      if (Platform.isLinux) {
+        expect(output, contains('250 Directory changed to $expectedOuterDir'));
+        expect(output, contains('Remote directory: $expectedOuterDir'));
+        expect(output, contains('drwxr-xr-x')); // Listing format on Linux
+        expect(output, contains('inner_dir'));
 
-      expect(output, contains('250 Directory changed'));
-      expect(output, contains('257 "$expectedInnerDir" is current directory'));
+        expect(output, contains('250 Directory changed to $expectedInnerDir'));
+        expect(output, contains('Remote directory: $expectedInnerDir'));
+      } else if (Platform.isMacOS) {
+        expect(output, contains('250 Directory changed to $expectedOuterDir'));
+        expect(
+            output, contains('257 "$expectedOuterDir" is current directory'));
+        expect(output, contains('150 Opening data connection'));
+        expect(output,
+            contains('drwxr-xr-x')); // Directory listing format on macOS
+        expect(output, contains('inner_dir'));
+
+        expect(output, contains('250 Directory changed to $expectedInnerDir'));
+        expect(
+            output, contains('257 "$expectedInnerDir" is current directory'));
+        expect(output, contains('150 Opening data connection'));
+      } else if (Platform.isWindows) {
+        final windowsOuterDir = expectedOuterDir.replaceAll("/", "\\");
+        final windowsInnerDir = expectedInnerDir.replaceAll("/", "\\");
+
+        expect(output, contains('250 Directory changed to $windowsOuterDir'));
+        expect(output, contains('257 "$windowsOuterDir" is current directory'));
+        expect(output, contains('inner_dir'));
+
+        expect(output, contains('250 Directory changed to $windowsInnerDir'));
+        expect(output, contains('257 "$windowsInnerDir" is current directory'));
+      }
+    });
+
+    test('Change Directories Using Absolute and Relative Paths', () async {
+      // Step 1: Create nested directories
+      final nestedDirPath = '${tempDir.path}/outer_dir/inner_dir';
+      Directory(nestedDirPath).createSync(recursive: true);
+
+      // Step 2: Change directory using absolute path to outer directory
+      ftpClient.stdin.writeln('cd ${tempDir.path}/outer_dir');
+      ftpClient.stdin.writeln('pwd'); // To check we're in the right directory
+
+      // Step 3: Change directory using relative path to inner directory
+      ftpClient.stdin.writeln('cd inner_dir');
+      ftpClient.stdin.writeln('pwd'); // To check we're in the right directory
+
+      // Step 4: Change directory back to the outer directory using relative path
+      ftpClient.stdin.writeln('cd ..');
+      ftpClient.stdin.writeln('pwd'); // To check we're in the outer directory
+
+      // Step 5: Change directory using absolute path back to the inner directory
+      ftpClient.stdin.writeln('cd $nestedDirPath');
+      ftpClient.stdin.writeln('pwd'); // To check we're in the inner directory
+
+      // Step 6: Quit FTP session
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      // Step 7: Read the output log
+      var output = await readAllOutput();
+
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin(
+            'cd ${tempDir.path}/outer_dir\npwd\ncd inner_dir\npwd\ncd ..\npwd\ncd $nestedDirPath\npwd');
+      }
+
+      // Expected directory paths including "outer_dir" and "inner_dir"
+      final expectedOuterDir =
+          '${tempDir.path}/outer_dir'.replaceAll("\\", "/");
+      final expectedInnerDir =
+          '${tempDir.path}/outer_dir/inner_dir'.replaceAll("\\", "/");
+
+      // Platform-specific checks
+      if (Platform.isLinux) {
+        expect(output, contains('250 Directory changed to $expectedOuterDir'));
+        expect(output, contains('Remote directory: $expectedOuterDir'));
+        expect(output, contains('250 Directory changed to $expectedInnerDir'));
+        expect(output, contains('Remote directory: $expectedInnerDir'));
+
+        expect(output, contains('250 Directory changed to $expectedOuterDir'));
+        expect(output, contains('Remote directory: $expectedOuterDir'));
+
+        expect(output, contains('250 Directory changed to $expectedInnerDir'));
+        expect(output, contains('Remote directory: $expectedInnerDir'));
+      } else if (Platform.isMacOS) {
+        expect(output, contains('250 Directory changed to $expectedOuterDir'));
+        expect(
+            output, contains('257 "$expectedOuterDir" is current directory'));
+        expect(output, contains('250 Directory changed to $expectedInnerDir'));
+        expect(
+            output, contains('257 "$expectedInnerDir" is current directory'));
+
+        expect(output, contains('250 Directory changed to $expectedOuterDir'));
+        expect(
+            output, contains('257 "$expectedOuterDir" is current directory'));
+
+        expect(output, contains('250 Directory changed to $expectedInnerDir'));
+        expect(
+            output, contains('257 "$expectedInnerDir" is current directory'));
+      } else if (Platform.isWindows) {
+        expect(
+            output,
+            contains(
+                '250 Directory changed to ${expectedOuterDir.replaceAll("/", "\\")}'));
+        expect(
+            output,
+            contains(
+                '257 "${expectedOuterDir.replaceAll("/", "\\")}" is current directory'));
+        expect(
+            output,
+            contains(
+                '250 Directory changed to ${expectedInnerDir.replaceAll("/", "\\")}'));
+        expect(
+            output,
+            contains(
+                '257 "${expectedInnerDir.replaceAll("/", "\\")}" is current directory'));
+
+        expect(
+            output,
+            contains(
+                '250 Directory changed to ${expectedOuterDir.replaceAll("/", "\\")}'));
+        expect(
+            output,
+            contains(
+                '257 "${expectedOuterDir.replaceAll("/", "\\")}" is current directory'));
+
+        expect(
+            output,
+            contains(
+                '250 Directory changed to ${expectedInnerDir.replaceAll("/", "\\")}'));
+        expect(
+            output,
+            contains(
+                '257 "${expectedInnerDir.replaceAll("/", "\\")}" is current directory'));
+      }
     });
   });
 }
