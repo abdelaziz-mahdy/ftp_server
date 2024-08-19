@@ -367,12 +367,9 @@ quit
       }
 
       // Expected directory paths including "outer_dir" and "inner_dir"
-      final expectedOuterDir =
-          '${tempDir.path}/outer_dir'.replaceAll("\\", "/");
-      final expectedInnerDir =
-          '${tempDir.path}/outer_dir/inner_dir'.replaceAll("\\", "/");
+      final expectedOuterDir = '${tempDir.path}/outer_dir';
+      final expectedInnerDir = '${tempDir.path}/outer_dir/inner_dir';
 
-      // Platform-specific checks
       if (Platform.isLinux) {
         expect(output, contains('250 Directory changed to $expectedOuterDir'));
         expect(output, contains('Remote directory: $expectedOuterDir'));
@@ -395,6 +392,7 @@ quit
             output, contains('257 "$expectedInnerDir" is current directory'));
         expect(output, contains('150 Opening data connection'));
       } else if (Platform.isWindows) {
+        // Normalize paths for Windows (replace / with \)
         final windowsOuterDir = expectedOuterDir.replaceAll("/", "\\");
         final windowsInnerDir = expectedInnerDir.replaceAll("/", "\\");
 
@@ -441,10 +439,8 @@ quit
       }
 
       // Expected directory paths including "outer_dir" and "inner_dir"
-      final expectedOuterDir =
-          '${tempDir.path}/outer_dir'.replaceAll("\\", "/");
-      final expectedInnerDir =
-          '${tempDir.path}/outer_dir/inner_dir'.replaceAll("\\", "/");
+      final expectedOuterDir = '${tempDir.path}/outer_dir';
+      final expectedInnerDir = '${tempDir.path}/outer_dir/inner_dir';
 
       if (Platform.isLinux) {
         expect(output, contains('250 Directory changed to $expectedOuterDir'));
@@ -473,6 +469,7 @@ quit
         expect(
             output, contains('257 "$expectedInnerDir" is current directory'));
       } else if (Platform.isWindows) {
+        // Normalize paths for Windows (replace / with \)
         final windowsOuterDir = expectedOuterDir.replaceAll("/", "\\");
         final windowsInnerDir = expectedInnerDir.replaceAll("/", "\\");
 
