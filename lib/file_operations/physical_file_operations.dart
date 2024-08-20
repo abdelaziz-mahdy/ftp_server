@@ -5,16 +5,20 @@ import 'file_operations.dart';
 /// Implementation of [FileOperations] for interacting with the physical file system.
 class PhysicalFileOperations implements FileOperations {
   final String rootDirectory;
-  String _currentDirectory;
+  String currentDirectory;
 
   /// Creates an instance of [PhysicalFileOperations] with the given root directory.
-  PhysicalFileOperations(this.rootDirectory) : _currentDirectory = rootDirectory;
+  PhysicalFileOperations(this.rootDirectory)
+      : currentDirectory = rootDirectory;
 
   /// Resolves a path to ensure it is within the root directory.
   String _resolvePathWithinRoot(String path) {
-    final resolvedPath = p.normalize(p.join(_currentDirectory, path));
-    if (!p.isWithin(rootDirectory, resolvedPath) && resolvedPath != rootDirectory) {
-      throw FileSystemException("Access denied: Path is outside the root directory", resolvedPath);
+    // Resolve the path within the root directory
+    final resolvedPath = p.normalize(p.join(rootDirectory, path));
+    if (!p.isWithin(rootDirectory, resolvedPath) &&
+        (rootDirectory != resolvedPath)) {
+      throw FileSystemException(
+          "Access denied: Path is outside the root directory", path);
     }
     return resolvedPath;
   }
@@ -97,19 +101,25 @@ class PhysicalFileOperations implements FileOperations {
 
   @override
   String resolvePath(String path) {
-    return _resolvePathWithinRoot(path);
+    // If the path is absolute, resolve it relative to the root directory
+    if (p.isAbsolute(path)) {
+      return _resolvePathWithinRoot(p.relative(path, from: '/'));
+    } else {
+      // Otherwise, resolve it as a relative path from the current directory
+      return _resolvePathWithinRoot(p.join(currentDirectory, path));
+    }
   }
 
   @override
   String getCurrentDirectory() {
-    return _currentDirectory;
+    return currentDirectory;
   }
 
   @override
   void changeDirectory(String path) {
     final fullPath = resolvePath(path);
     if (Directory(fullPath).existsSync()) {
-      _currentDirectory = fullPath;
+      currentDirectory = fullPath;
     } else {
       throw FileSystemException("Directory not found", fullPath);
     }
@@ -117,15 +127,18 @@ class PhysicalFileOperations implements FileOperations {
 
   @override
   void changeToParentDirectory() {
-    if (_currentDirectory == rootDirectory) {
-      throw FileSystemException("Cannot navigate above root", _currentDirectory);
+    if (currentDirectory == rootDirectory) {
+      throw FileSystemException(
+          "Cannot navigate above root", currentDirectory);
     }
 
-    final parentDir = Directory(_currentDirectory).parent;
-    if (p.isWithin(rootDirectory, parentDir.path) || parentDir.path == rootDirectory) {
-      _currentDirectory = parentDir.path;
+    final parentDir = Directory(currentDirectory).parent;
+    if (p.isWithin(rootDirectory, parentDir.path) ||
+        parentDir.path == rootDirectory) {
+      currentDirectory = parentDir.path;
     } else {
-      throw FileSystemException("Access denied: Cannot navigate above root", _currentDirectory);
+      throw FileSystemException(
+          "Access denied: Cannot navigate above root", currentDirectory);
     }
   }
 }

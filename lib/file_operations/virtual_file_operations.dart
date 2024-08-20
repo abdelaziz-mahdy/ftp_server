@@ -5,11 +5,11 @@ import 'file_operations.dart';
 /// Implementation of [FileOperations] for managing a virtual file system that maps to physical directories.
 class VirtualFileOperations implements FileOperations {
   final List<String> allowedDirectories;
-  String _currentDirectory;
+  String currentDirectory;
 
   /// Creates an instance of [VirtualFileOperations] with the given allowed directories.
   /// The initial current directory is set to the virtual root, represented by `/`.
-  VirtualFileOperations(this.allowedDirectories) : _currentDirectory = '/' {
+  VirtualFileOperations(this.allowedDirectories) : currentDirectory = '/' {
     if (allowedDirectories.isEmpty) {
       throw ArgumentError("Allowed directories cannot be empty");
     }
@@ -18,25 +18,32 @@ class VirtualFileOperations implements FileOperations {
   /// Maps a virtual path to the corresponding physical path.
   /// Ensures that the path stays within the allowed directories.
   String _mapVirtualToPhysicalPath(String virtualPath) {
-    // Normalize the virtual path relative to the current directory
-    String normalizedVirtualPath =
-        p.normalize(p.join(_currentDirectory, virtualPath));
+    String normalizedVirtualPath = p.normalize(virtualPath);
 
-    // If the path is the root, return the root as containing all allowed directories
     if (normalizedVirtualPath == '/') {
       return '/';
     }
 
     for (var dir in allowedDirectories) {
       final normalizedDir = p.normalize(dir);
-      final virtualSubPath = p.relative(normalizedVirtualPath, from: '/');
-      final potentialPhysicalPath = p.join(normalizedDir, virtualSubPath);
+      String potentialPhysicalPath;
 
-      // Check if the normalized path is within the allowed directory
+      if (virtualPath.startsWith('/')) {
+        potentialPhysicalPath =
+            p.join(normalizedDir, p.relative(normalizedVirtualPath, from: '/'));
+      } else {
+        potentialPhysicalPath = p.join(
+            normalizedDir,
+            p.relative(p.join(currentDirectory, normalizedVirtualPath),
+                from: '/'));
+      }
+
+      potentialPhysicalPath = p.normalize(p.join(normalizedDir,
+          p.relative(potentialPhysicalPath, from: normalizedDir)));
+
       if (p.isWithin(normalizedDir, potentialPhysicalPath) ||
           p.equals(normalizedDir, potentialPhysicalPath)) {
-        return p.normalize(p.join(
-            normalizedDir, p.relative(normalizedVirtualPath, from: '/')));
+        return potentialPhysicalPath;
       }
     }
 
@@ -164,7 +171,7 @@ class VirtualFileOperations implements FileOperations {
 
   @override
   String resolvePath(String path) {
-    if (_currentDirectory == '/' && path == '/') {
+    if (currentDirectory == '/' && path == '/') {
       return '/';
     }
     return _mapVirtualToPhysicalPath(path);
@@ -172,7 +179,7 @@ class VirtualFileOperations implements FileOperations {
 
   @override
   String getCurrentDirectory() {
-    return _currentDirectory;
+    return currentDirectory;
   }
 
   @override
@@ -181,9 +188,9 @@ class VirtualFileOperations implements FileOperations {
       final fullPath = resolvePath(path);
 
       if (fullPath == '/') {
-        _currentDirectory = '/';
+        currentDirectory = '/';
       } else if (Directory(fullPath).existsSync()) {
-        _currentDirectory = fullPath;
+        currentDirectory = fullPath;
       } else {
         throw FileSystemException("Directory not found: $fullPath");
       }
@@ -194,12 +201,12 @@ class VirtualFileOperations implements FileOperations {
 
   @override
   void changeToParentDirectory() {
-    if (_currentDirectory == '/') {
+    if (currentDirectory == '/') {
       throw FileSystemException(
-          "Cannot navigate above root: $_currentDirectory");
+          "Cannot navigate above root: $currentDirectory");
     }
 
-    final parentDir = Directory(_currentDirectory).parent;
-    _currentDirectory = parentDir.path;
+    final parentDir = Directory(currentDirectory).parent;
+    currentDirectory = parentDir.path;
   }
 }
