@@ -18,9 +18,8 @@ class VirtualFileOperations implements FileOperations {
 
     for (var dir in allowedDirectories) {
       if (virtualPath.isEmpty || virtualPath.startsWith(dir.split('/').last)) {
-        String relativePath = virtualPath.isEmpty
-            ? ''
-            : virtualPath.split('/').skip(1).join('/');
+        String relativePath =
+            virtualPath.isEmpty ? '' : virtualPath.split('/').skip(1).join('/');
         return p.normalize(p.join(dir, relativePath));
       }
     }

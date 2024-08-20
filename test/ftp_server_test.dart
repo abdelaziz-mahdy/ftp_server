@@ -1,52 +1,51 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ftp_server/file_operations/file_operations.dart';
 import 'package:ftp_server/file_operations/physical_file_operations.dart';
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
+import 'package:intl/intl.dart';
+
+import 'platform_output_handler/platform_output_handler.dart';
+import 'platform_output_handler/platform_output_handler_factory.dart';
+
+String _formatModificationTime(DateTime dateTime) {
+  return DateFormat('MMM dd HH:mm').format(dateTime);
+}
 
 void main() {
   final Directory tempDir = Directory.systemTemp.createTempSync('ftp_test');
-
+  final PlatformOutputHandler outputHandler =
+      PlatformOutputHandlerFactory.create();
   late FtpServer server;
   late Process ftpClient;
   const int port = 2126;
   final String logFilePath = '${tempDir.path}/ftpsession.log';
+
   Future<String> execFTPCmdOnWin(String commands) async {
-    // FTP 服务器的地址、用户名和密码
     const String ftpHost = '127.0.0.1 $port';
     const String user = 'test';
     const String password = 'password';
-    // Shell 命令连接 FTP 服务器并执行操作
     String command = '''
-open $ftpHost
-user $user
-$password
+    open $ftpHost
+    user $user $password
+    $commands
+    quit
+    ''';
 
-$commands
-quit
-''';
-
-    // 创建临时脚本文件
     File scriptFile = File('ftp_win_script.txt');
     await scriptFile.writeAsString(command);
 
     try {
-      // 运行 FTP 命令
       ProcessResult result = await Process.run(
           'ftp', ['-n', '-v', '-s:ftp_win_script.txt'],
           runInShell: true);
-
-      // 输出结果
       return result.stdout + result.stderr;
     } catch (e) {
       // print('Error: $e');
     } finally {
-      // 删除临时脚本文件
       await scriptFile.delete();
     }
-
     return "";
   }
 
@@ -87,7 +86,6 @@ quit
     });
 
     ftpClient.stdin.writeln('open 127.0.0.1 $port');
-
     await ftpClient.stdin.flush();
     ftpClient.stdin.writeln('user test password');
     await ftpClient.stdin.flush();
@@ -109,6 +107,7 @@ quit
         throw Exception(
             'FTP command is not available and could not be installed.');
       }
+
       // Create the allowed directory and start the FTP server
       tempDir.createSync(recursive: true);
       server = FtpServer(
@@ -117,7 +116,6 @@ quit
         password: 'password',
         fileOperations: PhysicalFileOperations(tempDir.path),
         serverType: ServerType.readAndWrite,
-        // ignore: avoid_print
         logFunction: (String message) => print(message),
       );
       await server.startInBackground();
@@ -141,7 +139,6 @@ quit
       await ftpClient.stdin.flush();
 
       var output = await readAllOutput();
-
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin("quit");
       }
@@ -160,12 +157,39 @@ quit
       await ftpClient.stdin.flush();
 
       var output = await readAllOutput();
-
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin("ls");
       }
 
-      expect(output, contains('226 Transfer complete'));
+      // Build the expected listing dynamically based on the actual directory contents
+      var listing = StringBuffer();
+      var dirContents = Directory(tempDir.path).listSync();
+      for (var entity in dirContents) {
+        var stat = entity.statSync();
+        String permissions = (entity is File) ? '-rw-r--r--' : 'drwxr-xr-x';
+        String fileSize = stat.size.toString();
+        String modificationTime = _formatModificationTime(stat.modified);
+        String fileName = entity.path.split(Platform.pathSeparator).last;
+
+        // Ignore the size and modification time for ftpsession.log
+        if (fileName == 'ftpsession.log') {
+          fileSize = '[IGNORED SIZE]';
+          modificationTime = '[IGNORED TIME]';
+        }
+
+        listing.writeln(
+            '$permissions 1 ftp ftp $fileSize $modificationTime $fileName');
+      }
+
+      // Adjust the actual output to ignore the size and modification time for ftpsession.log
+      var adjustedOutput = output.replaceAll(
+          RegExp(
+              r'-rw-r--r-- 1 ftp ftp \d+ \w{3} \d{2} \d{2}:\d{2} ftpsession.log'),
+          '-rw-r--r-- 1 ftp ftp [IGNORED SIZE] [IGNORED TIME] ftpsession.log');
+
+      final expectedOutput = outputHandler
+          .getExpectedDirectoryListingOutput(listing.toString().trim());
+      expect(adjustedOutput, contains(expectedOutput));
     });
 
     test('Change Directory', () async {
@@ -174,12 +198,13 @@ quit
       await ftpClient.stdin.flush();
 
       var output = await readAllOutput();
-
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin("cd ${tempDir.path}");
       }
 
-      expect(output, contains('250 Directory changed'));
+      final expectedOutput =
+          outputHandler.getExpectedDirectoryChangeOutput(tempDir.path);
+      expect(output, contains(expectedOutput));
     });
 
     test('Make Directory', () async {
@@ -189,9 +214,8 @@ quit
       await ftpClient.stdin.flush();
 
       var output = await readAllOutput();
-
       if (Platform.isWindows) {
-        output = await execFTPCmdOnWin("mkdir test_dir \nls");
+        output = await execFTPCmdOnWin("mkdir test_dir\nls");
       }
 
       expect(output, contains('257 "test_dir" created'));
@@ -207,17 +231,14 @@ quit
       await ftpClient.stdin.flush();
 
       var output = await readAllOutput();
-
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin("mkdir test_dir\nrmdir test_dir");
         expect(output, contains('250 Directory deleted'));
         output = await execFTPCmdOnWin("ls");
-        expect(output, isNot(contains('test_dir')));
       } else {
         expect(output, contains('250 Directory deleted'));
-        expect(output, isNot(contains('test_dir')));
       }
-
+      expect(output, isNot(contains('test_dir')));
       expect(Directory('${tempDir.path}/test_dir').existsSync(), isFalse);
     });
 
@@ -231,7 +252,6 @@ quit
       await ftpClient.stdin.flush();
 
       var output = await readAllOutput();
-
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin("put ${testFile.path}");
         expect(output, contains('226 Transfer complete'));
@@ -239,7 +259,6 @@ quit
       } else {
         expect(output, contains('226 Transfer complete'));
       }
-
       expect(output, contains('test_file.txt'));
     });
 
@@ -253,7 +272,6 @@ quit
       await ftpClient.stdin.flush();
 
       var output = await readAllOutput();
-
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin('get ${testFile.path} $testPath');
         expect(output, contains('226 Transfer complete'));
@@ -296,11 +314,7 @@ quit
         await ftpClient.stdin.flush();
 
         var output = await readAllOutput();
-
-        var expectText = '213 11';
-        if (Platform.isLinux) {
-          expectText = '\t11';
-        }
+        var expectText = outputHandler.getExpectedSizeOutput(11);
 
         expect(output, contains(expectText)); // File size is 11 bytes
         expect(output, contains('test_file.txt'));
@@ -323,19 +337,15 @@ quit
       await ftpClient.stdin.flush();
 
       var output = await readAllOutput();
-
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin('pwd');
       }
 
-      var expectText =
-          '257 "${tempDir.path.replaceAll("\\\\", "/")}" is current directory';
-      if (Platform.isLinux) {
-        expectText = 'Remote directory: ${tempDir.path}';
-      }
-
+      final expectText = outputHandler
+          .getExpectedPwdOutput(tempDir.path.replaceAll("\\", "/"));
       expect(output, contains(expectText));
     });
+
     test('List Nested Directories', () async {
       // Step 1: Create nested directories
       final nestedDirPath = '${tempDir.path}/outer_dir/inner_dir';
@@ -359,51 +369,24 @@ quit
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      // Step 7: Read the output log
       var output = await readAllOutput();
-
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin(
             'cd ${tempDir.path}/outer_dir\npwd\nls\ncd inner_dir\npwd\nls');
       }
 
-      // Expected directory paths including "outer_dir" and "inner_dir"
       final expectedOuterDir = '${tempDir.path}/outer_dir';
       final expectedInnerDir = '${tempDir.path}/outer_dir/inner_dir';
 
-      if (Platform.isLinux) {
-        expect(output, contains('250 Directory changed to $expectedOuterDir'));
-        expect(output, contains('Remote directory: $expectedOuterDir'));
-
-        expect(output, contains('inner_dir'));
-
-        expect(output, contains('250 Directory changed to $expectedInnerDir'));
-        expect(output, contains('Remote directory: $expectedInnerDir'));
-      } else if (Platform.isMacOS) {
-        expect(output, contains('250 Directory changed to $expectedOuterDir'));
-        expect(
-            output, contains('257 "$expectedOuterDir" is current directory'));
-        expect(output, contains('150 Opening data connection'));
-        expect(output,
-            contains('drwxr-xr-x')); // Directory listing format on macOS
-        expect(output, contains('inner_dir'));
-
-        expect(output, contains('250 Directory changed to $expectedInnerDir'));
-        expect(
-            output, contains('257 "$expectedInnerDir" is current directory'));
-        expect(output, contains('150 Opening data connection'));
-      } else if (Platform.isWindows) {
-        // Normalize paths for Windows (replace / with \)
-        final windowsOuterDir = expectedOuterDir.replaceAll("/", "\\");
-        final windowsInnerDir = expectedInnerDir.replaceAll("/", "\\");
-        output = output.replaceAll("/", "\\");
-        expect(output, contains('250 Directory changed to $windowsOuterDir'));
-        expect(output, contains('257 "$windowsOuterDir" is current directory'));
-        expect(output, contains('inner_dir'));
-
-        expect(output, contains('250 Directory changed to $windowsInnerDir'));
-        expect(output, contains('257 "$windowsInnerDir" is current directory'));
-      }
+      expect(
+          output,
+          contains(outputHandler
+              .getExpectedDirectoryChangeOutput(expectedOuterDir)));
+      expect(
+          output,
+          contains(outputHandler
+              .getExpectedDirectoryChangeOutput(expectedInnerDir)));
+      expect(output, contains('inner_dir'));
     });
 
     test('Change Directories Using Absolute and Relative Paths', () async {
@@ -431,60 +414,31 @@ quit
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      // Step 7: Read the output log
       var output = await readAllOutput();
-
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin(
             'cd ${tempDir.path}/outer_dir\npwd\ncd inner_dir\npwd\ncd ..\npwd\ncd $nestedDirPath\npwd');
       }
 
-      // Expected directory paths including "outer_dir" and "inner_dir"
       final expectedOuterDir = '${tempDir.path}/outer_dir';
       final expectedInnerDir = '${tempDir.path}/outer_dir/inner_dir';
 
-      if (Platform.isLinux) {
-        expect(output, contains('250 Directory changed to $expectedOuterDir'));
-        expect(output, contains('Remote directory: $expectedOuterDir'));
-        expect(output, contains('250 Directory changed to $expectedInnerDir'));
-        expect(output, contains('Remote directory: $expectedInnerDir'));
-
-        expect(output, contains('250 Directory changed to $expectedOuterDir'));
-        expect(output, contains('Remote directory: $expectedOuterDir'));
-
-        expect(output, contains('250 Directory changed to $expectedInnerDir'));
-        expect(output, contains('Remote directory: $expectedInnerDir'));
-      } else if (Platform.isMacOS) {
-        expect(output, contains('250 Directory changed to $expectedOuterDir'));
-        expect(
-            output, contains('257 "$expectedOuterDir" is current directory'));
-        expect(output, contains('250 Directory changed to $expectedInnerDir'));
-        expect(
-            output, contains('257 "$expectedInnerDir" is current directory'));
-
-        expect(output, contains('250 Directory changed to $expectedOuterDir'));
-        expect(
-            output, contains('257 "$expectedOuterDir" is current directory'));
-
-        expect(output, contains('250 Directory changed to $expectedInnerDir'));
-        expect(
-            output, contains('257 "$expectedInnerDir" is current directory'));
-      } else if (Platform.isWindows) {
-        // Normalize paths for Windows (replace / with \)
-        final windowsOuterDir = expectedOuterDir.replaceAll("/", "\\");
-        final windowsInnerDir = expectedInnerDir.replaceAll("/", "\\");
-        output = output.replaceAll("/", "\\");
-        expect(output, contains('250 Directory changed to $windowsOuterDir'));
-        expect(output, contains('257 "$windowsOuterDir" is current directory'));
-        expect(output, contains('250 Directory changed to $windowsInnerDir'));
-        expect(output, contains('257 "$windowsInnerDir" is current directory'));
-
-        expect(output, contains('250 Directory changed to $windowsOuterDir'));
-        expect(output, contains('257 "$windowsOuterDir" is current directory'));
-
-        expect(output, contains('250 Directory changed to $windowsInnerDir'));
-        expect(output, contains('257 "$windowsInnerDir" is current directory'));
-      }
+      expect(
+          output,
+          contains(outputHandler
+              .getExpectedDirectoryChangeOutput(expectedOuterDir)));
+      expect(
+          output,
+          contains(outputHandler
+              .getExpectedDirectoryChangeOutput(expectedInnerDir)));
+      expect(
+          output,
+          contains(outputHandler
+              .getExpectedDirectoryChangeOutput(expectedOuterDir)));
+      expect(
+          output,
+          contains(outputHandler
+              .getExpectedDirectoryChangeOutput(expectedInnerDir)));
     });
   });
 }

@@ -8,7 +8,8 @@ class PhysicalFileOperations implements FileOperations {
   String _currentDirectory;
 
   /// Creates an instance of [PhysicalFileOperations] with the given root directory.
-  PhysicalFileOperations(this.rootDirectory) : _currentDirectory = rootDirectory;
+  PhysicalFileOperations(this.rootDirectory)
+      : _currentDirectory = rootDirectory;
 
   @override
   Future<List<FileSystemEntity>> listDirectory(String path) async {
