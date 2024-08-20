@@ -9,14 +9,18 @@ class VirtualFileOperations implements FileOperations {
 
   /// Creates an instance of [VirtualFileOperations] with the given allowed directories.
   VirtualFileOperations(this.allowedDirectories)
-      : _currentDirectory = allowedDirectories.isNotEmpty ? allowedDirectories[0] : '/';
+      : _currentDirectory =
+            allowedDirectories.isNotEmpty ? allowedDirectories[0] : '/';
 
   String _mapVirtualToPhysicalPath(String virtualPath) {
-    virtualPath = virtualPath.startsWith('/') ? virtualPath.substring(1) : virtualPath;
+    virtualPath =
+        virtualPath.startsWith('/') ? virtualPath.substring(1) : virtualPath;
 
     for (var dir in allowedDirectories) {
       if (virtualPath.isEmpty || virtualPath.startsWith(dir.split('/').last)) {
-        String relativePath = virtualPath.isEmpty ? '' : virtualPath.split('/').skip(1).join('/');
+        String relativePath = virtualPath.isEmpty
+            ? ''
+            : virtualPath.split('/').skip(1).join('/');
         return p.normalize(p.join(dir, relativePath));
       }
     }
@@ -95,5 +99,25 @@ class VirtualFileOperations implements FileOperations {
   @override
   String getCurrentDirectory() {
     return _currentDirectory;
+  }
+
+  @override
+  void changeDirectory(String path) {
+    final fullPath = resolvePath(path);
+    if (Directory(fullPath).existsSync()) {
+      _currentDirectory = fullPath;
+    } else {
+      throw FileSystemException("Directory not found", fullPath);
+    }
+  }
+
+  @override
+  void changeToParentDirectory() {
+    final parentDir = Directory(_currentDirectory).parent;
+    if (parentDir.existsSync()) {
+      _currentDirectory = parentDir.path;
+    } else {
+      throw FileSystemException("Parent directory not found", parentDir.path);
+    }
   }
 }

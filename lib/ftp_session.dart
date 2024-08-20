@@ -9,7 +9,6 @@ import 'file_operations/file_operations.dart';
 
 class FtpSession {
   final Socket controlSocket;
-  String currentDirectory;
   bool isAuthenticated = false;
   final FTPCommandHandler commandHandler;
   ServerSocket? dataListener;
@@ -21,6 +20,8 @@ class FtpSession {
   final ServerType serverType;
   final LoggerHandler logger;
 
+  String get currentDirectory => fileOperations.getCurrentDirectory();
+
   /// Creates an FTP session with the provided [controlSocket], [fileOperations], and other configurations.
   FtpSession(
     this.controlSocket, {
@@ -29,8 +30,7 @@ class FtpSession {
     required this.fileOperations,
     required this.serverType,
     required this.logger,
-  })  : currentDirectory = '/',
-        commandHandler = FTPCommandHandler(controlSocket, logger) {
+  }) : commandHandler = FTPCommandHandler(controlSocket, logger) {
     sendResponse('220 Welcome to the FTP server');
     controlSocket.listen(processCommand, onDone: closeConnection);
   }
@@ -194,23 +194,20 @@ class FtpSession {
   }
 
   void changeDirectory(String dirname) {
-    String fullPath = fileOperations.resolvePath(dirname);
-    if (!fileOperations.exists(fullPath)) {
-      sendResponse('550 Directory not found');
-      return;
+    try {
+      fileOperations.changeDirectory(dirname);
+      sendResponse('250 Directory changed to $currentDirectory');
+    } catch (e) {
+      sendResponse('550 Access denied or directory not found error:$e');
     }
-
-    currentDirectory = fullPath;
-    sendResponse('250 Directory changed to $currentDirectory');
   }
 
   void changeToParentDirectory() {
-    var parentDir = Directory(currentDirectory).parent;
-    if (fileOperations.exists(parentDir.path)) {
-      currentDirectory = parentDir.path;
+    try {
+      fileOperations.changeToParentDirectory();
       sendResponse('250 Directory changed to $currentDirectory');
-    } else {
-      sendResponse('550 Access denied or directory not found');
+    } catch (e) {
+      sendResponse('550 Access denied or directory not found error:$e');
     }
   }
 

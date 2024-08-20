@@ -32,7 +32,8 @@ class FTPCommandHandler {
       case 'PORT':
         handlePort(argument, session);
         break;
-      case 'LIST' || 'NLST':
+      case 'LIST':
+      case 'NLST':
         handleList(argument, session);
         break;
       case 'RETR':
@@ -47,10 +48,12 @@ class FTPCommandHandler {
       case 'CDUP':
         handleCdup(session);
         break;
-      case 'MKD' || 'XMKD':
+      case 'MKD':
+      case 'XMKD':
         handleMkd(argument, session);
         break;
-      case 'RMD' || 'XRMD':
+      case 'RMD':
+      case 'XRMD':
         handleRmd(argument, session);
         break;
       case 'DELE':
@@ -68,7 +71,8 @@ class FTPCommandHandler {
       case 'SIZE':
         handleSize(argument, session);
         break;
-      case 'PWD' || 'XPWD':
+      case 'PWD':
+      case 'XPWD':
         handleCurPath(session);
         break;
       case 'OPTS':

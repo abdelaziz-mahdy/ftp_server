@@ -75,11 +75,31 @@ class PhysicalFileOperations implements FileOperations {
 
   @override
   String resolvePath(String path) {
-    return p.normalize(p.join(rootDirectory, path));
+    return p.normalize(p.join(_currentDirectory, path));
   }
 
   @override
   String getCurrentDirectory() {
     return _currentDirectory;
+  }
+
+  @override
+  void changeDirectory(String path) {
+    final fullPath = resolvePath(path);
+    if (Directory(fullPath).existsSync()) {
+      _currentDirectory = fullPath;
+    } else {
+      throw FileSystemException("Directory not found", fullPath);
+    }
+  }
+
+  @override
+  void changeToParentDirectory() {
+    final parentDir = Directory(_currentDirectory).parent;
+    if (parentDir.existsSync()) {
+      _currentDirectory = parentDir.path;
+    } else {
+      throw FileSystemException("Parent directory not found", parentDir.path);
+    }
   }
 }

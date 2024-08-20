@@ -36,4 +36,10 @@ abstract class FileOperations {
 
   /// Returns the current working directory.
   String getCurrentDirectory();
+
+  /// Changes the current working directory to the specified path.
+  void changeDirectory(String path);
+
+  /// Changes the current working directory to the parent directory.
+  void changeToParentDirectory();
 }
