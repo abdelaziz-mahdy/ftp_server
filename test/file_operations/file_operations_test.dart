@@ -220,22 +220,24 @@ void main() {
     });
 
     test('changeDirectory using relative path', () async {
-      await fileOps.createDirectory('subdir');
-      fileOps.changeDirectory('subdir');
-      expect(fileOps.getCurrentDirectory(),
-          equals(p.join(tempDir1.path, 'subdir')));
+      String subDirPath = p.join(p.basename(tempDir1.path), 'subdir');
+      await fileOps.createDirectory(subDirPath);
+      fileOps.changeDirectory(subDirPath);
+      expect(fileOps.getCurrentDirectory(), equals(p.join('/', subDirPath)));
     });
 
     test('changeDirectory using absolute path', () async {
-      await fileOps.createDirectory('subdir');
-      fileOps.changeDirectory(p.join(tempDir1.path, 'subdir'));
-      expect(fileOps.getCurrentDirectory(),
-          equals(p.join(tempDir1.path, 'subdir')));
+      String subDirPath = p.join('/', p.basename(tempDir1.path), 'subdir');
+      await fileOps.createDirectory(subDirPath);
+      fileOps.changeDirectory(subDirPath);
+      expect(fileOps.getCurrentDirectory(), equals(p.join('/', subDirPath)));
     });
 
     test('changeToParentDirectory moves to parent directory', () async {
-      await fileOps.createDirectory('subdir');
-      fileOps.changeDirectory('subdir');
+      String subDirPath = p.join('/', p.basename(tempDir1.path), 'subdir');
+
+      await fileOps.createDirectory(subDirPath);
+      fileOps.changeDirectory(subDirPath);
       fileOps.changeToParentDirectory();
       expect(fileOps.getCurrentDirectory(),
           equals('/${p.basename(tempDir1.path)}'));
