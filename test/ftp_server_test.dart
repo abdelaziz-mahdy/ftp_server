@@ -6,15 +6,10 @@ import 'package:ftp_server/file_operations/physical_file_operations.dart';
 import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
-import 'package:intl/intl.dart';
 import 'package:path/path.dart';
 
 import 'platform_output_handler/platform_output_handler.dart';
 import 'platform_output_handler/platform_output_handler_factory.dart';
-
-String _formatModificationTime(DateTime dateTime) {
-  return DateFormat('MMM dd HH:mm').format(dateTime);
-}
 
 void main() {
   final PlatformOutputHandler outputHandler =
@@ -37,8 +32,10 @@ void main() {
 
     try {
       ProcessResult result = await Process.run(
-          'ftp', ['-n', '-v', '-s:ftp_win_script.txt'],
-          runInShell: true);
+        'ftp',
+        ['-n', '-v', '-s:ftp_win_script.txt'],
+        runInShell: true,
+      );
       return result.stdout + result.stderr;
     } catch (e) {
       // Handle error
@@ -64,8 +61,6 @@ void main() {
           runInShell: true);
     } else if (Platform.isMacOS) {
       await Process.run('brew', ['install', 'inetutils'], runInShell: true);
-    } else if (Platform.isWindows) {
-      // FTP command should be available on Windows by default
     }
   }
 
@@ -91,13 +86,16 @@ void main() {
     return File(logFilePath).readAsStringSync();
   }
 
-  void runTestsForFileOperations(String testDescription,
-      FileOperations fileOperations, List<String> allowedDirectories) {
+  void runTestsForFileOperations(
+    String testDescription,
+    FileOperations fileOperations,
+    List<String> allowedDirectories,
+  ) {
     late FtpServer server;
     late Process ftpClient;
     final String logFilePath = '${allowedDirectories.first}/ftpsession.log';
+
     setUpAll(() async {
-      // Ensure the ftp command is available
       if (!await isFtpAvailable()) {
         await installFtp();
       }
@@ -138,11 +136,6 @@ void main() {
       );
 
       await connectAndAuthenticate(ftpClient, logFilePath);
-
-      if (fileOperations is VirtualFileOperations) {
-        ftpClient.stdin.writeln('cd ${allowedDirectories.first}');
-        await ftpClient.stdin.flush();
-      }
     });
 
     tearDown(() async {
@@ -176,35 +169,10 @@ void main() {
         output = await execFTPCmdOnWin("ls");
       }
 
-      var listing = StringBuffer();
-      for (var dir in allowedDirectories) {
-        var dirContents = Directory(dir).listSync();
-        for (var entity in dirContents) {
-          var stat = entity.statSync();
-          String permissions = (entity is File) ? '-rw-r--r--' : 'drwxr-xr-x';
-          String fileSize = stat.size.toString();
-          String modificationTime = _formatModificationTime(stat.modified);
-          String fileName = entity.path.split(Platform.pathSeparator).last;
+      String listing = await outputHandler.generateDirectoryListing(
+          fileOperations.getCurrentDirectory(), fileOperations);
 
-          // Ignore the size and modification time for ftpsession.log
-          if (fileName == 'ftpsession.log') {
-            fileSize = '[IGNORED SIZE]';
-            modificationTime = '[IGNORED TIME]';
-          }
-
-          listing.writeln(
-              '$permissions 1 ftp ftp $fileSize $modificationTime $fileName');
-        }
-      }
-
-      var adjustedOutput = output.replaceAll(
-          RegExp(
-              r'-rw-r--r-- 1 ftp ftp \d+ \w{3} \d{2} \d{2}:\d{2} ftpsession.log'),
-          '-rw-r--r-- 1 ftp ftp [IGNORED SIZE] [IGNORED TIME] ftpsession.log');
-
-      final expectedOutput = outputHandler
-          .getExpectedDirectoryListingOutput(listing.toString().trim());
-      expect(adjustedOutput, contains(expectedOutput));
+      expect(output, contains(listing));
     });
 
     test('$testDescription: Change Directory', () async {
@@ -217,8 +185,9 @@ void main() {
         output = await execFTPCmdOnWin("cd ${allowedDirectories.first}");
       }
 
-      final expectedOutput = outputHandler
+      String expectedOutput = outputHandler
           .getExpectedDirectoryChangeOutput(allowedDirectories.first);
+
       expect(output, contains(expectedOutput));
     });
 
@@ -331,9 +300,10 @@ void main() {
         await ftpClient.stdin.flush();
 
         var output = await readAllOutput(logFilePath);
-        var expectText = outputHandler.getExpectedSizeOutput(11);
+        var expectText =
+            outputHandler.getExpectedSizeOutput(11); // File size is 11 bytes
 
-        expect(output, contains(expectText)); // File size is 11 bytes
+        expect(output, contains(expectText));
         expect(output, contains('test_file.txt'));
       });
 
@@ -364,25 +334,19 @@ void main() {
     });
 
     test('$testDescription: List Nested Directories', () async {
-      // Step 1: Create nested directories
       final nestedDirPath = '${allowedDirectories.first}/outer_dir/inner_dir';
       Directory(nestedDirPath).createSync(recursive: true);
 
-      // Step 2: Change directory to the outer directory
       ftpClient.stdin.writeln('cd ${allowedDirectories.first}/outer_dir');
-      ftpClient.stdin.writeln('pwd'); // To check we're in the right directory
+      ftpClient.stdin.writeln('pwd');
 
-      // Step 3: List directories inside the outer directory
       ftpClient.stdin.writeln('ls');
 
-      // Step 4: Change directory to the inner directory using relative path
       ftpClient.stdin.writeln('cd inner_dir');
-      ftpClient.stdin.writeln('pwd'); // To check we're in the right directory
+      ftpClient.stdin.writeln('pwd');
 
-      // Step 5: List directories inside the inner directory
       ftpClient.stdin.writeln('ls');
 
-      // Step 6: Quit FTP session
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
@@ -410,27 +374,21 @@ void main() {
     test(
         '$testDescription: Change Directories Using Absolute and Relative Paths',
         () async {
-      // Step 1: Create nested directories
       final nestedDirPath = '${allowedDirectories.first}/outer_dir/inner_dir';
       Directory(nestedDirPath).createSync(recursive: true);
 
-      // Step 2: Change directory using absolute path to outer directory
       ftpClient.stdin.writeln('cd ${allowedDirectories.first}/outer_dir');
-      ftpClient.stdin.writeln('pwd'); // To check we're in the right directory
+      ftpClient.stdin.writeln('pwd');
 
-      // Step 3: Change directory using relative path to inner directory
       ftpClient.stdin.writeln('cd inner_dir');
-      ftpClient.stdin.writeln('pwd'); // To check we're in the right directory
+      ftpClient.stdin.writeln('pwd');
 
-      // Step 4: Change directory back to the outer directory using relative path
       ftpClient.stdin.writeln('cd ..');
-      ftpClient.stdin.writeln('pwd'); // To check we're in the outer directory
+      ftpClient.stdin.writeln('pwd');
 
-      // Step 5: Change directory using absolute path back to the inner directory
       ftpClient.stdin.writeln('cd $nestedDirPath');
-      ftpClient.stdin.writeln('pwd'); // To check we're in the inner directory
+      ftpClient.stdin.writeln('pwd');
 
-      // Step 6: Quit FTP session
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
@@ -463,8 +421,7 @@ void main() {
     });
 
     test('$testDescription: Prevent Navigation Above Root Directory', () async {
-      // ftpClient.stdin.writeln('pwd');
-      ftpClient.stdin.writeln('cd ..'); // Attempt to navigate above root
+      ftpClient.stdin.writeln('cd ..');
       ftpClient.stdin.writeln('cd ..');
       ftpClient.stdin.writeln('cd ..');
       ftpClient.stdin.writeln('cd ..');

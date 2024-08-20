@@ -8,13 +8,24 @@ class PhysicalFileOperations implements FileOperations {
   String _currentDirectory;
 
   /// Creates an instance of [PhysicalFileOperations] with the given root directory.
-  PhysicalFileOperations(this.rootDirectory)
-      : _currentDirectory = rootDirectory;
+  PhysicalFileOperations(this.rootDirectory) : _currentDirectory = rootDirectory;
+
+  /// Resolves a path to ensure it is within the root directory.
+  String _resolvePathWithinRoot(String path) {
+    final resolvedPath = p.normalize(p.join(_currentDirectory, path));
+    if (!p.isWithin(rootDirectory, resolvedPath) && resolvedPath != rootDirectory) {
+      throw FileSystemException("Access denied: Path is outside the root directory", resolvedPath);
+    }
+    return resolvedPath;
+  }
 
   @override
   Future<List<FileSystemEntity>> listDirectory(String path) async {
     final fullPath = resolvePath(path);
     final dir = Directory(fullPath);
+    if (!await dir.exists()) {
+      throw FileSystemException("Directory not found", fullPath);
+    }
     return dir.listSync();
   }
 
@@ -34,6 +45,9 @@ class PhysicalFileOperations implements FileOperations {
   @override
   Future<List<int>> readFile(String path) async {
     final file = await getFile(path);
+    if (!await file.exists()) {
+      throw FileSystemException("File not found", path);
+    }
     return file.readAsBytes();
   }
 
@@ -51,6 +65,8 @@ class PhysicalFileOperations implements FileOperations {
     final file = await getFile(path);
     if (await file.exists()) {
       await file.delete();
+    } else {
+      throw FileSystemException("File not found", path);
     }
   }
 
@@ -59,12 +75,17 @@ class PhysicalFileOperations implements FileOperations {
     final dir = Directory(resolvePath(path));
     if (await dir.exists()) {
       await dir.delete(recursive: true);
+    } else {
+      throw FileSystemException("Directory not found", path);
     }
   }
 
   @override
   Future<int> fileSize(String path) async {
     final file = await getFile(path);
+    if (!await file.exists()) {
+      throw FileSystemException("File not found", path);
+    }
     return await file.length();
   }
 
@@ -76,7 +97,7 @@ class PhysicalFileOperations implements FileOperations {
 
   @override
   String resolvePath(String path) {
-    return p.normalize(p.join(_currentDirectory, path));
+    return _resolvePathWithinRoot(path);
   }
 
   @override
@@ -96,18 +117,15 @@ class PhysicalFileOperations implements FileOperations {
 
   @override
   void changeToParentDirectory() {
-    final parentDir = Directory(_currentDirectory).parent;
     if (_currentDirectory == rootDirectory) {
-      throw Exception(
-        "Parent directory is above root ${parentDir.path}",
-      );
+      throw FileSystemException("Cannot navigate above root", _currentDirectory);
     }
-    if (parentDir.existsSync()) {
+
+    final parentDir = Directory(_currentDirectory).parent;
+    if (p.isWithin(rootDirectory, parentDir.path) || parentDir.path == rootDirectory) {
       _currentDirectory = parentDir.path;
     } else {
-      throw Exception(
-        "Parent directory not found ${parentDir.path}",
-      );
+      throw FileSystemException("Access denied: Cannot navigate above root", _currentDirectory);
     }
   }
 }
