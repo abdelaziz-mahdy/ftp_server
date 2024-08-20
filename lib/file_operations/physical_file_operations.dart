@@ -98,6 +98,21 @@ class PhysicalFileOperations implements FileOperations {
     return File(fullPath).existsSync() || Directory(fullPath).existsSync();
   }
 
+  /// Resolves the given [path] relative to the [currentDirectory].
+  /// The resolved path is normalized and checked to ensure it stays within the [rootDirectory].
+  ///
+  /// If the [path] is absolute and matches part of the [currentDirectory], the common prefix is removed.
+  ///
+  /// If the [path] is relative, it is resolved relative to the [currentDirectory].
+  ///
+  /// Examples:
+  /// ```dart
+  /// // Given rootDirectory = '/home/user/project' and currentDirectory = '/home/user/project/subdir'
+  /// resolvePath('file.txt'); // Returns: '/home/user/project/subdir/file.txt'
+  /// resolvePath('/home/user/project/subdir/file.txt'); // Returns: '/home/user/project/subdir/file.txt'
+  /// resolvePath('/home/user'); // Throws FileSystemException (outside root)
+  /// resolvePath('../../file.txt'); // Throws FileSystemException (attempt to go above root)
+  /// ```
   @override
   String resolvePath(String path) {
     // Normalize both the current directory and the provided path
