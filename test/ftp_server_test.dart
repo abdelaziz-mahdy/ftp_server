@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ftp_server/file_operations/file_operations.dart';
 import 'package:ftp_server/file_operations/physical_file_operations.dart';
+import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
 import 'package:intl/intl.dart';
@@ -14,13 +16,11 @@ String _formatModificationTime(DateTime dateTime) {
 }
 
 void main() {
-  final Directory tempDir = Directory.systemTemp.createTempSync('ftp_test');
+  final Directory tempDir1 = Directory.systemTemp.createTempSync('ftp_test1');
+  final Directory tempDir2 = Directory.systemTemp.createTempSync('ftp_test2');
   final PlatformOutputHandler outputHandler =
       PlatformOutputHandlerFactory.create();
-  late FtpServer server;
-  late Process ftpClient;
   const int port = 2126;
-  final String logFilePath = '${tempDir.path}/ftpsession.log';
 
   Future<String> execFTPCmdOnWin(String commands) async {
     const String ftpHost = '127.0.0.1 $port';
@@ -42,7 +42,7 @@ void main() {
           runInShell: true);
       return result.stdout + result.stderr;
     } catch (e) {
-      // print('Error: $e');
+      // Handle error
     } finally {
       await scriptFile.delete();
     }
@@ -70,13 +70,8 @@ void main() {
     }
   }
 
-  Future<void> connectAndAuthenticate() async {
-    ftpClient = await Process.start(
-      Platform.isWindows ? 'ftp' : 'bash',
-      Platform.isWindows ? ['-n', '-v'] : ['-c', 'ftp -n -v'],
-      runInShell: true,
-    );
-
+  Future<void> connectAndAuthenticate(
+      Process ftpClient, String logFilePath) async {
     File(logFilePath).writeAsStringSync(''); // Clear the log file
     ftpClient.stdout.transform(utf8.decoder).listen((data) {
       File(logFilePath).writeAsStringSync(data, mode: FileMode.append);
@@ -91,13 +86,18 @@ void main() {
     await ftpClient.stdin.flush();
   }
 
-  Future<String> readAllOutput() async {
+  Future<String> readAllOutput(String logFilePath) async {
     await Future.delayed(
         const Duration(milliseconds: 500)); // Wait for log to be written
     return File(logFilePath).readAsStringSync();
   }
 
-  group('FTP Server Tests', () {
+  void runTestsForFileOperations(String testDescription,
+      FileOperations fileOperations, List<String> allowedDirectories) {
+    late FtpServer server;
+    late Process ftpClient;
+    final String logFilePath = '${allowedDirectories.first}/ftpsession.log';
+
     setUpAll(() async {
       // Ensure the ftp command is available
       if (!await isFtpAvailable()) {
@@ -108,37 +108,35 @@ void main() {
             'FTP command is not available and could not be installed.');
       }
 
-      // Create the allowed directory and start the FTP server
-      tempDir.createSync(recursive: true);
       server = FtpServer(
         port,
         username: 'test',
         password: 'password',
-        fileOperations: PhysicalFileOperations(tempDir.path),
+        fileOperations: fileOperations,
         serverType: ServerType.readAndWrite,
         logFunction: (String message) => print(message),
       );
       await server.startInBackground();
+
+      ftpClient = await Process.start(
+        Platform.isWindows ? 'ftp' : 'bash',
+        Platform.isWindows ? ['-n', '-v'] : ['-c', 'ftp -n -v'],
+        runInShell: true,
+      );
+
+      await connectAndAuthenticate(ftpClient, logFilePath);
     });
 
     tearDownAll(() async {
       await server.stop();
-      tempDir.deleteSync(recursive: true);
-    });
-
-    setUp(() async {
-      await connectAndAuthenticate();
-    });
-
-    tearDown(() async {
       ftpClient.kill();
     });
 
-    test('Authentication Success', () async {
+    test('$testDescription: Authentication Success', () async {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      var output = await readAllOutput();
+      var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin("quit");
       }
@@ -146,7 +144,7 @@ void main() {
       expect(output, contains('230 User logged in, proceed'));
     });
 
-    test('List Directory', () async {
+    test('$testDescription: List Directory', () async {
       ftpClient.stdin.writeln('ls');
       if (Platform.isLinux) {
         ftpClient.stdin.writeln('passive on');
@@ -156,32 +154,32 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      var output = await readAllOutput();
+      var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin("ls");
       }
 
-      // Build the expected listing dynamically based on the actual directory contents
       var listing = StringBuffer();
-      var dirContents = Directory(tempDir.path).listSync();
-      for (var entity in dirContents) {
-        var stat = entity.statSync();
-        String permissions = (entity is File) ? '-rw-r--r--' : 'drwxr-xr-x';
-        String fileSize = stat.size.toString();
-        String modificationTime = _formatModificationTime(stat.modified);
-        String fileName = entity.path.split(Platform.pathSeparator).last;
+      for (var dir in allowedDirectories) {
+        var dirContents = Directory(dir).listSync();
+        for (var entity in dirContents) {
+          var stat = entity.statSync();
+          String permissions = (entity is File) ? '-rw-r--r--' : 'drwxr-xr-x';
+          String fileSize = stat.size.toString();
+          String modificationTime = _formatModificationTime(stat.modified);
+          String fileName = entity.path.split(Platform.pathSeparator).last;
 
-        // Ignore the size and modification time for ftpsession.log
-        if (fileName == 'ftpsession.log') {
-          fileSize = '[IGNORED SIZE]';
-          modificationTime = '[IGNORED TIME]';
+          // Ignore the size and modification time for ftpsession.log
+          if (fileName == 'ftpsession.log') {
+            fileSize = '[IGNORED SIZE]';
+            modificationTime = '[IGNORED TIME]';
+          }
+
+          listing.writeln(
+              '$permissions 1 ftp ftp $fileSize $modificationTime $fileName');
         }
-
-        listing.writeln(
-            '$permissions 1 ftp ftp $fileSize $modificationTime $fileName');
       }
 
-      // Adjust the actual output to ignore the size and modification time for ftpsession.log
       var adjustedOutput = output.replaceAll(
           RegExp(
               r'-rw-r--r-- 1 ftp ftp \d+ \w{3} \d{2} \d{2}:\d{2} ftpsession.log'),
@@ -192,45 +190,46 @@ void main() {
       expect(adjustedOutput, contains(expectedOutput));
     });
 
-    test('Change Directory', () async {
-      ftpClient.stdin.writeln('cd ${tempDir.path}');
+    test('$testDescription: Change Directory', () async {
+      ftpClient.stdin.writeln('cd ${allowedDirectories.first}');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      var output = await readAllOutput();
+      var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
-        output = await execFTPCmdOnWin("cd ${tempDir.path}");
+        output = await execFTPCmdOnWin("cd ${allowedDirectories.first}");
       }
 
-      final expectedOutput =
-          outputHandler.getExpectedDirectoryChangeOutput(tempDir.path);
+      final expectedOutput = outputHandler
+          .getExpectedDirectoryChangeOutput(allowedDirectories.first);
       expect(output, contains(expectedOutput));
     });
 
-    test('Make Directory', () async {
+    test('$testDescription: Make Directory', () async {
       ftpClient.stdin.writeln('mkdir test_dir');
       ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      var output = await readAllOutput();
+      var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin("mkdir test_dir\nls");
       }
 
       expect(output, contains('257 "test_dir" created'));
       expect(output, contains('test_dir'));
-      expect(Directory('${tempDir.path}/test_dir').existsSync(), isTrue);
+      expect(Directory('${allowedDirectories.first}/test_dir').existsSync(),
+          isTrue);
     });
 
-    test('Remove Directory', () async {
+    test('$testDescription: Remove Directory', () async {
       ftpClient.stdin.writeln('mkdir test_dir');
       ftpClient.stdin.writeln('rmdir test_dir');
       ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      var output = await readAllOutput();
+      var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin("mkdir test_dir\nrmdir test_dir");
         expect(output, contains('250 Directory deleted'));
@@ -239,11 +238,12 @@ void main() {
         expect(output, contains('250 Directory deleted'));
       }
       expect(output, isNot(contains('test_dir')));
-      expect(Directory('${tempDir.path}/test_dir').existsSync(), isFalse);
+      expect(Directory('${allowedDirectories.first}/test_dir').existsSync(),
+          isFalse);
     });
 
-    test('Store File', () async {
-      final testFile = File('${tempDir.path}/test_file.txt')
+    test('$testDescription: Store File', () async {
+      final testFile = File('${allowedDirectories.first}/test_file.txt')
         ..writeAsStringSync('Hello, FTP!');
 
       ftpClient.stdin.writeln('put ${testFile.path}');
@@ -251,7 +251,7 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      var output = await readAllOutput();
+      var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin("put ${testFile.path}");
         expect(output, contains('226 Transfer complete'));
@@ -262,8 +262,8 @@ void main() {
       expect(output, contains('test_file.txt'));
     });
 
-    test('Retrieve File', () async {
-      final testPath = '${tempDir.path}/test_file_ret.txt';
+    test('$testDescription: Retrieve File', () async {
+      final testPath = '${allowedDirectories.first}/test_file_ret.txt';
       final testFile = File(testPath)..writeAsStringSync('Hello, FTP!');
 
       ftpClient.stdin.writeln('get ${testFile.path} $testPath');
@@ -271,7 +271,7 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      var output = await readAllOutput();
+      var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin('get ${testFile.path} $testPath');
         expect(output, contains('226 Transfer complete'));
@@ -282,8 +282,8 @@ void main() {
       expect(File(testPath).existsSync(), isTrue);
     });
 
-    test('Delete File', () async {
-      final testFile = File('${tempDir.path}/test_file.txt')
+    test('$testDescription: Delete File', () async {
+      final testFile = File('${allowedDirectories.first}/test_file.txt')
         ..writeAsStringSync('Hello, FTP!');
 
       ftpClient.stdin.writeln('delete ${testFile.path}');
@@ -291,7 +291,7 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      var output = await readAllOutput();
+      var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = (await execFTPCmdOnWin('delete ${testFile.path}'));
         expect(output, contains('250 File deleted'));
@@ -304,8 +304,8 @@ void main() {
     });
 
     if (!Platform.isWindows) {
-      test('File Size', () async {
-        final testFile = File('${tempDir.path}/test_file.txt')
+      test('$testDescription: File Size', () async {
+        final testFile = File('${allowedDirectories.first}/test_file.txt')
           ..writeAsStringSync('Hello, FTP!');
 
         ftpClient.stdin.writeln('size ${testFile.path}');
@@ -313,46 +313,46 @@ void main() {
         ftpClient.stdin.writeln('quit');
         await ftpClient.stdin.flush();
 
-        var output = await readAllOutput();
+        var output = await readAllOutput(logFilePath);
         var expectText = outputHandler.getExpectedSizeOutput(11);
 
         expect(output, contains(expectText)); // File size is 11 bytes
         expect(output, contains('test_file.txt'));
       });
 
-      test('System Command', () async {
+      test('$testDescription: System Command', () async {
         ftpClient.stdin.writeln('syst');
         ftpClient.stdin.writeln('quit');
         await ftpClient.stdin.flush();
 
-        var output = await readAllOutput();
+        var output = await readAllOutput(logFilePath);
 
         expect(output, contains('215 UNIX Type: L8'));
       });
     }
 
-    test('Print Working Directory Command', () async {
+    test('$testDescription: Print Working Directory Command', () async {
       ftpClient.stdin.writeln('pwd');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      var output = await readAllOutput();
+      var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin('pwd');
       }
 
       final expectText = outputHandler
-          .getExpectedPwdOutput(tempDir.path.replaceAll("\\", "/"));
+          .getExpectedPwdOutput(allowedDirectories.first.replaceAll("\\", "/"));
       expect(output, contains(expectText));
     });
 
-    test('List Nested Directories', () async {
+    test('$testDescription: List Nested Directories', () async {
       // Step 1: Create nested directories
-      final nestedDirPath = '${tempDir.path}/outer_dir/inner_dir';
+      final nestedDirPath = '${allowedDirectories.first}/outer_dir/inner_dir';
       Directory(nestedDirPath).createSync(recursive: true);
 
       // Step 2: Change directory to the outer directory
-      ftpClient.stdin.writeln('cd ${tempDir.path}/outer_dir');
+      ftpClient.stdin.writeln('cd ${allowedDirectories.first}/outer_dir');
       ftpClient.stdin.writeln('pwd'); // To check we're in the right directory
 
       // Step 3: List directories inside the outer directory
@@ -369,14 +369,15 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      var output = await readAllOutput();
+      var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin(
-            'cd ${tempDir.path}/outer_dir\npwd\nls\ncd inner_dir\npwd\nls');
+            'cd ${allowedDirectories.first}/outer_dir\npwd\nls\ncd inner_dir\npwd\nls');
       }
 
-      final expectedOuterDir = '${tempDir.path}/outer_dir';
-      final expectedInnerDir = '${tempDir.path}/outer_dir/inner_dir';
+      final expectedOuterDir = '${allowedDirectories.first}/outer_dir';
+      final expectedInnerDir =
+          '${allowedDirectories.first}/outer_dir/inner_dir';
 
       expect(
           output,
@@ -389,13 +390,15 @@ void main() {
       expect(output, contains('inner_dir'));
     });
 
-    test('Change Directories Using Absolute and Relative Paths', () async {
+    test(
+        '$testDescription: Change Directories Using Absolute and Relative Paths',
+        () async {
       // Step 1: Create nested directories
-      final nestedDirPath = '${tempDir.path}/outer_dir/inner_dir';
+      final nestedDirPath = '${allowedDirectories.first}/outer_dir/inner_dir';
       Directory(nestedDirPath).createSync(recursive: true);
 
       // Step 2: Change directory using absolute path to outer directory
-      ftpClient.stdin.writeln('cd ${tempDir.path}/outer_dir');
+      ftpClient.stdin.writeln('cd ${allowedDirectories.first}/outer_dir');
       ftpClient.stdin.writeln('pwd'); // To check we're in the right directory
 
       // Step 3: Change directory using relative path to inner directory
@@ -414,14 +417,15 @@ void main() {
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
-      var output = await readAllOutput();
+      var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin(
-            'cd ${tempDir.path}/outer_dir\npwd\ncd inner_dir\npwd\ncd ..\npwd\ncd $nestedDirPath\npwd');
+            'cd ${allowedDirectories.first}/outer_dir\npwd\ncd inner_dir\npwd\ncd ..\npwd\ncd $nestedDirPath\npwd');
       }
 
-      final expectedOuterDir = '${tempDir.path}/outer_dir';
-      final expectedInnerDir = '${tempDir.path}/outer_dir/inner_dir';
+      final expectedOuterDir = '${allowedDirectories.first}/outer_dir';
+      final expectedInnerDir =
+          '${allowedDirectories.first}/outer_dir/inner_dir';
 
       expect(
           output,
@@ -440,5 +444,37 @@ void main() {
           contains(outputHandler
               .getExpectedDirectoryChangeOutput(expectedInnerDir)));
     });
+
+    test('$testDescription: Prevent Navigation Above Root Directory', () async {
+      ftpClient.stdin.writeln('cd ..'); // Attempt to navigate above root
+      ftpClient.stdin.writeln('pwd');
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin('cd ..\npwd');
+      }
+
+      final expectedOutput =
+          outputHandler.getExpectedPwdOutput(allowedDirectories.first);
+      expect(output, contains(expectedOutput));
+    });
+  }
+
+  group('FTP Server Tests with PhysicalFileOperations', () {
+    runTestsForFileOperations(
+      'PhysicalFileOperations',
+      PhysicalFileOperations(tempDir1.path),
+      [tempDir1.path],
+    );
+  });
+
+  group('FTP Server Tests with VirtualFileOperations', () {
+    runTestsForFileOperations(
+      'VirtualFileOperations',
+      VirtualFileOperations([tempDir1.path, tempDir2.path]),
+      [tempDir1.path, tempDir2.path],
+    );
   });
 }
