@@ -7,6 +7,7 @@ import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart';
 
 import 'platform_output_handler/platform_output_handler.dart';
 import 'platform_output_handler/platform_output_handler_factory.dart';
@@ -16,8 +17,6 @@ String _formatModificationTime(DateTime dateTime) {
 }
 
 void main() {
-  final Directory tempDir1 = Directory.systemTemp.createTempSync('ftp_test1');
-  final Directory tempDir2 = Directory.systemTemp.createTempSync('ftp_test2');
   final PlatformOutputHandler outputHandler =
       PlatformOutputHandlerFactory.create();
   const int port = 2126;
@@ -97,7 +96,6 @@ void main() {
     late FtpServer server;
     late Process ftpClient;
     final String logFilePath = '${allowedDirectories.first}/ftpsession.log';
-
     setUpAll(() async {
       // Ensure the ftp command is available
       if (!await isFtpAvailable()) {
@@ -129,6 +127,25 @@ void main() {
 
     tearDownAll(() async {
       await server.stop();
+      ftpClient.kill();
+    });
+
+    setUp(() async {
+      ftpClient = await Process.start(
+        Platform.isWindows ? 'ftp' : 'bash',
+        Platform.isWindows ? ['-n', '-v'] : ['-c', 'ftp -n -v'],
+        runInShell: true,
+      );
+
+      await connectAndAuthenticate(ftpClient, logFilePath);
+
+      if (fileOperations is VirtualFileOperations) {
+        ftpClient.stdin.writeln('cd ${allowedDirectories.first}');
+        await ftpClient.stdin.flush();
+      }
+    });
+
+    tearDown(() async {
       ftpClient.kill();
     });
 
@@ -446,7 +463,11 @@ void main() {
     });
 
     test('$testDescription: Prevent Navigation Above Root Directory', () async {
+      // ftpClient.stdin.writeln('pwd');
       ftpClient.stdin.writeln('cd ..'); // Attempt to navigate above root
+      ftpClient.stdin.writeln('cd ..');
+      ftpClient.stdin.writeln('cd ..');
+      ftpClient.stdin.writeln('cd ..');
       ftpClient.stdin.writeln('pwd');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
@@ -463,6 +484,7 @@ void main() {
   }
 
   group('FTP Server Tests with PhysicalFileOperations', () {
+    final Directory tempDir1 = Directory.systemTemp.createTempSync('ftp_test1');
     runTestsForFileOperations(
       'PhysicalFileOperations',
       PhysicalFileOperations(tempDir1.path),
@@ -471,6 +493,8 @@ void main() {
   });
 
   group('FTP Server Tests with VirtualFileOperations', () {
+    final Directory tempDir1 = Directory.systemTemp.createTempSync('ftp_test2');
+    final Directory tempDir2 = Directory.systemTemp.createTempSync('ftp_test3');
     runTestsForFileOperations(
       'VirtualFileOperations',
       VirtualFileOperations([tempDir1.path, tempDir2.path]),

@@ -113,10 +113,17 @@ class VirtualFileOperations implements FileOperations {
   @override
   void changeToParentDirectory() {
     final parentDir = Directory(_currentDirectory).parent;
+    if (_currentDirectory == "/") {
+      throw Exception(
+        "Parent directory is above root ${parentDir.path}",
+      );
+    }
     if (parentDir.existsSync()) {
       _currentDirectory = parentDir.path;
     } else {
-      throw FileSystemException("Parent directory not found", parentDir.path);
+      throw Exception(
+        "Parent directory not found ${parentDir.path}",
+      );
     }
   }
 }

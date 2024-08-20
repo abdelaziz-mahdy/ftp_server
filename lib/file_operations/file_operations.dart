@@ -3,6 +3,7 @@ import 'dart:io';
 
 /// Interface defining common file operations for both physical and virtual file systems.
 abstract class FileOperations {
+  
   /// Lists the contents of the directory at the given path.
   /// Returns a list of [FileSystemEntity] objects representing the contents.
   Future<List<FileSystemEntity>> listDirectory(String path);
