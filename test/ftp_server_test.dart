@@ -1,12 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ftp_server/file_operations/file_operations.dart';
+import 'package:ftp_server/file_operations/physical_file_operations.dart';
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
 
 void main() {
   final Directory tempDir = Directory.systemTemp.createTempSync('ftp_test');
-  final List<String> allowedDirectories = [tempDir.path];
+
   late FtpServer server;
   late Process ftpClient;
   const int port = 2126;
@@ -113,8 +115,7 @@ quit
         port,
         username: 'test',
         password: 'password',
-        allowedDirectories: allowedDirectories,
-        startingDirectory: allowedDirectories.first,
+        fileOperations: PhysicalFileOperations(tempDir.path),
         serverType: ServerType.readAndWrite,
         // ignore: avoid_print
         logFunction: (String message) => print(message),

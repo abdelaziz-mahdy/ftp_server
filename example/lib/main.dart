@@ -3,6 +3,7 @@ import 'dart:isolate';
 import 'dart:math';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:ftp_server/file_operations/physical_file_operations.dart';
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -99,8 +100,7 @@ class MyAppState extends State<MyApp> {
 
       var server = FtpServer(
         port ?? Random().nextInt(65535),
-        startingDirectory: serverDirectory,
-        allowedDirectories: [serverDirectory],
+        fileOperations: PhysicalFileOperations(serverDirectory),
         serverType: ServerType.readAndWrite,
       );
 

@@ -69,7 +69,7 @@ class FTPCommandHandler {
         handleSize(argument, session);
         break;
       case 'PWD' || 'XPWD':
-        handleCurPath(argument, session);
+        handleCurPath(session);
         break;
       case 'OPTS':
         handleOptions(argument, session);
@@ -184,8 +184,9 @@ class FTPCommandHandler {
     session.fileSize(argument);
   }
 
-  void handleCurPath(String argument, FtpSession session) {
-    session.currentPath();
+  void handleCurPath(FtpSession session) {
+    String currentPath = session.fileOperations.getCurrentDirectory();
+    session.sendResponse('257 "$currentPath" is current directory');
   }
 
   void handleOptions(String argument, FtpSession session) {
