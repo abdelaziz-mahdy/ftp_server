@@ -82,7 +82,7 @@ void main() {
 
   Future<String> readAllOutput(String logFilePath) async {
     await Future.delayed(
-        const Duration(milliseconds: 500)); // Wait for log to be written
+        const Duration(milliseconds: 200)); // Wait for log to be written
     return File(logFilePath).readAsStringSync();
   }
 
@@ -172,7 +172,13 @@ void main() {
       String listing = await outputHandler.generateDirectoryListing(
           fileOperations.getCurrentDirectory(), fileOperations);
 
-      expect(output, contains(listing));
+      // Normalize both expected and actual output using the replacement function
+      String normalizedOutput = outputHandler.normalizeDirectoryListing(output);
+      String normalizedExpected =
+          outputHandler.normalizeDirectoryListing(listing);
+
+      // Use normalized strings for comparison
+      expect(normalizedOutput, contains(normalizedExpected));
     });
 
     test('$testDescription: Change Directory', () async {

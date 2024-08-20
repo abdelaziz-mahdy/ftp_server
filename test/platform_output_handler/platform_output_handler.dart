@@ -45,4 +45,14 @@ abstract class PlatformOutputHandler {
   String _formatModificationTime(DateTime dateTime) {
     return DateFormat('MMM dd HH:mm').format(dateTime);
   }
+
+  /// Function to normalize directory listings by replacing dynamic parts
+  String normalizeDirectoryListing(String listing) {
+    // Replace file size (one or more digits) with [IGNORED SIZE]
+    listing = listing.replaceAll(RegExp(r'\s+\d+\s+'), ' [IGNORED SIZE] ');
+    // Replace modification time with [IGNORED TIME]
+    listing = listing.replaceAll(
+        RegExp(r'\w{3}\s+\d{2}\s+\d{2}:\d{2}'), '[IGNORED TIME]');
+    return listing;
+  }
 }

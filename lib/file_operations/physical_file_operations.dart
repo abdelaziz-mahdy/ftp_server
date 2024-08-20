@@ -8,8 +8,7 @@ class PhysicalFileOperations implements FileOperations {
   String currentDirectory;
 
   /// Creates an instance of [PhysicalFileOperations] with the given root directory.
-  PhysicalFileOperations(this.rootDirectory)
-      : currentDirectory = rootDirectory;
+  PhysicalFileOperations(this.rootDirectory) : currentDirectory = rootDirectory;
 
   /// Resolves a path to ensure it is within the root directory.
   String _resolvePathWithinRoot(String path) {
@@ -101,12 +100,29 @@ class PhysicalFileOperations implements FileOperations {
 
   @override
   String resolvePath(String path) {
-    // If the path is absolute, resolve it relative to the root directory
-    if (p.isAbsolute(path)) {
-      return _resolvePathWithinRoot(p.relative(path, from: '/'));
+    // Normalize both the current directory and the provided path
+    String normalizedCurrentDir = p.normalize(currentDirectory);
+    String normalizedRootDirectory = p.normalize(rootDirectory);
+
+    String normalizedPath = p.normalize(path);
+
+    // If the path is absolute, strip the common prefix with the current directory
+    if (p.isAbsolute(normalizedPath)) {
+      if (normalizedPath.startsWith(normalizedRootDirectory)) {
+        // Remove the common prefix (current directory) from the path
+        normalizedPath =
+            p.relative(normalizedPath, from: normalizedRootDirectory);
+      }
+      if (p.isAbsolute(normalizedPath)) {
+        // Resolve the remaining path relative to the root directory
+        return _resolvePathWithinRoot(p.relative(normalizedPath, from: '/'));
+      } else {
+        return _resolvePathWithinRoot(normalizedPath);
+      }
     } else {
-      // Otherwise, resolve it as a relative path from the current directory
-      return _resolvePathWithinRoot(p.join(currentDirectory, path));
+      // For relative paths, resolve it as usual
+      return _resolvePathWithinRoot(
+          p.join(normalizedCurrentDir, normalizedPath));
     }
   }
 
@@ -128,8 +144,7 @@ class PhysicalFileOperations implements FileOperations {
   @override
   void changeToParentDirectory() {
     if (currentDirectory == rootDirectory) {
-      throw FileSystemException(
-          "Cannot navigate above root", currentDirectory);
+      throw FileSystemException("Cannot navigate above root", currentDirectory);
     }
 
     final parentDir = Directory(currentDirectory).parent;

@@ -20,8 +20,14 @@ void main() {
       tempDir.deleteSync(recursive: true);
     });
 
-    test('resolvePath', () {
+    test('resolvePath with relative path', () {
       final resolvedPath = fileOps.resolvePath('some/path');
+      expect(resolvedPath, equals(p.join(tempDir.path, 'some', 'path')));
+    });
+
+    test('resolvePath with absolute path', () {
+      final resolvedPath =
+          fileOps.resolvePath(p.join(tempDir.path, 'some', 'path'));
       expect(resolvedPath, equals(p.join(tempDir.path, 'some', 'path')));
     });
 
@@ -81,22 +87,25 @@ void main() {
       expect(size, equals(13));
     });
 
-    test('changeDirectory changes current directory', () {
-      // Ensure the directory exists before changing to it
-      fileOps.createDirectory('subdir').then((_) {
-        fileOps.changeDirectory('subdir');
-        expect(fileOps.getCurrentDirectory(),
-            equals(p.join(tempDir.path, 'subdir')));
-      });
+    test('changeDirectory using relative path', () async {
+      await fileOps.createDirectory('subdir');
+      fileOps.changeDirectory('subdir');
+      expect(fileOps.getCurrentDirectory(),
+          equals(p.join(tempDir.path, 'subdir')));
     });
 
-    test('changeToParentDirectory moves to parent directory', () {
-      // Ensure the directory exists before changing to it
-      fileOps.createDirectory('subdir').then((_) {
-        fileOps.changeDirectory('subdir');
-        fileOps.changeToParentDirectory();
-        expect(fileOps.getCurrentDirectory(), equals(tempDir.path));
-      });
+    test('changeDirectory using absolute path', () async {
+      await fileOps.createDirectory('subdir');
+      fileOps.changeDirectory(p.join(tempDir.path, 'subdir'));
+      expect(fileOps.getCurrentDirectory(),
+          equals(p.join(tempDir.path, 'subdir')));
+    });
+
+    test('changeToParentDirectory moves to parent directory', () async {
+      await fileOps.createDirectory('subdir');
+      fileOps.changeDirectory('subdir');
+      fileOps.changeToParentDirectory();
+      expect(fileOps.getCurrentDirectory(), equals(tempDir.path));
     });
 
     test('writeFile writes data to file', () async {
@@ -132,9 +141,15 @@ void main() {
       tempDir2.deleteSync(recursive: true);
     });
 
-    test('resolvePath resolves path correctly', () {
+    test('resolvePath with relative path', () {
       final resolvedPath = fileOps.resolvePath('some/path');
       expect(resolvedPath, equals(p.join(tempDir1.path, 'some', 'path')));
+    });
+
+    test('resolvePath with absolute path', () {
+      final resolvedPath = fileOps
+          .resolvePath('/${p.basename(tempDir1.path)}/some/absolute/path');
+      expect(resolvedPath, equals(p.join(tempDir1.path, 'some/absolute/path')));
     });
 
     test('exists returns true for existing file', () {
@@ -181,11 +196,10 @@ void main() {
       file1.writeAsStringSync('Hello, World!');
       file2.writeAsStringSync('Hello, FTP!');
       dir.createSync();
-      print("current dir is ${fileOps.currentDirectory}");
       final entities =
           await fileOps.listDirectory('/${p.basename(tempDir1.path)}');
       expect(entities.length,
-          equals(2)); // Adjusted the expectation for virtual listing
+          equals(3)); // Adjusted the expectation for virtual listing
       expect(entities.map((e) => p.basename(e.path)),
           containsAll(['test_file.txt', 'test_file2.txt', 'test_dir']));
     });
@@ -197,22 +211,26 @@ void main() {
       expect(size, equals(13));
     });
 
-    test('changeDirectory changes current directory', () {
-      // Ensure the directory exists before changing to it
-      fileOps.createDirectory('subdir').then((_) {
-        fileOps.changeDirectory('subdir');
-        expect(fileOps.getCurrentDirectory(),
-            equals(p.join(tempDir1.path, 'subdir')));
-      });
+    test('changeDirectory using relative path', () async {
+      await fileOps.createDirectory('subdir');
+      fileOps.changeDirectory('subdir');
+      expect(fileOps.getCurrentDirectory(),
+          equals(p.join(tempDir1.path, 'subdir')));
     });
 
-    test('changeToParentDirectory moves to parent directory', () {
-      // Ensure the directory exists before changing to it
-      fileOps.createDirectory('subdir').then((_) {
-        fileOps.changeDirectory('subdir');
-        fileOps.changeToParentDirectory();
-        expect(fileOps.getCurrentDirectory(), equals('/'));
-      });
+    test('changeDirectory using absolute path', () async {
+      await fileOps.createDirectory('subdir');
+      fileOps.changeDirectory(p.join(tempDir1.path, 'subdir'));
+      expect(fileOps.getCurrentDirectory(),
+          equals(p.join(tempDir1.path, 'subdir')));
+    });
+
+    test('changeToParentDirectory moves to parent directory', () async {
+      await fileOps.createDirectory('subdir');
+      fileOps.changeDirectory('subdir');
+      fileOps.changeToParentDirectory();
+      expect(fileOps.getCurrentDirectory(),
+          equals('/${p.basename(tempDir1.path)}'));
     });
 
     test('writeFile writes data to file', () async {

@@ -1,8 +1,8 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ftp_server/file_operations/physical_file_operations.dart';
 import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 import 'package:path/path.dart' as p;
-import 'dart:io';
 
 void main() {
   group('PhysicalFileOperations.resolvePath', () {
@@ -54,6 +54,13 @@ void main() {
       fileOps.changeDirectory('subdir');
       final resolvedPath = fileOps.resolvePath('subdir2/../file.txt');
       expect(resolvedPath, equals(p.join(tempDir.path, 'subdir/file.txt')));
+    });
+
+    test('Resolves path with same directory prefix as currentDirectory', () {
+      fileOps.changeDirectory(p.join(tempDir.path, 'subdir'));
+      final resolvedPath =
+          fileOps.resolvePath(p.join(tempDir.path, 'subdir', 'file.txt'));
+      expect(resolvedPath, equals(p.join(tempDir.path, 'subdir', 'file.txt')));
     });
 
     test('Throws error for path above root using relative paths', () {
@@ -122,6 +129,13 @@ void main() {
       fileOps.changeDirectory('/${p.basename(tempDir1.path)}/subdir');
       final resolvedPath = fileOps.resolvePath('subdir2/../file.txt');
       expect(resolvedPath, equals(p.join(tempDir1.path, 'subdir/file.txt')));
+    });
+
+    test('Resolves path with same directory prefix as currentDirectory', () {
+      fileOps.changeDirectory(p.join(tempDir1.path, 'subdir'));
+      final resolvedPath =
+          fileOps.resolvePath(p.join(tempDir1.path, 'subdir', 'file.txt'));
+      expect(resolvedPath, equals(p.join(tempDir1.path, 'subdir', 'file.txt')));
     });
 
     test('Throws error for path outside allowed directories', () {
