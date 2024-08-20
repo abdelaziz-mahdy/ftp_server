@@ -224,7 +224,7 @@ class FtpSession {
       fileOperations.changeDirectory(dirname);
       sendResponse('250 Directory changed to $currentDirectory');
     } catch (e) {
-      sendResponse('550 Access denied or directory not found');
+      sendResponse('550 Access denied or directory not found $e');
       logger.generalLog('Error changing directory: $e');
     }
   }
@@ -234,7 +234,7 @@ class FtpSession {
       fileOperations.changeToParentDirectory();
       sendResponse('250 Directory changed to $currentDirectory');
     } catch (e) {
-      sendResponse('550 Access denied or directory not found');
+      sendResponse('550 Access denied or directory not found $e');
       logger.generalLog('Error changing to parent directory: $e');
     }
   }
