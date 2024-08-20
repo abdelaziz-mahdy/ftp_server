@@ -2,63 +2,72 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'file_operations.dart';
 
-/// Implementation of [FileOperations] for managing a virtual file system that maps to physical directories.
-class VirtualFileOperations implements FileOperations {
-  final List<String> allowedDirectories;
-  String currentDirectory;
+class VirtualFileOperations extends FileOperations {
+  final Map<String, String> directoryMappings = {};
 
   /// Creates an instance of [VirtualFileOperations] with the given allowed directories.
-  /// The initial current directory is set to the virtual root, represented by `/`.
-  VirtualFileOperations(this.allowedDirectories) : currentDirectory = '/' {
+  /// Maps directory names to their full paths internally.
+  VirtualFileOperations(List<String> allowedDirectories) : super('/') {
     if (allowedDirectories.isEmpty) {
       throw ArgumentError("Allowed directories cannot be empty");
+    }
+
+    // Create a mapping from directory names to their full paths
+    for (String dir in allowedDirectories) {
+      final normalizedDir = p.normalize(dir);
+      final dirName = p.basename(normalizedDir);
+      directoryMappings[dirName] = normalizedDir;
     }
   }
 
   /// Maps a virtual path to the corresponding physical path.
-  /// Ensures that the path stays within the allowed directories.
-  String _mapVirtualToPhysicalPath(String virtualPath) {
-    String normalizedVirtualPath = p.normalize(virtualPath);
-
-    if (normalizedVirtualPath == '/') {
-      return '/';
+  /// Ensures that the path stays within the mapped directories.
+  @override
+  String resolvePath(String path) {
+    String normalizedPath = super.resolvePath(path);
+    if (normalizedPath == rootDirectory) {
+      return rootDirectory;
     }
+    // Check if the path is absolute
+    if (p.isAbsolute(path)) {
+      normalizedPath = p.relative(normalizedPath, from: rootDirectory);
+      // Extract the first part of the path (the directory name)
+      String dirName = p
+          .split(normalizedPath)
+          .firstWhere((part) => part.isNotEmpty && part != rootDirectory);
 
-    for (var dir in allowedDirectories) {
-      final normalizedDir = p.normalize(dir);
-      String potentialPhysicalPath;
+      // Match the directory name against the mappings
+      if (directoryMappings.containsKey(dirName)) {
+        // Get the corresponding physical path
+        String mappedDir = directoryMappings[dirName]!;
 
-      if (virtualPath.startsWith('/')) {
-        potentialPhysicalPath =
-            p.join(normalizedDir, p.relative(normalizedVirtualPath, from: '/'));
+        // Construct the full path by replacing the virtual root with the mapped directory
+        String remainingPath = normalizedPath.substring(dirName.length);
+        if (remainingPath.startsWith(rootDirectory)) {
+          remainingPath = remainingPath.substring(1);
+        }
+        return p.normalize(p.join(mappedDir, remainingPath));
       } else {
-        potentialPhysicalPath = p.join(
-            normalizedDir,
-            p.relative(p.join(currentDirectory, normalizedVirtualPath),
-                from: '/'));
+        throw FileSystemException(
+            "Access denied or directory not found: $path");
       }
-
-      potentialPhysicalPath = p.normalize(p.join(normalizedDir,
-          p.relative(potentialPhysicalPath, from: normalizedDir)));
-
-      if (p.isWithin(normalizedDir, potentialPhysicalPath) ||
-          p.equals(normalizedDir, potentialPhysicalPath)) {
-        return potentialPhysicalPath;
-      }
+    } else {
+      // For relative paths, resolve it against the current directory
+      String currentDir = getCurrentDirectory();
+      String potentialPhysicalPath = p.join(currentDir, normalizedPath);
+      return potentialPhysicalPath;
     }
-
-    throw FileSystemException(
-        "Access denied or directory not found: $virtualPath");
   }
 
+  // Other methods remain the same, utilizing the new resolvePath method
   @override
   Future<List<FileSystemEntity>> listDirectory(String path) async {
     try {
       final fullPath = resolvePath(path);
 
-      if (fullPath == '/') {
-        // Listing the virtual root should list all allowed directories
-        return allowedDirectories.map((dir) => Directory(dir)).toList();
+      if (fullPath == rootDirectory) {
+        // Listing the virtual root should list all mapped directories
+        return directoryMappings.values.map((dir) => Directory(dir)).toList();
       }
 
       final dir = Directory(fullPath);
@@ -167,46 +176,5 @@ class VirtualFileOperations implements FileOperations {
     } catch (e) {
       return false;
     }
-  }
-
-  @override
-  String resolvePath(String path) {
-    if (currentDirectory == '/' && path == '/') {
-      return '/';
-    }
-    return _mapVirtualToPhysicalPath(path);
-  }
-
-  @override
-  String getCurrentDirectory() {
-    return currentDirectory;
-  }
-
-  @override
-  void changeDirectory(String path) {
-    try {
-      final fullPath = resolvePath(path);
-
-      if (fullPath == '/') {
-        currentDirectory = '/';
-      } else if (Directory(fullPath).existsSync()) {
-        currentDirectory = fullPath;
-      } else {
-        throw FileSystemException("Directory not found: $fullPath");
-      }
-    } catch (e) {
-      throw FileSystemException("Failed to change directory: $path, Error: $e");
-    }
-  }
-
-  @override
-  void changeToParentDirectory() {
-    if (currentDirectory == '/') {
-      throw FileSystemException(
-          "Cannot navigate above root: $currentDirectory");
-    }
-
-    final parentDir = Directory(currentDirectory).parent;
-    currentDirectory = parentDir.path;
   }
 }

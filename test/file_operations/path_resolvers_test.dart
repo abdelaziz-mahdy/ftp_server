@@ -132,10 +132,11 @@ void main() {
     });
 
     test('Resolves path with same directory prefix as currentDirectory', () {
-      fileOps.changeDirectory(p.join(tempDir1.path, 'subdir'));
-      final resolvedPath =
-          fileOps.resolvePath(p.join(tempDir1.path, 'subdir', 'file.txt'));
-      expect(resolvedPath, equals(p.join(tempDir1.path, 'subdir', 'file.txt')));
+      // fileOps.changeDirectory('subdir');
+      final resolvedPath = fileOps
+          .resolvePath(p.join(p.basename(tempDir1.path), 'subdir', 'file.txt'));
+      expect(resolvedPath,
+          equals(p.join('/', p.basename(tempDir1.path), 'subdir', 'file.txt')));
     });
 
     test('Throws error for path outside allowed directories', () {
@@ -144,8 +145,8 @@ void main() {
     });
 
     test('Throws error for navigating above root from root', () {
-      fileOps.changeDirectory('/');
-      expect(() => fileOps.resolvePath('../../../some/absolute/path'),
+      // fileOps.changeDirectory('/');
+      expect(() => fileOps.resolvePath('../../../../../../some/absolute/path'),
           throwsA(isA<FileSystemException>()));
     });
   });

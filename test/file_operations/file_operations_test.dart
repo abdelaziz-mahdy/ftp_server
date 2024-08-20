@@ -141,6 +141,7 @@ void main() {
     });
 
     test('resolvePath with relative path', () {
+      fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
       final resolvedPath = fileOps.resolvePath('some/path');
       expect(resolvedPath, equals(p.join(tempDir1.path, 'some', 'path')));
     });
@@ -154,11 +155,15 @@ void main() {
     test('exists returns true for existing file', () {
       final file = File(p.join(tempDir1.path, 'test_file.txt'));
       file.writeAsStringSync('Hello, World!');
-      expect(fileOps.exists('test_file.txt'), isTrue);
+      expect(fileOps.exists(p.join(p.basename(tempDir1.path), 'test_file.txt')),
+          isTrue);
     });
 
     test('exists returns false for non-existing file', () {
-      expect(fileOps.exists('non_existing_file.txt'), isFalse);
+      expect(
+          fileOps.exists(
+              p.join(p.basename(tempDir1.path), 'non_existing_file.txt')),
+          isFalse);
     });
 
     test('createDirectory creates directory', () async {
@@ -170,21 +175,24 @@ void main() {
     test('deleteFile deletes file', () async {
       final file = File(p.join(tempDir1.path, 'test_file.txt'));
       file.writeAsStringSync('Hello, World!');
-      await fileOps.deleteFile('test_file.txt');
+      await fileOps
+          .deleteFile(p.join(p.basename(tempDir1.path), 'test_file.txt'));
       expect(file.existsSync(), isFalse);
     });
 
     test('deleteDirectory deletes directory', () async {
       final dir = Directory(p.join(tempDir1.path, 'test_dir'));
       dir.createSync();
-      await fileOps.deleteDirectory('test_dir');
+      await fileOps
+          .deleteDirectory(p.join(p.basename(tempDir1.path), 'test_dir'));
       expect(dir.existsSync(), isFalse);
     });
 
     test('getFile returns correct file', () async {
       final file = File(p.join(tempDir1.path, 'test_file.txt'));
       file.writeAsStringSync('Hello, World!');
-      final fetchedFile = await fileOps.getFile('test_file.txt');
+      final fetchedFile = await fileOps
+          .getFile(p.join(p.basename(tempDir1.path), 'test_file.txt'));
       expect(fetchedFile.path, equals(file.path));
     });
 
@@ -197,8 +205,7 @@ void main() {
       dir.createSync();
       final entities =
           await fileOps.listDirectory('/${p.basename(tempDir1.path)}');
-      expect(entities.length,
-          equals(3)); // Adjusted the expectation for virtual listing
+      expect(entities.length, equals(3));
       expect(entities.map((e) => p.basename(e.path)),
           containsAll(['test_file.txt', 'test_file2.txt', 'test_dir']));
     });
@@ -206,7 +213,8 @@ void main() {
     test('fileSize returns correct size', () async {
       final file = File(p.join(tempDir1.path, 'test_file.txt'));
       file.writeAsStringSync('Hello, World!');
-      final size = await fileOps.fileSize('test_file.txt');
+      final size = await fileOps
+          .fileSize(p.join(p.basename(tempDir1.path), 'test_file.txt'));
       expect(size, equals(13));
     });
 
@@ -234,7 +242,8 @@ void main() {
 
     test('writeFile writes data to file', () async {
       final data = 'Hello, World!'.codeUnits;
-      await fileOps.writeFile('test_file.txt', data);
+      await fileOps.writeFile(
+          p.join(p.basename(tempDir1.path), 'test_file.txt'), data);
       final file = File(p.join(tempDir1.path, 'test_file.txt'));
       expect(file.readAsStringSync(), equals('Hello, World!'));
     });
@@ -242,7 +251,8 @@ void main() {
     test('readFile reads data from file', () async {
       final file = File(p.join(tempDir1.path, 'test_file.txt'));
       file.writeAsStringSync('Hello, World!');
-      final data = await fileOps.readFile('test_file.txt');
+      final data = await fileOps
+          .readFile(p.join(p.basename(tempDir1.path), 'test_file.txt'));
       expect(String.fromCharCodes(data), equals('Hello, World!'));
     });
   });

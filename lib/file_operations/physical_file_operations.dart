@@ -1,26 +1,10 @@
 import 'dart:io';
-import 'package:path/path.dart' as p;
 import 'file_operations.dart';
 
 /// Implementation of [FileOperations] for interacting with the physical file system.
-class PhysicalFileOperations implements FileOperations {
-  final String rootDirectory;
-  String currentDirectory;
-
+class PhysicalFileOperations extends FileOperations {
   /// Creates an instance of [PhysicalFileOperations] with the given root directory.
-  PhysicalFileOperations(this.rootDirectory) : currentDirectory = rootDirectory;
-
-  /// Resolves a path to ensure it is within the root directory.
-  String _resolvePathWithinRoot(String path) {
-    // Resolve the path within the root directory
-    final resolvedPath = p.normalize(p.join(rootDirectory, path));
-    if (!p.isWithin(rootDirectory, resolvedPath) &&
-        (rootDirectory != resolvedPath)) {
-      throw FileSystemException(
-          "Access denied: Path is outside the root directory", path);
-    }
-    return resolvedPath;
-  }
+  PhysicalFileOperations(super.rootDirectory);
 
   @override
   Future<List<FileSystemEntity>> listDirectory(String path) async {
@@ -96,79 +80,5 @@ class PhysicalFileOperations implements FileOperations {
   bool exists(String path) {
     final fullPath = resolvePath(path);
     return File(fullPath).existsSync() || Directory(fullPath).existsSync();
-  }
-
-  /// Resolves the given [path] relative to the [currentDirectory].
-  /// The resolved path is normalized and checked to ensure it stays within the [rootDirectory].
-  ///
-  /// If the [path] is absolute and matches part of the [currentDirectory], the common prefix is removed.
-  ///
-  /// If the [path] is relative, it is resolved relative to the [currentDirectory].
-  ///
-  /// Examples:
-  /// ```dart
-  /// // Given rootDirectory = '/home/user/project' and currentDirectory = '/home/user/project/subdir'
-  /// resolvePath('file.txt'); // Returns: '/home/user/project/subdir/file.txt'
-  /// resolvePath('/home/user/project/subdir/file.txt'); // Returns: '/home/user/project/subdir/file.txt'
-  /// resolvePath('/home/user'); // Throws FileSystemException (outside root)
-  /// resolvePath('../../file.txt'); // Throws FileSystemException (attempt to go above root)
-  /// ```
-  @override
-  String resolvePath(String path) {
-    // Normalize both the current directory and the provided path
-    String normalizedCurrentDir = p.normalize(currentDirectory);
-    String normalizedRootDirectory = p.normalize(rootDirectory);
-
-    String normalizedPath = p.normalize(path);
-
-    // If the path is absolute, strip the common prefix with the current directory
-    if (p.isAbsolute(normalizedPath)) {
-      if (normalizedPath.startsWith(normalizedRootDirectory)) {
-        // Remove the common prefix (current directory) from the path
-        normalizedPath =
-            p.relative(normalizedPath, from: normalizedRootDirectory);
-      }
-      if (p.isAbsolute(normalizedPath)) {
-        // Resolve the remaining path relative to the root directory
-        return _resolvePathWithinRoot(p.relative(normalizedPath, from: '/'));
-      } else {
-        return _resolvePathWithinRoot(normalizedPath);
-      }
-    } else {
-      // For relative paths, resolve it as usual
-      return _resolvePathWithinRoot(
-          p.join(normalizedCurrentDir, normalizedPath));
-    }
-  }
-
-  @override
-  String getCurrentDirectory() {
-    return currentDirectory;
-  }
-
-  @override
-  void changeDirectory(String path) {
-    final fullPath = resolvePath(path);
-    if (Directory(fullPath).existsSync()) {
-      currentDirectory = fullPath;
-    } else {
-      throw FileSystemException("Directory not found", fullPath);
-    }
-  }
-
-  @override
-  void changeToParentDirectory() {
-    if (currentDirectory == rootDirectory) {
-      throw FileSystemException("Cannot navigate above root", currentDirectory);
-    }
-
-    final parentDir = Directory(currentDirectory).parent;
-    if (p.isWithin(rootDirectory, parentDir.path) ||
-        parentDir.path == rootDirectory) {
-      currentDirectory = parentDir.path;
-    } else {
-      throw FileSystemException(
-          "Access denied: Cannot navigate above root", currentDirectory);
-    }
   }
 }
