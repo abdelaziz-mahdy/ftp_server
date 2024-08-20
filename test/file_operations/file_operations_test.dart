@@ -167,7 +167,8 @@ void main() {
     });
 
     test('createDirectory creates directory', () async {
-      await fileOps.createDirectory('new_directory');
+      await fileOps
+          .createDirectory(p.join(p.basename(tempDir1.path), 'new_directory'));
       final dir = Directory(p.join(tempDir1.path, 'new_directory'));
       expect(dir.existsSync(), isTrue);
     });
