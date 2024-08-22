@@ -16,30 +16,38 @@ class VirtualFileOperations extends FileOperations {
       directoryMappings[dirName] = normalizedDir;
     }
   }
-
   @override
   String resolvePath(String path) {
+    // Convert Windows-style backslashes to forward slashes for consistency
+    path = path.replaceAll(r'\', '/');
+
     // If the path is empty or a relative path, append it to the current directory
     final effectivePath =
         p.isAbsolute(path) ? path : p.join(currentDirectory, path);
 
-    final virtualPath = p.normalize(effectivePath);
+    // Normalize the path to handle ../, ./, etc.
+    var virtualPath = p.normalize(effectivePath);
 
+    // Handle the case where the root directory is requested
     if (virtualPath == rootDirectory) {
       return rootDirectory;
     }
 
+    // Extract the first segment of the path to match against directory mappings
     final firstSegment = p.split(virtualPath).firstWhere(
         (part) => part.isNotEmpty && part != rootDirectory,
         orElse: () => rootDirectory);
 
+    // Check if the first segment is mapped to an allowed directory
     if (!directoryMappings.containsKey(firstSegment)) {
       throw FileSystemException("Access denied or directory not found: $path");
     }
 
+    // Get the mapped directory and construct the remaining path
     final mappedDir = directoryMappings[firstSegment]!;
     final remainingPath = p.relative(virtualPath, from: '/$firstSegment');
 
+    // Resolve the final path and ensure it is within the allowed directories
     final resolvedPath = p.normalize(p.join(mappedDir, remainingPath));
     return _resolvePathWithinRoot(resolvedPath);
   }
@@ -166,6 +174,8 @@ class VirtualFileOperations extends FileOperations {
 
   String _resolvePathWithinRoot(String path) {
     final normalizedPath = p.normalize(path);
+
+    // Ensure that the resolved path is within the allowed directories
     if (directoryMappings.values.any((dir) =>
         p.isWithin(dir, normalizedPath) || p.equals(dir, normalizedPath))) {
       return normalizedPath;

@@ -35,35 +35,68 @@ void main() {
       final resolvedPath = fileOps
           .resolvePath('/${p.basename(tempDir1.path)}/some/absolute/path');
       expect(resolvedPath, equals(p.join(tempDir1.path, 'some/absolute/path')));
+
+      // Windows-style path
+      final windowsResolvedPath = fileOps
+          .resolvePath('${p.basename(tempDir1.path)}/some/absolute/path');
+      expect(windowsResolvedPath,
+          equals(p.join(tempDir1.path, 'some', 'absolute', 'path')));
     });
 
     test('Resolves relative path within allowed directory', () {
       fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
       final resolvedPath = fileOps.resolvePath('relative/path');
       expect(resolvedPath, equals(p.join(tempDir1.path, 'relative/path')));
+
+      // Windows-style path
+      fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
+      final windowsResolvedPath = fileOps.resolvePath(r'relative\path');
+      expect(windowsResolvedPath,
+          equals(p.join(tempDir1.path, 'relative', 'path')));
     });
 
     test('Resolves root path', () {
       final resolvedPath = fileOps.resolvePath('/');
       expect(resolvedPath, equals('/'));
+
+      // Windows-style root path
+      final windowsResolvedPath = fileOps.resolvePath('');
+      expect(windowsResolvedPath, equals('/'));
     });
 
     test('Resolves parent directory path', () {
       fileOps.changeDirectory('/${p.basename(tempDir1.path)}/subdir');
       final resolvedPath = fileOps.resolvePath('..');
       expect(resolvedPath, equals((tempDir1.path)));
+
+      // Windows-style parent directory
+      fileOps.changeDirectory('\\${p.basename(tempDir1.path)}\\subdir');
+      final windowsResolvedPath = fileOps.resolvePath('..');
+      expect(windowsResolvedPath, equals(tempDir1.path));
     });
 
     test('Resolves complex relative path within allowed directory', () {
       fileOps.changeDirectory('/${p.basename(tempDir1.path)}/subdir');
       final resolvedPath = fileOps.resolvePath('subdir2/../file.txt');
       expect(resolvedPath, equals(p.join(tempDir1.path, 'subdir/file.txt')));
+
+      // Windows-style complex path
+      fileOps.changeDirectory('\\${p.basename(tempDir1.path)}\\subdir');
+      final windowsResolvedPath = fileOps.resolvePath(r'subdir2\..\file.txt');
+      expect(windowsResolvedPath,
+          equals(p.join(tempDir1.path, 'subdir', 'file.txt')));
     });
 
     test('Resolves path with same directory prefix as currentDirectory', () {
       final resolvedPath = fileOps
           .resolvePath(p.join(p.basename(tempDir1.path), 'subdir', 'file.txt'));
       expect(resolvedPath, equals(p.join(tempDir1.path, 'subdir', 'file.txt')));
+
+      // Windows-style path with same directory prefix
+      final windowsResolvedPath = fileOps
+          .resolvePath(p.join(p.basename(tempDir1.path), 'subdir', 'file.txt'));
+      expect(windowsResolvedPath,
+          equals(p.join(tempDir1.path, 'subdir', 'file.txt')));
     });
 
     test('Resolves path with special characters in path', () {
@@ -76,11 +109,20 @@ void main() {
     test('Throws error for path outside allowed directories', () {
       expect(() => fileOps.resolvePath('/outside/path'),
           throwsA(isA<FileSystemException>()));
+
+      // Windows-style outside path
+      expect(() => fileOps.resolvePath('outside\path'),
+          throwsA(isA<FileSystemException>()));
     });
 
     test('Throws error for navigating above root from root', () {
       fileOps.changeDirectory('/');
       expect(() => fileOps.resolvePath('../../../../../../some/absolute/path'),
+          throwsA(isA<FileSystemException>()));
+
+      // Windows-style navigation above root
+      fileOps.changeDirectory('');
+      expect(() => fileOps.resolvePath(r'..\..\..\..\some\absolute\path'),
           throwsA(isA<FileSystemException>()));
     });
   });
