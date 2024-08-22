@@ -113,6 +113,7 @@ void main() {
       password: 'password',
       allowedDirectories: allowedDirectories,
       serverType: ServerType.readAndWrite,
+      // ignore: avoid_print
       logFunction: (String message) => print(message),
     );
     await server.startInBackground();
@@ -261,8 +262,8 @@ void main() {
 
   test('Retrieve File', () async {
     const testPath = 'test_file_ret.txt'; // Relative path
-    final testFile = File('${allowedDirectories.first}/$testPath')
-      ..writeAsStringSync('Hello, FTP!');
+    File('${allowedDirectories.first}/$testPath')
+        .writeAsStringSync('Hello, FTP!');
     ftpClient.stdin.writeln('pwd');
     ftpClient.stdin.writeln('ls');
     ftpClient.stdin
@@ -308,9 +309,8 @@ void main() {
   });
 
   test('Handle Special Characters in Filenames', () async {
-    final testFile =
-        File('${allowedDirectories.first}/test_file_!@#\$%^&*().txt')
-          ..writeAsStringSync('Special characters in the filename');
+    File('${allowedDirectories.first}/test_file_!@#\$%^&*().txt')
+        .writeAsStringSync('Special characters in the filename');
     ftpClient.stdin
         .writeln('put test_file_!@#\$%^&*().txt'); // Use relative path
     ftpClient.stdin.writeln('ls');
@@ -330,9 +330,8 @@ void main() {
   });
 
   test('Handle Large File Transfer', () async {
-    final largeFile = File('${allowedDirectories.first}/large_file.txt')
-      ..writeAsBytesSync(
-          List.generate(1024 * 1024 * 50, (index) => index % 256)); // 50MB file
+    File('${allowedDirectories.first}/large_file.txt').writeAsBytesSync(
+        List.generate(1024 * 1024 * 50, (index) => index % 256)); // 50MB file
     ftpClient.stdin.writeln('put large_file.txt'); // Use relative path
     ftpClient.stdin.writeln('ls');
     ftpClient.stdin.writeln('quit');
@@ -365,8 +364,8 @@ void main() {
   });
 
   test('File Size', () async {
-    final testFile = File('${allowedDirectories.first}/test_file.txt')
-      ..writeAsStringSync('Hello, FTP!');
+    File('${allowedDirectories.first}/test_file.txt')
+        .writeAsStringSync('Hello, FTP!');
 
     ftpClient.stdin.writeln('size test_file.txt'); // Use relative path
     ftpClient.stdin.writeln('quit');
@@ -513,9 +512,8 @@ void main() {
 
   test('Handle Large File Transfer', () async {
     // Create a 1 GB file
-    final largeFile = File('${allowedDirectories.first}/large_file.txt')
-      ..writeAsBytesSync(List.generate(
-          1024 * 1024 * 1024, (index) => index % 256)); // 1GB file
+    File('${allowedDirectories.first}/large_file.txt').writeAsBytesSync(
+        List.generate(1024 * 1024 * 1024, (index) => index % 256)); // 1GB file
     ftpClient.stdin.writeln('put large_file.txt'); // Use relative path
     ftpClient.stdin.writeln('ls');
     ftpClient.stdin.writeln('quit');
