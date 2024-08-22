@@ -255,7 +255,7 @@ class FtpSession {
         String fileName = entity.path.split(Platform.pathSeparator).last;
         String entry =
             '$permissions 1 ftp ftp $fileSize $modificationTime $fileName\r\n';
-        dataSocket!.write(utf8.encode(entry));
+        dataSocket!.write(entry);
       }
 
       if (transferInProgress) {

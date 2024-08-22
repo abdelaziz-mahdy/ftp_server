@@ -249,7 +249,8 @@ void main() {
 
     var output = await readAllOutput(logFilePath);
     if (Platform.isWindows) {
-      output = await execFTPCmdOnWin("put ${testFile.path}"); // Use relative path
+      output =
+          await execFTPCmdOnWin("put ${testFile.path}"); // Use relative path
       expect(output, contains('226 Transfer complete'));
       output = await execFTPCmdOnWin("ls");
     } else {
@@ -419,7 +420,7 @@ void main() {
       output = await execFTPCmdOnWin('pwd');
     }
 
-    final expectText = outputHandler.getExpectedPwdOutput('/');
+    final expectText = outputHandler.getExpectedPwdOutput('/${basename(allowedDirectories.first)}');
     expect(output, contains(expectText));
   });
 
@@ -486,8 +487,9 @@ void main() {
           'cd outer_dir\npwd\ncd inner_dir\npwd\ncd ..\npwd\ncd $nestedDirPath\npwd');
     }
 
-    const expectedOuterDir = '/outer_dir';
-    const expectedInnerDir = '/outer_dir/inner_dir';
+    var expectedOuterDir = '/${basename(allowedDirectories.first)}/outer_dir';
+    var expectedInnerDir =
+        '/${basename(allowedDirectories.first)}/outer_dir/inner_dir';
 
     expect(
         output,
