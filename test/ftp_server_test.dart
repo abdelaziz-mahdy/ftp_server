@@ -120,7 +120,7 @@ void main() {
 
     ftpClient = await Process.start(
       Platform.isWindows ? 'ftp' : 'bash',
-      Platform.isWindows ? ['-n', '-v'] : ['-c', 'ftp -n -v'],
+      Platform.isWindows ? ['-n', '-v'] : ['-c', 'sudo ftp -n -v'],
       runInShell: true,
     );
 
