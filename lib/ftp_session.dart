@@ -175,59 +175,6 @@ class FtpSession {
     return DateFormat('MMM dd HH:mm').format(dateTime);
   }
 
-// Method to store a file on the server
-  Future<void> storeFile(String filename) async {
-    if (!openDataConnection()) {
-      return;
-    }
-
-    try {
-      String fullPath = fileOperations.resolvePath(filename);
-
-      transferInProgress = true;
-
-      // Create the directory if it doesn't exist
-      final directory = Directory(fullPath).parent;
-      if (!await directory.exists()) {
-        await directory.create(recursive: true);
-      }
-
-      File file = File(fullPath);
-      IOSink fileSink = file.openWrite();
-
-      dataSocket!.listen(
-        (data) {
-          if (transferInProgress) {
-            fileSink.add(data);
-          }
-        },
-        onDone: () async {
-          if (transferInProgress) {
-            await fileSink.close();
-            transferInProgress = false;
-            await dataSocket!.close();
-            dataSocket = null;
-            sendResponse('226 Transfer complete');
-          }
-        },
-        onError: (error) async {
-          if (transferInProgress) {
-            sendResponse('426 Connection closed; transfer aborted');
-            await fileSink.close();
-            transferInProgress = false;
-            await dataSocket!.close();
-            dataSocket = null;
-          }
-        },
-        cancelOnError: true,
-      );
-    } catch (e) {
-      sendResponse('550 Error creating file or directory: $e');
-      transferInProgress = false;
-      dataSocket = null;
-    }
-  }
-
 // Method to retrieve a file from the server
   Future<void> retrieveFile(String filename) async {
     if (!openDataConnection()) {
@@ -277,6 +224,59 @@ class FtpSession {
       }
     } catch (e) {
       sendResponse('550 File transfer failed');
+      transferInProgress = false;
+      dataSocket = null;
+    }
+  }
+
+// Method to store a file on the server
+  Future<void> storeFile(String filename) async {
+    if (!openDataConnection()) {
+      return;
+    }
+
+    try {
+      String fullPath = fileOperations.resolvePath(filename);
+
+      transferInProgress = true;
+
+      // Create the directory if it doesn't exist
+      final directory = Directory(fullPath).parent;
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+
+      File file = File(fullPath);
+      IOSink fileSink = file.openWrite();
+
+      dataSocket!.listen(
+        (data) {
+          if (transferInProgress) {
+            fileSink.add(data);
+          }
+        },
+        onDone: () async {
+          if (transferInProgress) {
+            await fileSink.close();
+            transferInProgress = false;
+            await dataSocket!.close();
+            dataSocket = null;
+            sendResponse('226 Transfer complete');
+          }
+        },
+        onError: (error) async {
+          if (transferInProgress) {
+            sendResponse('426 Connection closed; transfer aborted');
+            await fileSink.close();
+            transferInProgress = false;
+            await dataSocket!.close();
+            dataSocket = null;
+          }
+        },
+        cancelOnError: true,
+      );
+    } catch (e) {
+      sendResponse('550 Error creating file or directory: $e');
       transferInProgress = false;
       dataSocket = null;
     }
