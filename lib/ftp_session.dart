@@ -61,7 +61,7 @@ class FtpSession {
     logger.generalLog('Connection closed');
   }
 
-  Future<bool> openDataConnection() async {
+  bool openDataConnection()  {
     // await Future.delayed(const Duration(milliseconds: 100));
 
     if (dataSocket == null) {
@@ -119,9 +119,8 @@ class FtpSession {
 
 // Method to store a file on the server
   Future<void> storeFile(String filename) async {
-    await Future.delayed(const Duration(milliseconds: 100));
 
-    if (!await openDataConnection()) {
+    if (! openDataConnection()) {
       return;
     }
 
@@ -174,7 +173,7 @@ class FtpSession {
 
 // Method to retrieve a file from the server
   Future<void> retrieveFile(String filename) async {
-    if (!await openDataConnection()) {
+    if (! openDataConnection()) {
       return;
     }
 
@@ -239,7 +238,7 @@ class FtpSession {
   }
 
   Future<void> listDirectory(String path) async {
-    if (!await openDataConnection()) {
+    if (! openDataConnection()) {
       return;
     }
 
