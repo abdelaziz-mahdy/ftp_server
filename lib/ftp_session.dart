@@ -62,7 +62,7 @@ class FtpSession {
   }
 
   Future<bool> openDataConnection() async {
-    await Future.delayed(const Duration(milliseconds: 100));
+    // await Future.delayed(const Duration(milliseconds: 100));
 
     if (dataSocket == null) {
       sendResponse('425 Can\'t open data connection');
