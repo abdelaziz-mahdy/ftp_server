@@ -49,7 +49,7 @@ class FtpSession {
     }
   }
 
-  Future<void> sendResponse(String message) async {
+  void sendResponse(String message) {
     logger.logResponse(message);
     controlSocket.write("$message\r\n");
   }
