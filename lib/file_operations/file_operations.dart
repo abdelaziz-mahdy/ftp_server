@@ -78,29 +78,30 @@ abstract class FileOperations {
   }
 
   /// Helper method to ensure the path stays within the root directory.
-String _resolvePathWithinRoot(String path) {
-  // Preliminary check for any attempt to traverse above the root directory
-  final upLevelCount = path.split('/').where((part) => part == '..').length;
-  final rootParts = p.split(p.normalize(rootDirectory)).length;
+  String _resolvePathWithinRoot(String path) {
+    // Preliminary check for any attempt to traverse above the root directory
+    final upLevelCount = path.split('/').where((part) => part == '..').length;
+    final rootParts = p.split(p.normalize(rootDirectory)).length;
 
-  // If the number of "../" sequences exceeds the depth of the root directory, it's invalid
-  if (upLevelCount > rootParts) {
-    throw FileSystemException(
-        "Access denied: Path is attempting to escape the root directory", path);
+    // If the number of "../" sequences exceeds the depth of the root directory, it's invalid
+    if (upLevelCount > rootParts) {
+      throw FileSystemException(
+          "Access denied: Path is attempting to escape the root directory",
+          path);
+    }
+
+    // Normalize and join the path after the check
+    final resolvedPath = p.normalize(p.join(rootDirectory, path));
+
+    // Your original condition remains unchanged
+    if (!p.isWithin(rootDirectory, resolvedPath) &&
+        (rootDirectory != resolvedPath)) {
+      throw FileSystemException(
+          "Access denied: Path is outside the root directory", path);
+    }
+
+    return resolvedPath;
   }
-
-  // Normalize and join the path after the check
-  final resolvedPath = p.normalize(p.join(rootDirectory, path));
-
-  // Your original condition remains unchanged
-  if (!p.isWithin(rootDirectory, resolvedPath) && (rootDirectory != resolvedPath)) {
-    throw FileSystemException(
-        "Access denied: Path is outside the root directory", path);
-  }
-
-  return resolvedPath;
-}
-
 
   /// Returns the current working directory.
   String getCurrentDirectory() {

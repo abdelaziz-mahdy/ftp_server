@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ftp_server/file_operations/file_operations.dart';
 import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
@@ -260,7 +259,7 @@ void main() {
   });
 
   test('Retrieve File', () async {
-    final testPath = 'test_file_ret.txt'; // Relative path
+    const testPath = 'test_file_ret.txt'; // Relative path
     final testFile = File('${allowedDirectories.first}/$testPath')
       ..writeAsStringSync('Hello, FTP!');
 
@@ -487,8 +486,8 @@ void main() {
           'cd outer_dir\npwd\ncd inner_dir\npwd\ncd ..\npwd\ncd $nestedDirPath\npwd');
     }
 
-    final expectedOuterDir = '/outer_dir';
-    final expectedInnerDir = '/outer_dir/inner_dir';
+    const expectedOuterDir = '/outer_dir';
+    const expectedInnerDir = '/outer_dir/inner_dir';
 
     expect(
         output,

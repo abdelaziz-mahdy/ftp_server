@@ -1,11 +1,9 @@
 library ftp_server;
 
 import 'dart:io';
-import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 import 'package:ftp_server/ftp_session.dart';
 import 'package:ftp_server/server_type.dart';
 import 'logger_handler.dart';
-import 'file_operations/file_operations.dart';
 
 class FtpServer {
   ServerSocket? _server;

@@ -83,7 +83,7 @@ void main() {
       fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
 
       // Attempt to create a directory within the current directory
-      final newDirName = 'test_dir';
+      const newDirName = 'test_dir';
       final resolvedPath = fileOps.resolvePath(newDirName);
       await fileOps.createDirectory(resolvedPath);
 
@@ -97,7 +97,7 @@ void main() {
       fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
 
       // Attempt to create a directory in a restricted path
-      final restrictedDirName = '/restricted_dir/test_dir';
+      const restrictedDirName = '/restricted_dir/test_dir';
 
       expect(
           () => Directory(fileOps.resolvePath(restrictedDirName)).createSync(),
@@ -105,7 +105,7 @@ void main() {
     });
     test('Fails to create a directory outside of allowed directories', () {
       // Attempt to create a directory outside the allowed directories
-      final invalidDirPath = '/outside/dir/test_dir';
+      const invalidDirPath = '/outside/dir/test_dir';
 
       expect(() => Directory(fileOps.resolvePath(invalidDirPath)).createSync(),
           throwsA(isA<FileSystemException>()));
