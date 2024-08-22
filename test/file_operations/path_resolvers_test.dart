@@ -63,6 +63,12 @@ void main() {
       expect(resolvedPath, equals(p.join(tempDir.path, 'subdir', 'file.txt')));
     });
 
+    test('Resolves path with special characters in path', () {
+      final resolvedPath = fileOps.resolvePath('/some/special!@#\$%^&*()/path');
+      expect(resolvedPath,
+          equals(p.join(tempDir.path, 'some/special!@#\$%^&*()/path')));
+    });
+
     test('Throws error for path above root using relative paths', () {
       expect(() => fileOps.resolvePath('../../outside/path'),
           throwsA(isA<FileSystemException>()));
@@ -132,10 +138,16 @@ void main() {
     });
 
     test('Resolves path with same directory prefix as currentDirectory', () {
-      // fileOps.changeDirectory('subdir');
-      final resolvedPath =
-          fileOps.resolvePath(p.join(p.basename(tempDir1.path), 'subdir', 'file.txt'));
+      final resolvedPath = fileOps
+          .resolvePath(p.join(p.basename(tempDir1.path), 'subdir', 'file.txt'));
       expect(resolvedPath, equals(p.join(tempDir1.path, 'subdir', 'file.txt')));
+    });
+
+    test('Resolves path with special characters in path', () {
+      final resolvedPath = fileOps.resolvePath(
+          p.join(p.basename(tempDir1.path), 'some/special!@#\$%^&*()/path'));
+      expect(resolvedPath,
+          equals(p.join(tempDir1.path, 'some/special!@#\$%^&*()/path')));
     });
 
     test('Throws error for path outside allowed directories', () {

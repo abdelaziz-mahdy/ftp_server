@@ -30,6 +30,15 @@ void main() {
       expect(resolvedPath, equals(p.join(tempDir.path, 'some', 'path')));
     });
 
+    test('resolvePath with special characters', () {
+      final resolvedPath =
+          fileOps.resolvePath('some/path with spaces and !@#\$%^&*()');
+      expect(
+          resolvedPath,
+          equals(p.join(
+              tempDir.path, 'some', 'path with spaces and !@#\$%^&*()')));
+    });
+
     test('exists returns true for existing file', () {
       final file = File(p.join(tempDir.path, 'test_file.txt'));
       file.writeAsStringSync('Hello, World!');
@@ -46,6 +55,20 @@ void main() {
       expect(dir.existsSync(), isTrue);
     });
 
+    test('createDirectory with special characters', () async {
+      await fileOps.createDirectory('new_directory_with_!@#\$%^&*()');
+      final dir =
+          Directory(p.join(tempDir.path, 'new_directory_with_!@#\$%^&*()'));
+      expect(dir.existsSync(), isTrue);
+    });
+
+    test('createDirectory with nested directories', () async {
+      await fileOps.createDirectory('new_directory/sub_directory');
+      final dir =
+          Directory(p.join(tempDir.path, 'new_directory', 'sub_directory'));
+      expect(dir.existsSync(), isTrue);
+    });
+
     test('deleteFile deletes file', () async {
       final file = File(p.join(tempDir.path, 'test_file.txt'));
       file.writeAsStringSync('Hello, World!');
@@ -53,9 +76,23 @@ void main() {
       expect(file.existsSync(), isFalse);
     });
 
+    test('deleteFile with non-existing file', () async {
+      expect(() async => await fileOps.deleteFile('non_existing_file.txt'),
+          throwsA(isA<FileSystemException>()));
+    });
+
     test('deleteDirectory deletes directory', () async {
       final dir = Directory(p.join(tempDir.path, 'test_dir'));
       dir.createSync();
+      await fileOps.deleteDirectory('test_dir');
+      expect(dir.existsSync(), isFalse);
+    });
+
+    test('deleteDirectory with files inside', () async {
+      final dir = Directory(p.join(tempDir.path, 'test_dir'));
+      dir.createSync();
+      final file = File(p.join(dir.path, 'test_file.txt'));
+      file.writeAsStringSync('Hello, World!');
       await fileOps.deleteDirectory('test_dir');
       expect(dir.existsSync(), isFalse);
     });
@@ -79,11 +116,24 @@ void main() {
           containsAll(['test_file.txt', 'test_dir']));
     });
 
+    test('listDirectory with hidden files', () async {
+      final file = File(p.join(tempDir.path, '.hidden_file.txt'));
+      file.writeAsStringSync('Hello, Hidden World!');
+      final entities = await fileOps.listDirectory('/');
+      expect(entities.map((e) => p.basename(e.path)),
+          contains('.hidden_file.txt'));
+    });
+
     test('fileSize returns correct size', () async {
       final file = File(p.join(tempDir.path, 'test_file.txt'));
       file.writeAsStringSync('Hello, World!');
       final size = await fileOps.fileSize('test_file.txt');
       expect(size, equals(13));
+    });
+
+    test('fileSize for non-existing file', () async {
+      expect(() async => await fileOps.fileSize('non_existing_file.txt'),
+          throwsA(isA<FileSystemException>()));
     });
 
     test('changeDirectory using relative path', () async {
@@ -152,6 +202,13 @@ void main() {
       expect(resolvedPath, equals(p.join(tempDir1.path, 'some/absolute/path')));
     });
 
+    test('resolvePath with special characters in path', () {
+      final resolvedPath = fileOps.resolvePath(
+          '/${p.basename(tempDir1.path)}/some/special!@#\$%^&*()/path');
+      expect(resolvedPath,
+          equals(p.join(tempDir1.path, 'some/special!@#\$%^&*()/path')));
+    });
+
     test('exists returns true for existing file', () {
       final file = File(p.join(tempDir1.path, 'test_file.txt'));
       file.writeAsStringSync('Hello, World!');
@@ -173,6 +230,14 @@ void main() {
       expect(dir.existsSync(), isTrue);
     });
 
+    test('createDirectory with special characters', () async {
+      await fileOps.createDirectory(
+          p.join(p.basename(tempDir1.path), 'new_directory_with_!@#\$%^&*()'));
+      final dir =
+          Directory(p.join(tempDir1.path, 'new_directory_with_!@#\$%^&*()'));
+      expect(dir.existsSync(), isTrue);
+    });
+
     test('deleteFile deletes file', () async {
       final file = File(p.join(tempDir1.path, 'test_file.txt'));
       file.writeAsStringSync('Hello, World!');
@@ -180,7 +245,10 @@ void main() {
           .deleteFile(p.join(p.basename(tempDir1.path), 'test_file.txt'));
       expect(file.existsSync(), isFalse);
     });
-
+    test('deleteFile with non-existing file', () async {
+      expect(() async => await fileOps.deleteFile('non_existing_file.txt'),
+          throwsA(isA<FileSystemException>()));
+    });
     test('deleteDirectory deletes directory', () async {
       final dir = Directory(p.join(tempDir1.path, 'test_dir'));
       dir.createSync();
@@ -235,7 +303,6 @@ void main() {
 
     test('changeToParentDirectory moves to parent directory', () async {
       String subDirPath = p.join('/', p.basename(tempDir1.path), 'subdir');
-
       await fileOps.createDirectory(subDirPath);
       fileOps.changeDirectory(subDirPath);
       fileOps.changeToParentDirectory();

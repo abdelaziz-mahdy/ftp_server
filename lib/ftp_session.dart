@@ -19,6 +19,7 @@ class FtpSession {
   final FileOperations fileOperations;
   final ServerType serverType;
   final LoggerHandler logger;
+  bool transferInProgress = false;
 
   String get currentDirectory => fileOperations.getCurrentDirectory();
 
@@ -111,65 +112,46 @@ class FtpSession {
     return '0.0.0.0';
   }
 
-  Future<void> listDirectory(String path) async {
+  Future<void> _handleTransfer(
+    Stream<List<int>> inputStream,
+    void Function() onTransferComplete, {
+    bool abortOnError = true,
+  }) async {
+    transferInProgress = true; // Mark transfer as in progress
+
     try {
-      if (!openDataConnection()) {
-        return;
-      }
-
-      String fullPath = fileOperations.resolvePath(path);
-      logger.generalLog('Listing directory: $fullPath');
-
-      if (!fileOperations.exists(fullPath)) {
-        sendResponse('550 Directory not found');
-        return;
-      }
-
-      var dirContents = await fileOperations.listDirectory(fullPath);
-      for (var entity in dirContents) {
-        var stat = await entity.stat();
-        String permissions = _formatPermissions(stat);
-        String fileSize = stat.size.toString();
-        String modificationTime = _formatModificationTime(stat.modified);
-        String fileName = entity.path.split(Platform.pathSeparator).last;
-        String entry =
-            '$permissions 1 ftp ftp $fileSize $modificationTime $fileName\r\n';
-        dataSocket!.write(entry);
-      }
-      dataSocket!.close();
-      dataSocket = null;
-      sendResponse('226 Transfer complete');
+      inputStream.listen(
+        (data) {
+          if (transferInProgress) {
+            dataSocket?.add(data);
+          }
+        },
+        onDone: () async {
+          if (transferInProgress) {
+            await dataSocket?.close();
+            dataSocket = null;
+            transferInProgress = false; // Mark transfer as completed
+            onTransferComplete();
+          }
+        },
+        onError: (error) async {
+          if (abortOnError && transferInProgress) {
+            sendResponse('426 Connection closed; transfer aborted');
+            await dataSocket?.close();
+            dataSocket = null;
+            transferInProgress = false; // Mark transfer as aborted
+          }
+        },
+        cancelOnError: true,
+      );
     } catch (e) {
-      sendResponse('550 Failed to list directory');
-      logger.generalLog('Error listing directory: $e');
+      if (abortOnError) {
+        sendResponse('550 Transfer failed');
+      }
+      logger.generalLog('Error during transfer: $e');
       dataSocket?.close();
       dataSocket = null;
-    }
-  }
-
-  Future<void> retrieveFile(String filename) async {
-    try {
-      if (!openDataConnection()) {
-        return;
-      }
-
-      String fullPath = fileOperations.resolvePath(filename);
-      if (!fileOperations.exists(fullPath)) {
-        sendResponse('550 File not found');
-        return;
-      }
-
-      var file = await fileOperations.getFile(fullPath);
-      Stream<List<int>> fileStream = file.openRead();
-      await fileStream.pipe(dataSocket!);
-      dataSocket!.close();
-      dataSocket = null;
-      sendResponse('226 Transfer complete');
-    } catch (e) {
-      sendResponse('550 File transfer failed');
-      logger.generalLog('Error retrieving file: $e');
-      dataSocket?.close();
-      dataSocket = null;
+      transferInProgress = false; // Mark transfer as aborted
     }
   }
 
@@ -180,11 +162,6 @@ class FtpSession {
       }
       String fullPath = fileOperations.resolvePath(filename);
 
-      if (!fileOperations.exists(fullPath)) {
-        sendResponse('550 Access denied');
-        return;
-      }
-
       final directory = Directory(fullPath).parent;
       if (!await directory.exists()) {
         await directory.create(recursive: true);
@@ -193,29 +170,100 @@ class FtpSession {
       var file = File(fullPath);
       var fileSink = file.openWrite();
 
-      dataSocket!.listen(
-        (data) {
-          fileSink.add(data);
-        },
-        onDone: () async {
+      await _handleTransfer(
+        dataSocket!,
+        () async {
           await fileSink.close();
-          await dataSocket!.close();
-          dataSocket = null;
           sendResponse('226 Transfer complete');
         },
-        onError: (error) async {
-          sendResponse('426 Connection closed; transfer aborted');
-          await fileSink.close();
-          await dataSocket!.close();
-          dataSocket = null;
-        },
-        cancelOnError: true,
       );
     } catch (e) {
       sendResponse('550 Error creating file or directory');
       logger.generalLog('Error storing file: $e');
       dataSocket?.close();
       dataSocket = null;
+      transferInProgress = false; // Mark transfer as aborted
+    }
+  }
+
+  Future<void> retrieveFile(String filename) async {
+    try {
+      if (!openDataConnection()) {
+        return;
+      }
+      String fullPath = fileOperations.resolvePath(filename);
+      if (!fileOperations.exists(fullPath)) {
+        sendResponse('550 File not found');
+        return;
+      }
+
+      var file = await fileOperations.getFile(fullPath);
+      var fileStream = file.openRead();
+
+      await _handleTransfer(
+        fileStream,
+        () => sendResponse('226 Transfer complete'),
+      );
+    } catch (e) {
+      sendResponse('550 File transfer failed');
+      logger.generalLog('Error retrieving file: $e');
+      dataSocket?.close();
+      dataSocket = null;
+      transferInProgress = false; // Mark transfer as aborted
+    }
+  }
+
+  Future<void> listDirectory(String path) async {
+    try {
+      if (!openDataConnection()) {
+        return;
+      }
+      String fullPath = fileOperations.resolvePath(path);
+      logger.generalLog('Listing directory: $fullPath');
+
+      if (!fileOperations.exists(fullPath)) {
+        sendResponse('550 Directory not found');
+        return;
+      }
+
+      var dirContents = await fileOperations.listDirectory(fullPath);
+      // Create a stream from the directory listing
+      var streamController = StreamController<List<int>>();
+      await _handleTransfer(
+        streamController.stream,
+        () => sendResponse('226 Transfer complete'),
+      );
+
+      for (var entity in dirContents) {
+        if (!transferInProgress) break; // Abort if transfer is cancelled
+
+        var stat = await entity.stat();
+        String permissions = _formatPermissions(stat);
+        String fileSize = stat.size.toString();
+        String modificationTime = _formatModificationTime(stat.modified);
+        String fileName = entity.path.split(Platform.pathSeparator).last;
+        String entry =
+            '$permissions 1 ftp ftp $fileSize $modificationTime $fileName\r\n';
+        streamController.add(utf8.encode(entry));
+      }
+      streamController.close();
+    } catch (e) {
+      sendResponse('550 Failed to list directory');
+      logger.generalLog('Error listing directory: $e');
+      dataSocket?.close();
+      dataSocket = null;
+      transferInProgress = false; // Mark transfer as aborted
+    }
+  }
+
+  void abortTransfer() async {
+    if (transferInProgress) {
+      transferInProgress = false;
+      dataSocket?.destroy(); // Forcefully close the data socket
+      sendResponse('426 Transfer aborted');
+      dataSocket = null;
+    } else {
+      sendResponse('226 No transfer in progress');
     }
   }
 

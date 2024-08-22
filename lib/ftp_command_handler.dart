@@ -84,6 +84,9 @@ class FTPCommandHandler {
       case 'EPSV':
         handleEpsv(session);
         break;
+      case 'ABOR':
+        handleAbort(session);
+        break;
       default:
         session.sendResponse('502 Command not implemented');
         break;
@@ -218,5 +221,9 @@ class FTPCommandHandler {
 
   void handleEpsv(FtpSession session) {
     session.enterExtendedPassiveMode();
+  }
+
+  void handleAbort(FtpSession session) {
+    session.abortTransfer();
   }
 }

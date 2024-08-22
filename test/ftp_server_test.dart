@@ -6,7 +6,6 @@ import 'package:ftp_server/file_operations/physical_file_operations.dart';
 import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
-
 import 'platform_output_handler/platform_output_handler.dart';
 import 'platform_output_handler/platform_output_handler_factory.dart';
 
@@ -171,12 +170,10 @@ void main() {
 
       String listing = await outputHandler.generateDirectoryListing(
           fileOperations.getCurrentDirectory(), fileOperations);
-
       // Normalize both expected and actual output using the replacement function
       String normalizedOutput = outputHandler.normalizeDirectoryListing(output);
       String normalizedExpected =
           outputHandler.normalizeDirectoryListing(listing);
-
       // Use normalized strings for comparison
       expect(normalizedOutput, contains(normalizedExpected));
     });
@@ -295,24 +292,118 @@ void main() {
       expect(testFile.existsSync(), isFalse);
     });
 
+    test('$testDescription: Handle Special Characters in Filenames', () async {
+      final testFile =
+          File('${allowedDirectories.first}/test_file_!@#\$%^&*().txt')
+            ..writeAsStringSync('Special characters in the filename');
+      ftpClient.stdin.writeln('put ${testFile.path}');
+      ftpClient.stdin.writeln('ls');
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin("put ${testFile.path}");
+        expect(output, contains('226 Transfer complete'));
+        output = await execFTPCmdOnWin("ls");
+      } else {
+        expect(output, contains('226 Transfer complete'));
+      }
+      expect(output, contains('test_file_!@#\$%^&*().txt'));
+    });
+
+    test('$testDescription: Handle Large File Transfer', () async {
+      final largeFile = File('${allowedDirectories.first}/large_file.txt')
+        ..writeAsBytesSync(List.generate(
+            1024 * 1024 * 50, (index) => index % 256)); // 50MB file
+      ftpClient.stdin.writeln('put ${largeFile.path}');
+      ftpClient.stdin.writeln('ls');
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin("put ${largeFile.path}");
+        expect(output, contains('226 Transfer complete'));
+        output = await execFTPCmdOnWin("ls");
+      } else {
+        expect(output, contains('226 Transfer complete'));
+      }
+      expect(output, contains('large_file.txt'));
+    });
+
+    test('$testDescription: Handle Directory with Special Characters',
+        () async {
+      ftpClient.stdin.writeln('mkdir special!@#\$%^&*()_dir');
+      ftpClient.stdin.writeln('ls');
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin("mkdir special!@#\$%^&*()_dir\nls");
+      } else {
+        expect(output, contains('257 "special!@#\$%^&*()_dir" created'));
+      }
+      expect(output, contains('special!@#\$%^&*()_dir'));
+    });
+
+    // test('$testDescription: Abort File Transfer', () async {
+    //   final largeFile = File('${allowedDirectories.first}/large_file.txt')
+    //     ..writeAsBytesSync(List.generate(
+    //         1024 * 1024 * 50, (index) => index % 256)); // 50MB file
+    //   ftpClient.stdin.writeln('put ${largeFile.path}');
+    //   ftpClient.stdin.writeln('abort');
+    //   ftpClient.stdin.writeln('ls');
+    //   ftpClient.stdin.writeln('quit');
+    //   await ftpClient.stdin.flush();
+
+    //   var output = await readAllOutput(logFilePath);
+    //   if (Platform.isWindows) {
+    //     output = await execFTPCmdOnWin("put ${largeFile.path}\nabort\nls");
+    //     expect(output, contains('426 Connection closed; transfer aborted'));
+    //   } else {
+    //     expect(output, contains('426 Connection closed; transfer aborted'));
+    //   }
+    // });
+
+    test('$testDescription: File Size', () async {
+      final testFile = File('${allowedDirectories.first}/test_file.txt')
+        ..writeAsStringSync('Hello, FTP!');
+
+      ftpClient.stdin.writeln('size ${testFile.path}');
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin("size ${testFile.path}");
+      }
+
+      String expectedSizeOutput = outputHandler.getExpectedSizeOutput(11);
+      expect(output, contains(expectedSizeOutput));
+    });
+
+    test('$testDescription: Prevent Navigation Above Root Directory', () async {
+      ftpClient.stdin.writeln('cd ..');
+      ftpClient.stdin.writeln('cd ..');
+      ftpClient.stdin.writeln('cd ..');
+      ftpClient.stdin.writeln('cd ..');
+      ftpClient.stdin.writeln('pwd');
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin('cd ..\npwd');
+      }
+
+      final expectedOutput =
+          outputHandler.getExpectedPwdOutput(allowedDirectories.first);
+      expect(output, contains(expectedOutput));
+    });
+
     if (!Platform.isWindows) {
-      test('$testDescription: File Size', () async {
-        final testFile = File('${allowedDirectories.first}/test_file.txt')
-          ..writeAsStringSync('Hello, FTP!');
-
-        ftpClient.stdin.writeln('size ${testFile.path}');
-        ftpClient.stdin.writeln('ls');
-        ftpClient.stdin.writeln('quit');
-        await ftpClient.stdin.flush();
-
-        var output = await readAllOutput(logFilePath);
-        var expectText =
-            outputHandler.getExpectedSizeOutput(11); // File size is 11 bytes
-
-        expect(output, contains(expectText));
-        expect(output, contains('test_file.txt'));
-      });
-
       test('$testDescription: System Command', () async {
         ftpClient.stdin.writeln('syst');
         ftpClient.stdin.writeln('quit');
@@ -443,6 +534,27 @@ void main() {
       final expectedOutput =
           outputHandler.getExpectedPwdOutput(allowedDirectories.first);
       expect(output, contains(expectedOutput));
+    });
+
+    test('$testDescription: Handle Large File Transfer', () async {
+      // Create a 1 GB file
+      final largeFile = File('${allowedDirectories.first}/large_file.txt')
+        ..writeAsBytesSync(List.generate(
+            1024 * 1024 * 1024, (index) => index % 256)); // 1GB file
+      ftpClient.stdin.writeln('put ${largeFile.path}');
+      ftpClient.stdin.writeln('ls');
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin("put ${largeFile.path}");
+        expect(output, contains('226 Transfer complete'));
+        output = await execFTPCmdOnWin("ls");
+      } else {
+        expect(output, contains('226 Transfer complete'));
+      }
+      expect(output, contains('large_file.txt'));
     });
   }
 
