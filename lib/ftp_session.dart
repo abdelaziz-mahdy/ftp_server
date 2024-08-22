@@ -177,12 +177,12 @@ class FtpSession {
     try {
       transferInProgress = true;
 
-      String fullPath = fileOperations.resolvePath(filename);
-      if (!fileOperations.exists(fullPath)) {
-        sendResponse('550 File not found');
+      if (!fileOperations.exists(filename)) {
+        sendResponse('550 File not found $filename');
         transferInProgress = false;
         return;
       }
+      String fullPath = fileOperations.resolvePath(filename);
 
       File file = File(fullPath);
       if (await file.exists()) {
@@ -212,7 +212,7 @@ class FtpSession {
           cancelOnError: true,
         );
       } else {
-        sendResponse('550 File not found');
+        sendResponse('550 File not found $fullPath');
         transferInProgress = false;
       }
     } catch (e) {

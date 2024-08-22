@@ -263,7 +263,8 @@ void main() {
     const testPath = 'test_file_ret.txt'; // Relative path
     final testFile = File('${allowedDirectories.first}/$testPath')
       ..writeAsStringSync('Hello, FTP!');
-
+    ftpClient.stdin.writeln('pwd');
+    ftpClient.stdin.writeln('ls');
     ftpClient.stdin
         .writeln('get test_file_ret.txt test_file_ret.txt'); // Relative paths
     ftpClient.stdin.writeln('ls');
@@ -420,7 +421,8 @@ void main() {
       output = await execFTPCmdOnWin('pwd');
     }
 
-    final expectText = outputHandler.getExpectedPwdOutput('/${basename(allowedDirectories.first)}');
+    final expectText = outputHandler
+        .getExpectedPwdOutput('/${basename(allowedDirectories.first)}');
     expect(output, contains(expectText));
   });
 
