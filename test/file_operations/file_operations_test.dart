@@ -85,7 +85,7 @@ void main() {
       // Attempt to create a directory within the current directory
       const newDirName = 'test_dir';
       final resolvedPath = fileOps.resolvePath(newDirName);
-      await fileOps.createDirectory(resolvedPath);
+      await fileOps.createDirectory(newDirName);
 
       // Verify that the directory was created correctly
       expect(Directory(resolvedPath).existsSync(), isTrue);

@@ -242,14 +242,14 @@ void main() {
     final testFile = File('${allowedDirectories.first}/test_file.txt')
       ..writeAsStringSync('Hello, FTP!');
 
-    ftpClient.stdin.writeln('put test_file.txt'); // Use relative path
+    ftpClient.stdin.writeln('put ${testFile.path}'); // Use relative path
     ftpClient.stdin.writeln('ls');
     ftpClient.stdin.writeln('quit');
     await ftpClient.stdin.flush();
 
     var output = await readAllOutput(logFilePath);
     if (Platform.isWindows) {
-      output = await execFTPCmdOnWin("put test_file.txt"); // Use relative path
+      output = await execFTPCmdOnWin("put ${testFile.path}"); // Use relative path
       expect(output, contains('226 Transfer complete'));
       output = await execFTPCmdOnWin("ls");
     } else {
