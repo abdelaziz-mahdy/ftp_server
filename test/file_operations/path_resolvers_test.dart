@@ -111,7 +111,7 @@ void main() {
           throwsA(isA<FileSystemException>()));
 
       // Windows-style outside path
-      expect(() => fileOps.resolvePath('outside\path'),
+      expect(() => fileOps.resolvePath('outside\\path'),
           throwsA(isA<FileSystemException>()));
     });
 
