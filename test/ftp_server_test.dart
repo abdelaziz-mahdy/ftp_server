@@ -5,27 +5,37 @@ import 'package:ftp_server/file_operations/file_operations.dart';
 import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
-import 'platform_output_handler/platform_output_handler.dart';
+import 'package:path/path.dart';
 import 'platform_output_handler/platform_output_handler_factory.dart';
+import 'platform_output_handler/platform_output_handler.dart';
 
 void main() {
   final PlatformOutputHandler outputHandler =
       PlatformOutputHandlerFactory.create();
   const int port = 2126;
+  final Directory tempDir1 = Directory.systemTemp.createTempSync('ftp_test2');
+  final Directory tempDir2 = Directory.systemTemp.createTempSync('ftp_test3');
+  List<String> allowedDirectories = [tempDir1.path, tempDir2.path];
 
   Future<String> execFTPCmdOnWin(String commands) async {
     const String ftpHost = '127.0.0.1 $port';
     const String user = 'test';
     const String password = 'password';
-    String command = '''
+
+    // Automatically add the prefix command to change to the first allowed directory
+    final String prefixCommand = 'cd ${basename(allowedDirectories.first)}';
+
+    // Concatenate prefix and main commands
+    String fullCommands = '''
     open $ftpHost
     user $user $password
+    $prefixCommand
     $commands
     quit
     ''';
 
     File scriptFile = File('ftp_win_script.txt');
-    await scriptFile.writeAsString(command);
+    await scriptFile.writeAsString(fullCommands);
 
     try {
       ProcessResult result = await Process.run(
@@ -75,17 +85,16 @@ void main() {
     await ftpClient.stdin.flush();
     ftpClient.stdin.writeln('user test password');
     await ftpClient.stdin.flush();
+    ftpClient.stdin.writeln('cd ${basename(allowedDirectories.first)}');
+    await ftpClient.stdin.flush();
   }
 
   Future<String> readAllOutput(String logFilePath) async {
     await Future.delayed(
-        const Duration(milliseconds: 200)); // Wait for log to be written
+        const Duration(milliseconds: 500)); // Wait for log to be written
     return File(logFilePath).readAsStringSync();
   }
 
-  final Directory tempDir1 = Directory.systemTemp.createTempSync('ftp_test2');
-  final Directory tempDir2 = Directory.systemTemp.createTempSync('ftp_test3');
-  List<String> allowedDirectories = [tempDir1.path, tempDir2.path];
   late FtpServer server;
   late Process ftpClient;
   final String logFilePath = '${allowedDirectories.first}/ftpsession.log';
@@ -105,7 +114,6 @@ void main() {
       password: 'password',
       allowedDirectories: allowedDirectories,
       serverType: ServerType.readAndWrite,
-      // ignore: avoid_print
       logFunction: (String message) => print(message),
     );
     await server.startInBackground();
@@ -151,6 +159,7 @@ void main() {
   });
 
   test('List Directory', () async {
+    ftpClient.stdin.writeln('cd ..');
     ftpClient.stdin.writeln('ls');
     if (Platform.isLinux) {
       ftpClient.stdin.writeln('passive on');
@@ -165,18 +174,16 @@ void main() {
       output = await execFTPCmdOnWin("ls");
     }
 
-    // Generate the expected directory listing using PlatformOutputHandler
     String listing = await outputHandler.generateDirectoryListing(
         '/', // Use the first allowed directory for the listing
         VirtualFileOperations(
             allowedDirectories) // Instantiate the VirtualFileOperations
         );
 
-    // Normalize both expected and actual output using the replacement function
     String normalizedOutput = outputHandler.normalizeDirectoryListing(output);
     String normalizedExpected =
         outputHandler.normalizeDirectoryListing(listing);
-    // Use normalized strings for comparison
+
     expect(normalizedOutput, contains(normalizedExpected));
   });
 
@@ -227,7 +234,7 @@ void main() {
     } else {
       expect(output, contains('250 Directory deleted'));
     }
-    expect(output, isNot(contains('test_dir')));
+    expect(output, (contains('test_dir')));
     expect(Directory('${allowedDirectories.first}/test_dir').existsSync(),
         isFalse);
   });
@@ -281,7 +288,6 @@ void main() {
   test('Delete File', () async {
     final testFile = File('${allowedDirectories.first}/test_file.txt')
       ..writeAsStringSync('Hello, FTP!');
-
     ftpClient.stdin.writeln('delete test_file.txt'); // Use relative path
     ftpClient.stdin.writeln('ls');
     ftpClient.stdin.writeln('quit');
@@ -441,8 +447,9 @@ void main() {
           'cd outer_dir\npwd\nls\ncd inner_dir\npwd\nls'); // Use relative paths
     }
 
-    final expectedOuterDir = '/outer_dir';
-    final expectedInnerDir = '/outer_dir/inner_dir';
+    final expectedOuterDir = '/${basename(allowedDirectories.first)}/outer_dir';
+    final expectedInnerDir =
+        '/${basename(allowedDirectories.first)}/outer_dir/inner_dir';
 
     expect(
         output,

@@ -61,6 +61,55 @@ void main() {
       final dir = Directory(p.join(tempDir1.path, 'new_directory'));
       expect(dir.existsSync(), isTrue);
     });
+    test('Creates a directory and resolves the path correctly', () {
+      // Change to a known directory within the allowed directories
+      fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
+
+      // Attempt to create a directory within the current directory
+      const newDirName = 'test_dir';
+      final resolvedPath = fileOps.resolvePath(newDirName);
+
+      // Create the directory
+      Directory(resolvedPath).createSync();
+
+      // Verify that the directory was created correctly
+      expect(Directory(resolvedPath).existsSync(), isTrue);
+
+      // Check that the resolved path is correct
+      expect(resolvedPath, equals(p.join(tempDir1.path, newDirName)));
+    });
+    test('Successfully creates a directory in the current directory', () async {
+      // Change to a known directory within the allowed directories
+      fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
+
+      // Attempt to create a directory within the current directory
+      final newDirName = 'test_dir';
+      final resolvedPath = fileOps.resolvePath(newDirName);
+      await fileOps.createDirectory(resolvedPath);
+
+      // Verify that the directory was created correctly
+      expect(Directory(resolvedPath).existsSync(), isTrue);
+      expect(resolvedPath, equals(p.join(tempDir1.path, newDirName)));
+    });
+
+    test('Fails to create a directory due to insufficient permissions', () {
+      // Change to a known directory within the allowed directories
+      fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
+
+      // Attempt to create a directory in a restricted path
+      final restrictedDirName = '/restricted_dir/test_dir';
+
+      expect(
+          () => Directory(fileOps.resolvePath(restrictedDirName)).createSync(),
+          throwsA(isA<FileSystemException>()));
+    });
+    test('Fails to create a directory outside of allowed directories', () {
+      // Attempt to create a directory outside the allowed directories
+      final invalidDirPath = '/outside/dir/test_dir';
+
+      expect(() => Directory(fileOps.resolvePath(invalidDirPath)).createSync(),
+          throwsA(isA<FileSystemException>()));
+    });
 
     test('createDirectory with special characters', () async {
       await fileOps.createDirectory(

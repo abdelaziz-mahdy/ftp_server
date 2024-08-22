@@ -293,32 +293,20 @@ class FtpSession {
 
   void makeDirectory(String dirname) async {
     try {
-      String newDirPath = fileOperations.resolvePath(dirname);
-      if (fileOperations.exists(newDirPath)) {
-        sendResponse('550 Directory already exists');
-        return;
-      }
-
-      await fileOperations.createDirectory(newDirPath);
+      await fileOperations.createDirectory(dirname);
       sendResponse('257 "$dirname" created');
     } catch (e) {
-      sendResponse('550 Failed to create directory');
+      sendResponse('550 Failed to create directory, error: $e');
       logger.generalLog('Error creating directory: $e');
     }
   }
 
   void removeDirectory(String dirname) async {
     try {
-      String dirPath = fileOperations.resolvePath(dirname);
-      if (!fileOperations.exists(dirPath)) {
-        sendResponse('550 Directory not found');
-        return;
-      }
-
-      await fileOperations.deleteDirectory(dirPath);
+      await fileOperations.deleteDirectory(dirname);
       sendResponse('250 Directory deleted');
     } catch (e) {
-      sendResponse('550 Failed to delete directory');
+      sendResponse('550 Failed to delete directory $e');
       logger.generalLog('Error deleting directory: $e');
     }
   }

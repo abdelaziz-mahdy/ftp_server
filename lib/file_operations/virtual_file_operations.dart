@@ -19,7 +19,11 @@ class VirtualFileOperations extends FileOperations {
 
   @override
   String resolvePath(String path) {
-    final virtualPath = p.normalize(p.join(currentDirectory, path));
+    // If the path is empty or a relative path, append it to the current directory
+    final effectivePath =
+        p.isAbsolute(path) ? path : p.join(currentDirectory, path);
+
+    final virtualPath = p.normalize(effectivePath);
 
     if (virtualPath == rootDirectory) {
       return rootDirectory;
@@ -49,8 +53,11 @@ class VirtualFileOperations extends FileOperations {
           (key) => fullPath.startsWith(directoryMappings[key]!),
           orElse: () => rootDirectory);
 
-      currentDirectory = p.normalize(p.join('/', virtualDirName,
-          p.relative(fullPath, from: directoryMappings[virtualDirName]??"/")));
+      currentDirectory = p.normalize(p.join(
+          '/',
+          virtualDirName,
+          p.relative(fullPath,
+              from: directoryMappings[virtualDirName] ?? "/")));
     } else {
       throw FileSystemException("Directory not found or access denied", path);
     }
@@ -113,6 +120,8 @@ class VirtualFileOperations extends FileOperations {
     final dir = Directory(fullPath);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
+    } else {
+      throw FileSystemException("Directory Already found: $fullPath");
     }
   }
 
