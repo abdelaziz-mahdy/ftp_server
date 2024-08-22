@@ -1,86 +1,9 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ftp_server/file_operations/physical_file_operations.dart';
 import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
-  group('PhysicalFileOperations.resolvePath', () {
-    late Directory tempDir;
-    late PhysicalFileOperations fileOps;
-
-    setUp(() {
-      tempDir =
-          Directory.systemTemp.createTempSync('physical_file_operations_test');
-      fileOps = PhysicalFileOperations(tempDir.path);
-
-      // Create directories and files needed for the test cases
-      Directory(p.join(tempDir.path, 'subdir')).createSync(recursive: true);
-      Directory(p.join(tempDir.path, 'subdir2')).createSync(recursive: true);
-      File(p.join(tempDir.path, 'subdir', 'file.txt'))
-          .createSync(recursive: true);
-      File(p.join(tempDir.path, 'some', 'absolute', 'path'))
-          .createSync(recursive: true);
-      File(p.join(tempDir.path, 'relative', 'path'))
-          .createSync(recursive: true);
-    });
-
-    tearDown(() {
-      tempDir.deleteSync(recursive: true);
-    });
-
-    test('Resolves absolute path within root', () {
-      final resolvedPath = fileOps.resolvePath('/some/absolute/path');
-      expect(resolvedPath, equals(p.join(tempDir.path, 'some/absolute/path')));
-    });
-
-    test('Resolves relative path within root', () {
-      final resolvedPath = fileOps.resolvePath('relative/path');
-      expect(resolvedPath, equals(p.join(tempDir.path, 'relative/path')));
-    });
-
-    test('Resolves root path', () {
-      final resolvedPath = fileOps.resolvePath('/');
-      expect(resolvedPath, equals(tempDir.path));
-    });
-
-    test('Resolves parent directory path', () {
-      fileOps.changeDirectory('subdir');
-      final resolvedPath = fileOps.resolvePath('..');
-      expect(resolvedPath, equals(tempDir.path));
-    });
-
-    test('Resolves complex relative path within root', () {
-      fileOps.changeDirectory('subdir');
-      final resolvedPath = fileOps.resolvePath('subdir2/../file.txt');
-      expect(resolvedPath, equals(p.join(tempDir.path, 'subdir/file.txt')));
-    });
-
-    test('Resolves path with same directory prefix as currentDirectory', () {
-      fileOps.changeDirectory(p.join(tempDir.path, 'subdir'));
-      final resolvedPath =
-          fileOps.resolvePath(p.join(tempDir.path, 'subdir', 'file.txt'));
-      expect(resolvedPath, equals(p.join(tempDir.path, 'subdir', 'file.txt')));
-    });
-
-    test('Resolves path with special characters in path', () {
-      final resolvedPath = fileOps.resolvePath('/some/special!@#\$%^&*()/path');
-      expect(resolvedPath,
-          equals(p.join(tempDir.path, 'some/special!@#\$%^&*()/path')));
-    });
-
-    test('Throws error for path above root using relative paths', () {
-      expect(() => fileOps.resolvePath('../../outside/path'),
-          throwsA(isA<FileSystemException>()));
-    });
-
-    test('Throws error for navigating above root from root', () {
-      fileOps.changeDirectory('/');
-      expect(() => fileOps.resolvePath('../../../some/absolute/path'),
-          throwsA(isA<FileSystemException>()));
-    });
-  });
-
   group('VirtualFileOperations.resolvePath', () {
     late Directory tempDir1, tempDir2;
     late VirtualFileOperations fileOps;

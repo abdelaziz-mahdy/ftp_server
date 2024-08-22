@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
+import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 import 'package:ftp_server/server_type.dart';
 import 'package:intl/intl.dart';
 import 'ftp_command_handler.dart';
@@ -16,7 +17,9 @@ class FtpSession {
   final String? username;
   final String? password;
   String? cachedUsername;
+
   final FileOperations fileOperations;
+  final List<String> allowedDirectories;
   final ServerType serverType;
   final LoggerHandler logger;
   bool transferInProgress = false;
@@ -28,10 +31,11 @@ class FtpSession {
     this.controlSocket, {
     this.username,
     this.password,
-    required this.fileOperations,
+    required this.allowedDirectories,
     required this.serverType,
     required this.logger,
-  }) : commandHandler = FTPCommandHandler(controlSocket, logger) {
+  })  : commandHandler = FTPCommandHandler(controlSocket, logger),
+        fileOperations = VirtualFileOperations(allowedDirectories) {
     sendResponse('220 Welcome to the FTP server');
     controlSocket.listen(processCommand, onDone: closeConnection);
   }

@@ -1,6 +1,7 @@
 library ftp_server;
 
 import 'dart:io';
+import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 import 'package:ftp_server/ftp_session.dart';
 import 'package:ftp_server/server_type.dart';
 import 'logger_handler.dart';
@@ -27,20 +28,23 @@ class FtpServer {
   ///   ```dart
   ///   fileOperations: VirtualFileOperations(['/home/user/ftp1', '/home/user/ftp2'])
   ///   ```
-  final FileOperations fileOperations;
   final ServerType serverType;
   final LoggerHandler logger;
+  final List<String> allowedDirectories;
 
   /// Creates an FTP server with the provided configurations.
   FtpServer(
     this.port, {
     this.username,
     this.password,
-    required this.fileOperations,
+    required this.allowedDirectories,
     required this.serverType,
     Function(String)? logFunction,
-  }) : logger = LoggerHandler(logFunction);
-
+  }) : logger = LoggerHandler(logFunction) {
+    if (allowedDirectories.isEmpty) {
+      throw ArgumentError("Allowed directories cannot be empty");
+    }
+  }
   Future<void> start() async {
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
     logger.generalLog('FTP Server is running on port $port');
@@ -51,7 +55,7 @@ class FtpServer {
         client,
         username: username,
         password: password,
-        fileOperations: fileOperations,
+        allowedDirectories: allowedDirectories,
         serverType: serverType,
         logger: logger,
       );
@@ -68,7 +72,7 @@ class FtpServer {
         client,
         username: username,
         password: password,
-        fileOperations: fileOperations,
+        allowedDirectories: allowedDirectories,
         serverType: serverType,
         logger: logger,
       );
