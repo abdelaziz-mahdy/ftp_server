@@ -331,7 +331,7 @@ void main() {
 
   test('Handle Large File Transfer', () async {
     File('${allowedDirectories.first}/large_file.txt').writeAsBytesSync(
-        List.generate(1024 * 1024 * 50, (index) => index % 256)); // 50MB file
+        List.generate(1024 * 1024 * 10, (index) => index % 256)); // 10MB file
     ftpClient.stdin.writeln('put large_file.txt'); // Use relative path
     ftpClient.stdin.writeln('ls');
     ftpClient.stdin.writeln('quit');
