@@ -61,7 +61,7 @@ class FtpSession {
     logger.generalLog('Connection closed');
   }
 
-  bool openDataConnection()  {
+  bool openDataConnection() {
     // await Future.delayed(const Duration(milliseconds: 100));
 
     if (dataSocket == null) {
@@ -117,10 +117,67 @@ class FtpSession {
     return '0.0.0.0';
   }
 
+  Future<void> listDirectory(String path) async {
+    if (!openDataConnection()) {
+      return;
+    }
+
+    try {
+      transferInProgress = true;
+
+      var dirContents = await fileOperations.listDirectory(path);
+      logger.generalLog('Listing directory: $path');
+
+      for (FileSystemEntity entity in dirContents) {
+        if (!transferInProgress) break; // Abort if transfer is cancelled
+
+        var stat = await entity.stat();
+        String permissions = _formatPermissions(stat);
+        String fileSize = stat.size.toString();
+        String modificationTime = _formatModificationTime(stat.modified);
+        String fileName = entity.path.split(Platform.pathSeparator).last;
+        String entry =
+            '$permissions 1 ftp ftp $fileSize $modificationTime $fileName\r\n';
+        dataSocket!.write(entry);
+      }
+
+      if (transferInProgress) {
+        transferInProgress = false;
+        await dataSocket!.close();
+        dataSocket = null;
+        sendResponse('226 Transfer complete');
+      }
+    } catch (e) {
+      sendResponse('550 Failed to list directory');
+      logger.generalLog('Error listing directory: $e');
+      transferInProgress = false;
+      dataSocket?.close();
+      dataSocket = null;
+    }
+  }
+
+  String _formatPermissions(FileStat stat) {
+    String type = stat.type == FileSystemEntityType.directory ? 'd' : '-';
+    String owner = _permissionToString(stat.mode >> 6);
+    String group = _permissionToString((stat.mode >> 3) & 7);
+    String others = _permissionToString(stat.mode & 7);
+    return '$type$owner$group$others';
+  }
+
+  String _permissionToString(int permission) {
+    String read = (permission & 4) != 0 ? 'r' : '-';
+    String write = (permission & 2) != 0 ? 'w' : '-';
+    String execute = (permission & 1) != 0 ? 'x' : '-';
+    return '$read$write$execute';
+  }
+
+  String _formatModificationTime(DateTime dateTime) {
+    return DateFormat('MMM dd HH:mm').format(dateTime);
+  }
+
 // Method to store a file on the server
   Future<void> storeFile(String filename) async {
-
-    if (! openDataConnection()) {
+    if (!openDataConnection()) {
       return;
     }
 
@@ -173,7 +230,7 @@ class FtpSession {
 
 // Method to retrieve a file from the server
   Future<void> retrieveFile(String filename) async {
-    if (! openDataConnection()) {
+    if (!openDataConnection()) {
       return;
     }
 
@@ -234,45 +291,6 @@ class FtpSession {
       dataSocket = null;
     } else {
       sendResponse('226 No transfer in progress');
-    }
-  }
-
-  Future<void> listDirectory(String path) async {
-    if (! openDataConnection()) {
-      return;
-    }
-
-    try {
-      transferInProgress = true;
-
-      var dirContents = await fileOperations.listDirectory(path);
-      logger.generalLog('Listing directory: $path');
-
-      for (FileSystemEntity entity in dirContents) {
-        if (!transferInProgress) break; // Abort if transfer is cancelled
-
-        var stat = await entity.stat();
-        String permissions = _formatPermissions(stat);
-        String fileSize = stat.size.toString();
-        String modificationTime = _formatModificationTime(stat.modified);
-        String fileName = entity.path.split(Platform.pathSeparator).last;
-        String entry =
-            '$permissions 1 ftp ftp $fileSize $modificationTime $fileName\r\n';
-        dataSocket!.write(entry);
-      }
-
-      if (transferInProgress) {
-        transferInProgress = false;
-        await dataSocket!.close();
-        dataSocket = null;
-        sendResponse('226 Transfer complete');
-      }
-    } catch (e) {
-      sendResponse('550 Failed to list directory');
-      logger.generalLog('Error listing directory: $e');
-      transferInProgress = false;
-      dataSocket?.close();
-      dataSocket = null;
     }
   }
 
@@ -348,24 +366,5 @@ class FtpSession {
       sendResponse('425 Can\'t enter extended passive mode');
       logger.generalLog('Error entering extended passive mode: $e');
     }
-  }
-
-  String _formatPermissions(FileStat stat) {
-    String type = stat.type == FileSystemEntityType.directory ? 'd' : '-';
-    String owner = _permissionToString(stat.mode >> 6);
-    String group = _permissionToString((stat.mode >> 3) & 7);
-    String others = _permissionToString(stat.mode & 7);
-    return '$type$owner$group$others';
-  }
-
-  String _permissionToString(int permission) {
-    String read = (permission & 4) != 0 ? 'r' : '-';
-    String write = (permission & 2) != 0 ? 'w' : '-';
-    String execute = (permission & 1) != 0 ? 'x' : '-';
-    return '$read$write$execute';
-  }
-
-  String _formatModificationTime(DateTime dateTime) {
-    return DateFormat('MMM dd HH:mm').format(dateTime);
   }
 }
