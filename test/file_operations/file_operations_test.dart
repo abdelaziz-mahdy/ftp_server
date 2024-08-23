@@ -31,14 +31,17 @@ void main() {
     test('resolvePath with absolute path', () {
       final resolvedPath = fileOps
           .resolvePath('/${p.basename(tempDir1.path)}/some/absolute/path');
-      expect(resolvedPath, equals(p.normalize(p.join(tempDir1.path, 'some/absolute/path'))));
+      expect(resolvedPath,
+          equals(p.normalize(p.join(tempDir1.path, 'some/absolute/path'))));
     });
 
     test('resolvePath with special characters in path', () {
       final resolvedPath = fileOps.resolvePath(
           '/${p.basename(tempDir1.path)}/some/special!@#\$%^&*()/path');
-      expect(resolvedPath,
-          equals(p.normalize(p.join(tempDir1.path, 'some/special!@#\$%^&*()/path'))));
+      expect(
+          resolvedPath,
+          equals(p.normalize(
+              p.join(tempDir1.path, 'some/special!@#\$%^&*()/path'))));
     });
 
     test('exists returns true for existing file', () {
