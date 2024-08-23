@@ -171,7 +171,7 @@ void main() {
 
     var output = await readAllOutput(logFilePath);
     if (Platform.isWindows) {
-      output = await execFTPCmdOnWin("ls");
+      output = await execFTPCmdOnWin("cd ..\n ls");
     }
 
     String listing = await outputHandler.generateDirectoryListing(
@@ -228,9 +228,8 @@ void main() {
 
     var output = await readAllOutput(logFilePath);
     if (Platform.isWindows) {
-      output = await execFTPCmdOnWin("mkdir test_dir\nrmdir test_dir");
+      output = await execFTPCmdOnWin("mkdir test_dir\nrmdir test_dir\nls\n");
       expect(output, contains('250 Directory deleted'));
-      output = await execFTPCmdOnWin("ls");
     } else {
       expect(output, contains('250 Directory deleted'));
     }

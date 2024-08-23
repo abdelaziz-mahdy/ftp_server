@@ -59,11 +59,11 @@ void main() {
 
     test('Resolves root path', () {
       final resolvedPath = fileOps.resolvePath('/');
-      expect(resolvedPath, equals('/'));
+      expect(resolvedPath, equals(p.normalize('/')));
 
       // Windows-style root path
       final windowsResolvedPath = fileOps.resolvePath('');
-      expect(windowsResolvedPath, equals('/'));
+      expect(windowsResolvedPath, equals(p.normalize('/')));
     });
 
     test('Resolves parent directory path', () {

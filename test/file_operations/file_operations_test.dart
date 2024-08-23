@@ -114,14 +114,15 @@ void main() {
       expect(() => Directory(fileOps.resolvePath(invalidDirPath)).createSync(),
           throwsA(isA<FileSystemException>()));
     });
-
-    test('createDirectory with special characters', () async {
-      await fileOps.createDirectory(
-          p.join(p.basename(tempDir1.path), 'new_directory_with_!@#\$%^&*()'));
-      final dir =
-          Directory(p.join(tempDir1.path, 'new_directory_with_!@#\$%^&*()'));
-      expect(dir.existsSync(), isTrue);
-    });
+    if (!Platform.isWindows) {
+      test('createDirectory with special characters', () async {
+        await fileOps.createDirectory(p.join(
+            p.basename(tempDir1.path), 'new_directory_with_!@#\$%^&*()'));
+        final dir =
+            Directory(p.join(tempDir1.path, 'new_directory_with_!@#\$%^&*()'));
+        expect(dir.existsSync(), isTrue);
+      });
+    }
 
     test('deleteFile deletes file', () async {
       final file = File(p.join(tempDir1.path, 'test_file.txt'));
@@ -176,14 +177,16 @@ void main() {
       String subDirPath = p.join(p.basename(tempDir1.path), 'subdir');
       await fileOps.createDirectory(subDirPath);
       fileOps.changeDirectory(subDirPath);
-      expect(fileOps.getCurrentDirectory(), equals(p.join('/', subDirPath)));
+      expect(fileOps.getCurrentDirectory(),
+          equals(p.normalize(p.join('/', subDirPath))));
     });
 
     test('changeDirectory using absolute path', () async {
       String subDirPath = p.join('/', p.basename(tempDir1.path), 'subdir');
       await fileOps.createDirectory(subDirPath);
       fileOps.changeDirectory(subDirPath);
-      expect(fileOps.getCurrentDirectory(), equals(p.join('/', subDirPath)));
+      expect(fileOps.getCurrentDirectory(),
+          equals(p.normalize(p.join('/', subDirPath))));
     });
 
     test('changeToParentDirectory moves to parent directory', () async {
@@ -192,7 +195,7 @@ void main() {
       fileOps.changeDirectory(subDirPath);
       fileOps.changeToParentDirectory();
       expect(fileOps.getCurrentDirectory(),
-          equals('/${p.basename(tempDir1.path)}'));
+          equals(p.normalize('/${p.basename(tempDir1.path)}')));
     });
 
     test('writeFile writes data to file', () async {
