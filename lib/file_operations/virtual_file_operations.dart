@@ -36,7 +36,7 @@ class VirtualFileOperations extends FileOperations {
 
     // Extract the first segment of the path to match against directory mappings
     final firstSegment = p.split(virtualPath).firstWhere(
-        (part) => part.isNotEmpty && part != rootDirectory,
+        (part) => part.isNotEmpty && part != p.rootPrefix(rootDirectory),
         orElse: () => rootDirectory);
 
     // Check if the first segment is mapped to an allowed directory
