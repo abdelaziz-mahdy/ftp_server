@@ -310,25 +310,25 @@ void main() {
 
   if (!Platform.isWindows) {
     test('Handle Special Characters in Filenames', () async {
-    File('${allowedDirectories.first}/test_file_!@#\$%^&*().txt')
-        .writeAsStringSync('Special characters in the filename');
-    ftpClient.stdin
-        .writeln('put test_file_!@#\$%^&*().txt'); // Use relative path
-    ftpClient.stdin.writeln('ls');
-    ftpClient.stdin.writeln('quit');
-    await ftpClient.stdin.flush();
+      File('${allowedDirectories.first}/test_file_!@#\$%^&*().txt')
+          .writeAsStringSync('Special characters in the filename');
+      ftpClient.stdin
+          .writeln('put test_file_!@#\$%^&*().txt'); // Use relative path
+      ftpClient.stdin.writeln('ls');
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
 
-    var output = await readAllOutput(logFilePath);
-    if (Platform.isWindows) {
-      output = await execFTPCmdOnWin(
-          "put test_file_!@#\$%^&*().txt"); // Use relative path
-      expect(output, contains('226 Transfer complete'));
-      output = await execFTPCmdOnWin("ls");
-    } else {
-      expect(output, contains('226 Transfer complete'));
-    }
-    expect(output, contains('test_file_!@#\$%^&*().txt'));
-  });
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin(
+            "put test_file_!@#\$%^&*().txt"); // Use relative path
+        expect(output, contains('226 Transfer complete'));
+        output = await execFTPCmdOnWin("ls");
+      } else {
+        expect(output, contains('226 Transfer complete'));
+      }
+      expect(output, contains('test_file_!@#\$%^&*().txt'));
+    });
   }
 
   test('Handle Large File Transfer', () async {
