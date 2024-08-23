@@ -11,7 +11,8 @@ class VirtualFileOperations extends FileOperations {
     }
 
     for (String dir in allowedDirectories) {
-      final normalizedDir = p.normalize(dir);
+      final normalizedDir = p.normalize(dir).replaceAll(r'\', '/');
+
       final dirName = p.basename(normalizedDir);
       directoryMappings[dirName] = normalizedDir;
     }
