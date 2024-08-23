@@ -41,7 +41,8 @@ class VirtualFileOperations extends FileOperations {
 
     // Check if the first segment is mapped to an allowed directory
     if (!directoryMappings.containsKey(firstSegment)) {
-      throw FileSystemException("Access denied or directory not found: path requested $path, firstSegment is $firstSegment, directoryMappings $directoryMappings");
+      throw FileSystemException(
+          "Access denied or directory not found: path requested $path, firstSegment is $firstSegment, directoryMappings $directoryMappings");
     }
 
     // Get the mapped directory and construct the remaining path
