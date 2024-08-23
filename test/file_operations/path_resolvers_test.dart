@@ -34,7 +34,8 @@ void main() {
     test('Resolves absolute path within allowed directory', () {
       final resolvedPath = fileOps
           .resolvePath('/${p.basename(tempDir1.path)}/some/absolute/path');
-      expect(resolvedPath, equals(p.join(tempDir1.path, 'some/absolute/path')));
+      expect(resolvedPath,
+          equals(p.join(tempDir1.path, 'some', 'absolute', 'path')));
 
       // Windows-style path
       final windowsResolvedPath = fileOps
@@ -46,7 +47,8 @@ void main() {
     test('Resolves relative path within allowed directory', () {
       fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
       final resolvedPath = fileOps.resolvePath('relative/path');
-      expect(resolvedPath, equals(p.join(tempDir1.path, 'relative/path')));
+      expect(resolvedPath,
+          equals(p.normalize(p.join(tempDir1.path, 'relative/path'))));
 
       // // Windows-style path
       // fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
@@ -78,7 +80,8 @@ void main() {
     test('Resolves complex relative path within allowed directory', () {
       fileOps.changeDirectory('/${p.basename(tempDir1.path)}/subdir');
       final resolvedPath = fileOps.resolvePath('subdir2/../file.txt');
-      expect(resolvedPath, equals(p.join(tempDir1.path, 'subdir/file.txt')));
+      expect(resolvedPath,
+          equals(p.normalize(p.join(tempDir1.path, 'subdir/file.txt'))));
 
       // // Windows-style complex path
       // fileOps.changeDirectory('\\${p.basename(tempDir1.path)}\\subdir');
@@ -102,8 +105,10 @@ void main() {
     test('Resolves path with special characters in path', () {
       final resolvedPath = fileOps.resolvePath(
           p.join(p.basename(tempDir1.path), 'some/special!@#\$%^&*()/path'));
-      expect(resolvedPath,
-          equals(p.join(tempDir1.path, 'some/special!@#\$%^&*()/path')));
+      expect(
+          resolvedPath,
+          equals(p.normalize(
+              p.join(tempDir1.path, 'some/special!@#\$%^&*()/path'))));
     });
 
     test('Throws error for path outside allowed directories', () {
