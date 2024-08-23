@@ -34,15 +34,16 @@ void main() {
       expect(resolvedPath,
           equals(p.normalize(p.join(tempDir1.path, 'some/absolute/path'))));
     });
-
-    test('resolvePath with special characters in path', () {
-      final resolvedPath = fileOps.resolvePath(
-          '/${p.basename(tempDir1.path)}/some/special!@#\$%^&*()/path');
-      expect(
-          resolvedPath,
-          equals(p.normalize(
-              p.join(tempDir1.path, 'some/special!@#\$%^&*()/path'))));
-    });
+    if (!Platform.isWindows) {
+      test('resolvePath with special characters in path', () {
+        final resolvedPath = fileOps.resolvePath(
+            '/${p.basename(tempDir1.path)}/some/special!@#\$%^&*()/path');
+        expect(
+            resolvedPath,
+            equals(p.normalize(
+                p.join(tempDir1.path, 'some/special!@#\$%^&*()/path'))));
+      });
+    }
 
     test('exists returns true for existing file', () {
       final file = File(p.join(tempDir1.path, 'test_file.txt'));

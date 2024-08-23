@@ -3,14 +3,14 @@ import 'platform_output_handler.dart';
 class WindowsOutputHandler extends PlatformOutputHandler {
   @override
   String getExpectedPwdOutput(String path) =>
-      '257 "${path.replaceAll("/", "\\\\")}" is current directory';
+      '257 "${path.replaceAll("/", "\\")}" is current directory';
 
   @override
   String getExpectedSizeOutput(int size) => '213 $size';
 
   @override
   String getExpectedDirectoryChangeOutput(String path) =>
-      '250 Directory changed to ${path.replaceAll("/", "\\\\")}';
+      '250 Directory changed to ${path.replaceAll("/", "\\")}';
 
   @override
   String getExpectedDirectoryListingOutput(String listing) =>

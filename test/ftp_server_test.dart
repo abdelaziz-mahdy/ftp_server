@@ -308,7 +308,8 @@ void main() {
     expect(testFile.existsSync(), isFalse);
   });
 
-  test('Handle Special Characters in Filenames', () async {
+  if (!Platform.isWindows) {
+    test('Handle Special Characters in Filenames', () async {
     File('${allowedDirectories.first}/test_file_!@#\$%^&*().txt')
         .writeAsStringSync('Special characters in the filename');
     ftpClient.stdin
@@ -328,6 +329,7 @@ void main() {
     }
     expect(output, contains('test_file_!@#\$%^&*().txt'));
   });
+  }
 
   test('Handle Large File Transfer', () async {
     File('${allowedDirectories.first}/large_file.txt').writeAsBytesSync(

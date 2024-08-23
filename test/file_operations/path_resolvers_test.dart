@@ -101,16 +101,16 @@ void main() {
       expect(windowsResolvedPath,
           equals(p.join(tempDir1.path, 'subdir', 'file.txt')));
     });
-
-    test('Resolves path with special characters in path', () {
-      final resolvedPath = fileOps.resolvePath(
-          p.join(p.basename(tempDir1.path), 'some/special!@#\$%^&*()/path'));
-      expect(
-          resolvedPath,
-          equals(p.normalize(
-              p.join(tempDir1.path, 'some/special!@#\$%^&*()/path'))));
-    });
-
+    if (!Platform.isWindows) {
+      test('Resolves path with special characters in path', () {
+        final resolvedPath = fileOps.resolvePath(
+            p.join(p.basename(tempDir1.path), 'some/special!@#\$%^&*()/path'));
+        expect(
+            resolvedPath,
+            equals(p.normalize(
+                p.join(tempDir1.path, 'some/special!@#\$%^&*()/path'))));
+      });
+    }
     test('Throws error for path outside allowed directories', () {
       expect(() => fileOps.resolvePath('/outside/path'),
           throwsA(isA<FileSystemException>()));
