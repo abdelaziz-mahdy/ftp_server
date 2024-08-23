@@ -22,7 +22,7 @@ void main() {
     const String password = 'password';
 
     // Automatically add the prefix command to change to the first allowed directory
-    final String prefixCommand = 'cd ${basename(allowedDirectories.first)}';
+    final String prefixCommand = 'cd ${basename(allowedDirectories.first)}\n';
 
     // Concatenate prefix and main commands
     String fullCommands = '''
