@@ -11,16 +11,16 @@ class VirtualFileOperations extends FileOperations {
     }
 
     for (String dir in allowedDirectories) {
-      final normalizedDir = p.normalize(dir).replaceAll(r'\', '/');
-
+      // final normalizedDir = p.normalize(dir).replaceAll(r'\', '/');
+      final normalizedDir = p.normalize(dir);
       final dirName = p.basename(normalizedDir);
       directoryMappings[dirName] = normalizedDir;
     }
   }
   @override
   String resolvePath(String path) {
-    // Convert Windows-style backslashes to forward slashes for consistency
-    path = path.replaceAll(r'\', '/');
+    // // Convert Windows-style backslashes to forward slashes for consistency
+    // path = path.replaceAll(r'\', '/');
 
     // If the path is empty or a relative path, append it to the current directory
     final effectivePath =
