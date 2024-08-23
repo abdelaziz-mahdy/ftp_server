@@ -5,7 +5,7 @@ import 'file_operations.dart';
 class VirtualFileOperations extends FileOperations {
   final Map<String, String> directoryMappings = {};
 
-  VirtualFileOperations(List<String> allowedDirectories) : super('/') {
+  VirtualFileOperations(List<String> allowedDirectories) : super(p.separator) {
     if (allowedDirectories.isEmpty) {
       throw ArgumentError("Allowed directories cannot be empty");
     }
@@ -47,7 +47,8 @@ class VirtualFileOperations extends FileOperations {
 
     // Get the mapped directory and construct the remaining path
     final mappedDir = directoryMappings[firstSegment]!;
-    final remainingPath = p.relative(virtualPath, from: '/$firstSegment');
+    final remainingPath =
+        p.relative(virtualPath, from: '$rootDirectory$firstSegment');
 
     // Resolve the final path and ensure it is within the allowed directories
     final resolvedPath = p.normalize(p.join(mappedDir, remainingPath));
@@ -64,10 +65,10 @@ class VirtualFileOperations extends FileOperations {
           orElse: () => rootDirectory);
 
       currentDirectory = p.normalize(p.join(
-          '/',
+          rootDirectory,
           virtualDirName,
           p.relative(fullPath,
-              from: directoryMappings[virtualDirName] ?? "/")));
+              from: directoryMappings[virtualDirName] ?? rootDirectory)));
     } else {
       throw FileSystemException("Directory not found or access denied", path);
     }
