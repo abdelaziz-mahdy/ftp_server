@@ -20,9 +20,9 @@ abstract class PlatformOutputHandler {
       String fileSize = stat.size.toString();
       String modificationTime = _formatModificationTime(stat.modified);
       String fileName = p.basename(entity.path);
-      String suffix = Platform.isWindows ? r"\r" : "";
+      String suffix = Platform.isWindows ? "\r" : "";
       listing.writeln(
-          '$permissions 1 ftp ftp $fileSize $modificationTime $fileName $suffix');
+          '$permissions 1 ftp ftp $fileSize $modificationTime $fileName$suffix');
     }
 
     return listing.toString().trim();
