@@ -241,24 +241,26 @@ void main() {
   });
 
   test('Store File', () async {
-    final testFile = File('${clientTempDir.path}/test_file.txt')
+    var filename = 'test_file.txt';
+    final testFile = File('${clientTempDir.path}/$filename')
       ..writeAsStringSync('Hello, FTP!');
 
-    ftpClient.stdin.writeln('put ${testFile.path}'); // Use relative path
+    ftpClient.stdin
+        .writeln('put ${testFile.path} $filename'); // Use relative path
     ftpClient.stdin.writeln('ls');
     ftpClient.stdin.writeln('quit');
     await ftpClient.stdin.flush();
 
     var output = await readAllOutput(logFilePath);
     if (Platform.isWindows) {
-      output =
-          await execFTPCmdOnWin("put ${testFile.path}"); // Use relative path
+      output = await execFTPCmdOnWin(
+          "put ${testFile.path} $filename"); // Use relative path
       expect(output, contains('226 Transfer complete'));
       output = await execFTPCmdOnWin("ls");
     } else {
       expect(output, contains('226 Transfer complete'));
     }
-    expect(output, contains('test_file.txt'));
+    expect(output, contains(filename));
   });
 
   test('Retrieve File', () async {
@@ -314,15 +316,16 @@ void main() {
       String filename = "test_file_!@#\$%^&*().txt";
       final testFile = File('${clientTempDir.path}/$filename')
         ..writeAsStringSync('Special characters in the filename');
-      ftpClient.stdin.writeln('put ${testFile.path}'); // Use relative path
+      ftpClient.stdin
+          .writeln('put ${testFile.path} $filename'); // Use relative path
       ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
-        output =
-            await execFTPCmdOnWin("put ${testFile.path}"); // Use relative path
+        output = await execFTPCmdOnWin(
+            "put ${testFile.path} $filename"); // Use relative path
         expect(output, contains('226 Transfer complete'));
         output = await execFTPCmdOnWin("ls");
       } else {
@@ -337,15 +340,18 @@ void main() {
     final testFile = File('${clientTempDir.path}/$filename')
       ..writeAsBytesSync(
           List.generate(1024 * 1024 * 10, (index) => index % 256)); // 10MB file
-    ftpClient.stdin.writeln('put ${testFile.path}'); // Use relative path
+    ftpClient.stdin
+        .writeln('put ${testFile.path} $filename'); // Use relative path
+    // todo better
+    await Future.delayed(const Duration(seconds: 2));
     ftpClient.stdin.writeln('ls');
     ftpClient.stdin.writeln('quit');
     await ftpClient.stdin.flush();
 
     var output = await readAllOutput(logFilePath);
     if (Platform.isWindows) {
-      output =
-          await execFTPCmdOnWin("put ${testFile.path}"); // Use relative path
+      output = await execFTPCmdOnWin(
+          "put ${testFile.path} $filename"); // Use relative path
       expect(output, contains('226 Transfer complete'));
       output = await execFTPCmdOnWin("ls");
     } else {
@@ -525,15 +531,20 @@ void main() {
     final testFile = File('${clientTempDir.path}/$filename')
       ..writeAsBytesSync(
           List.generate(1024 * 1024 * 50, (index) => index % 256)); // 50Mb file
-    ftpClient.stdin.writeln('put ${testFile.path}'); // Use relative path
+    ftpClient.stdin
+        .writeln('put ${testFile.path} $filename'); // Use relative path
+
+    // todo better
+    await Future.delayed(const Duration(seconds: 5));
+
     ftpClient.stdin.writeln('ls');
     ftpClient.stdin.writeln('quit');
     await ftpClient.stdin.flush();
 
     var output = await readAllOutput(logFilePath);
     if (Platform.isWindows) {
-      output =
-          await execFTPCmdOnWin("put ${testFile.path}"); // Use relative path
+      output = await execFTPCmdOnWin(
+          "put ${testFile.path} $filename"); // Use relative path
       expect(output, contains('226 Transfer complete'));
       output = await execFTPCmdOnWin("ls");
     } else {
