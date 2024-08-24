@@ -1,18 +1,10 @@
-## 1.0.0
+## 0.1.0
 
-Breaking Change: Replace `allowedDirectories` with `fileOperations`. Use `PhysicalFileOperations` or `VirtualFileOperations`.
+### Breaking Change
 
-**Before:**
+- **Update to `allowedDirectories` Logic**: The FTP server now uses a virtual file system to manage one or more directories specified in `allowedDirectories`, providing better flexibility and scalability by seamlessly handling multiple directories under a virtual root.
 
-```dart
-allowedDirectories: ['/home/user/ftp'],
-```
-
-**After:**
-
-```dart
-fileOperations: PhysicalFileOperations('/home/user/ftp'),
-```
+- **Removal of Flutter Dependency**: This update removes the dependency on Flutter, allowing the FTP server to run directly with Dart, making it more lightweight and versatile.
 
 ## 0.0.7
 
