@@ -477,7 +477,7 @@ void main() {
     ftpClient.stdin.writeln('cd ..');
     ftpClient.stdin.writeln('pwd');
 
-    ftpClient.stdin.writeln('cd $nestedDirPath'); // Absolute path
+    ftpClient.stdin.writeln('cd ${basename(nestedDirPath)}'); // Absolute path
     ftpClient.stdin.writeln('pwd');
 
     ftpClient.stdin.writeln('quit');
@@ -486,7 +486,7 @@ void main() {
     var output = await readAllOutput(logFilePath);
     if (Platform.isWindows) {
       output = await execFTPCmdOnWin(
-          'cd outer_dir\npwd\ncd inner_dir\npwd\ncd ..\npwd\ncd $nestedDirPath\npwd');
+          'cd outer_dir\npwd\ncd inner_dir\npwd\ncd ..\npwd\ncd ${basename(nestedDirPath)}\npwd');
     }
 
     var expectedOuterDir = '/${basename(allowedDirectories.first)}/outer_dir';

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:ftp_server/file_operations/file_operations.dart';
 import 'package:path/path.dart' as p;
 import 'package:intl/intl.dart';
@@ -19,9 +20,9 @@ abstract class PlatformOutputHandler {
       String fileSize = stat.size.toString();
       String modificationTime = _formatModificationTime(stat.modified);
       String fileName = p.basename(entity.path);
-
+      String suffix = Platform.isWindows ? r"\r" : "";
       listing.writeln(
-          '$permissions 1 ftp ftp $fileSize $modificationTime $fileName');
+          '$permissions 1 ftp ftp $fileSize $modificationTime $fileName $suffix');
     }
 
     return listing.toString().trim();
