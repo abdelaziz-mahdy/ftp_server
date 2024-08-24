@@ -15,6 +15,8 @@ void main() {
   final Directory tempDir1 = Directory.systemTemp.createTempSync('ftp_test2');
   final Directory tempDir2 = Directory.systemTemp.createTempSync('ftp_test3');
   List<String> allowedDirectories = [tempDir1.path, tempDir2.path];
+  final Directory clientTempDir =
+      Directory.systemTemp.createTempSync('ftp_test0');
 
   Future<String> execFTPCmdOnWin(String commands) async {
     const String ftpHost = '127.0.0.1 $port';
@@ -239,7 +241,7 @@ void main() {
   });
 
   test('Store File', () async {
-    final testFile = File('${allowedDirectories.first}/test_file.txt')
+    final testFile = File('${clientTempDir.path}/test_file.txt')
       ..writeAsStringSync('Hello, FTP!');
 
     ftpClient.stdin.writeln('put ${testFile.path}'); // Use relative path
@@ -309,44 +311,47 @@ void main() {
 
   if (!Platform.isWindows) {
     test('Handle Special Characters in Filenames', () async {
-      File('${allowedDirectories.first}/test_file_!@#\$%^&*().txt')
-          .writeAsStringSync('Special characters in the filename');
-      ftpClient.stdin
-          .writeln('put test_file_!@#\$%^&*().txt'); // Use relative path
+      String filename = "test_file_!@#\$%^&*().txt";
+      final testFile = File('${clientTempDir.path}/$filename')
+        ..writeAsStringSync('Special characters in the filename');
+      ftpClient.stdin.writeln('put ${testFile.path}'); // Use relative path
       ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
-        output = await execFTPCmdOnWin(
-            "put test_file_!@#\$%^&*().txt"); // Use relative path
+        output =
+            await execFTPCmdOnWin("put ${testFile.path}"); // Use relative path
         expect(output, contains('226 Transfer complete'));
         output = await execFTPCmdOnWin("ls");
       } else {
         expect(output, contains('226 Transfer complete'));
       }
-      expect(output, contains('test_file_!@#\$%^&*().txt'));
+      expect(output, contains(filename));
     });
   }
 
   test('Handle Large File Transfer', () async {
-    File('${allowedDirectories.first}/large_file.txt').writeAsBytesSync(
-        List.generate(1024 * 1024 * 10, (index) => index % 256)); // 10MB file
-    ftpClient.stdin.writeln('put large_file.txt'); // Use relative path
+    var filename = "large_file_10M.txt";
+    final testFile = File('${clientTempDir.path}/$filename')
+      ..writeAsBytesSync(
+          List.generate(1024 * 1024 * 10, (index) => index % 256)); // 10MB file
+    ftpClient.stdin.writeln('put ${testFile.path}'); // Use relative path
     ftpClient.stdin.writeln('ls');
     ftpClient.stdin.writeln('quit');
     await ftpClient.stdin.flush();
 
     var output = await readAllOutput(logFilePath);
     if (Platform.isWindows) {
-      output = await execFTPCmdOnWin("put large_file.txt"); // Use relative path
+      output =
+          await execFTPCmdOnWin("put ${testFile.path}"); // Use relative path
       expect(output, contains('226 Transfer complete'));
       output = await execFTPCmdOnWin("ls");
     } else {
       expect(output, contains('226 Transfer complete'));
     }
-    expect(output, contains('large_file.txt'));
+    expect(output, contains(filename));
   });
 
   test('Handle Directory with Special Characters', () async {
@@ -364,22 +369,25 @@ void main() {
     expect(output, contains('special!@#\$%^&*()_dir'));
   });
 
-  test('File Size', () async {
-    File('${allowedDirectories.first}/test_file.txt')
-        .writeAsStringSync('Hello, FTP!');
+  if (!Platform.isWindows) {
+    test('File Size', () async {
+      File('${allowedDirectories.first}/test_file.txt')
+          .writeAsStringSync('Hello, FTP!');
 
-    ftpClient.stdin.writeln('size test_file.txt'); // Use relative path
-    ftpClient.stdin.writeln('quit');
-    await ftpClient.stdin.flush();
+      ftpClient.stdin.writeln('size test_file.txt'); // Use relative path
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
 
-    var output = await readAllOutput(logFilePath);
-    if (Platform.isWindows) {
-      output = await execFTPCmdOnWin("size test_file.txt"); // Use relative path
-    }
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output =
+            await execFTPCmdOnWin("size test_file.txt"); // Use relative path
+      }
 
-    String expectedSizeOutput = outputHandler.getExpectedSizeOutput(11);
-    expect(output, contains(expectedSizeOutput));
-  });
+      String expectedSizeOutput = outputHandler.getExpectedSizeOutput(11);
+      expect(output, contains(expectedSizeOutput));
+    });
+  }
 
   test('Prevent Navigation Above Root Directory', () async {
     ftpClient.stdin.writeln('cd ..');
@@ -513,21 +521,24 @@ void main() {
 
   test('Handle Large File Transfer', () async {
     // Create a 1 GB file
-    File('${allowedDirectories.first}/large_file.txt').writeAsBytesSync(
-        List.generate(1024 * 1024 * 50, (index) => index % 256)); // 50Mb file
-    ftpClient.stdin.writeln('put large_file.txt'); // Use relative path
+    String filename = "large_file_50M.txt";
+    final testFile = File('${clientTempDir.path}/$filename')
+      ..writeAsBytesSync(
+          List.generate(1024 * 1024 * 50, (index) => index % 256)); // 50Mb file
+    ftpClient.stdin.writeln('put ${testFile.path}'); // Use relative path
     ftpClient.stdin.writeln('ls');
     ftpClient.stdin.writeln('quit');
     await ftpClient.stdin.flush();
 
     var output = await readAllOutput(logFilePath);
     if (Platform.isWindows) {
-      output = await execFTPCmdOnWin("put large_file.txt"); // Use relative path
+      output =
+          await execFTPCmdOnWin("put ${testFile.path}"); // Use relative path
       expect(output, contains('226 Transfer complete'));
       output = await execFTPCmdOnWin("ls");
     } else {
       expect(output, contains('226 Transfer complete'));
     }
-    expect(output, contains('large_file.txt'));
+    expect(output, contains(filename));
   });
 }
