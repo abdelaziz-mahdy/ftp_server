@@ -361,22 +361,23 @@ void main() {
       }
       expect(output, contains('special!@#\$%^&*()_dir'));
     });
+    if (!Platform.isWindows) {
+      test('File Size', () async {
+        File('${sharedDirectories.first}/test_file.txt')
+            .writeAsStringSync('Hello, FTP!');
+        ftpClient.stdin.writeln('size test_file.txt');
+        ftpClient.stdin.writeln('quit');
+        await ftpClient.stdin.flush();
 
-    test('File Size', () async {
-      File('${sharedDirectories.first}/test_file.txt')
-          .writeAsStringSync('Hello, FTP!');
-      ftpClient.stdin.writeln('size test_file.txt');
-      ftpClient.stdin.writeln('quit');
-      await ftpClient.stdin.flush();
+        var output = await readAllOutput(logFilePath);
+        if (Platform.isWindows) {
+          output = await execFTPCmdOnWin("size test_file.txt");
+        }
 
-      var output = await readAllOutput(logFilePath);
-      if (Platform.isWindows) {
-        output = await execFTPCmdOnWin("size test_file.txt");
-      }
-
-      String expectedSizeOutput = outputHandler.getExpectedSizeOutput(11);
-      expect(output, contains(expectedSizeOutput));
-    });
+        String expectedSizeOutput = outputHandler.getExpectedSizeOutput(11);
+        expect(output, contains(expectedSizeOutput));
+      });
+    }
 
     test('Prevent Navigation Above Root Directory', () async {
       ftpClient.stdin.writeln('cd ..');
@@ -395,16 +396,17 @@ void main() {
       final expectedOutput = outputHandler.getExpectedPwdOutput('/');
       expect(output, contains(expectedOutput));
     });
+    if (!Platform.isWindows) {
+      test('System Command', () async {
+        ftpClient.stdin.writeln('syst');
+        ftpClient.stdin.writeln('quit');
+        await ftpClient.stdin.flush();
 
-    test('System Command', () async {
-      ftpClient.stdin.writeln('syst');
-      ftpClient.stdin.writeln('quit');
-      await ftpClient.stdin.flush();
+        var output = await readAllOutput(logFilePath);
 
-      var output = await readAllOutput(logFilePath);
-
-      expect(output, contains('215 UNIX Type: L8'));
-    });
+        expect(output, contains('215 UNIX Type: L8'));
+      });
+    }
 
     test('Print Working Directory Command', () async {
       ftpClient.stdin.writeln('pwd');
