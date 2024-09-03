@@ -19,7 +19,7 @@ class FtpSession {
   String? cachedUsername;
 
   final FileOperations fileOperations;
-  final List<String> allowedDirectories;
+  final List<String> sharedDirectories;
   final ServerType serverType;
   final LoggerHandler logger;
   bool transferInProgress = false;
@@ -30,11 +30,11 @@ class FtpSession {
     this.controlSocket, {
     this.username,
     this.password,
-    required this.allowedDirectories,
+    required this.sharedDirectories,
     required this.serverType,
     required this.logger,
   })  : commandHandler = FTPCommandHandler(controlSocket, logger),
-        fileOperations = VirtualFileOperations(allowedDirectories) {
+        fileOperations = VirtualFileOperations(sharedDirectories) {
     sendResponse('220 Welcome to the FTP server');
     controlSocket.listen(processCommand, onDone: closeConnection);
   }

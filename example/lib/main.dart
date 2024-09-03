@@ -99,7 +99,7 @@ class MyAppState extends State<MyApp> {
 
       var server = FtpServer(
         port ?? Random().nextInt(65535),
-        allowedDirectories: [serverDirectory],
+        sharedDirectories: [serverDirectory],
         serverType: ServerType.readAndWrite,
       );
 

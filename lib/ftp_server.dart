@@ -7,42 +7,56 @@ import 'logger_handler.dart';
 
 class FtpServer {
   ServerSocket? _server;
+
+  /// The port on which the FTP server will listen for incoming connections.
   final int port;
+
+  /// The username required for client authentication.
+  ///
+  /// This is optional and can be null if no authentication is required.
   final String? username;
+
+  /// The password required for client authentication.
+  ///
+  /// This is optional and can be null if no authentication is required.
   final String? password;
 
-  /// The file operations handler used by the FTP server to interact with the file system.
+  /// The server type defining the mode of the FTP server.
   ///
-  /// This can be one of the following:
-  ///
-  /// - `PhysicalFileOperations`: For managing a single physical directory.
-  ///   Example:
-  ///   ```dart
-  ///   fileOperations: PhysicalFileOperations('/home/user/ftp')
-  ///   ```
-  ///
-  /// - `VirtualFileOperations`: For managing multiple directories as a single virtual root.
-  ///   Example:
-  ///   ```dart
-  ///   fileOperations: VirtualFileOperations(['/home/user/ftp1', '/home/user/ftp2'])
-  ///   ```
+  /// - `ServerType.readOnly`: Only allows read operations (no write, delete, etc.).
+  /// - `ServerType.readAndWrite`: Allows both read and write operations.
   final ServerType serverType;
+
+  /// A logger handler used for logging various server events and commands.
+  ///
+  /// The `LoggerHandler` provides methods to log commands, responses, and general messages.
   final LoggerHandler logger;
-  final List<String> allowedDirectories;
+
+  /// A list of directories that the FTP server will expose to clients.
+  ///
+  /// These directories are accessible by clients connected to the FTP server.
+  /// The list must not be empty, otherwise an [ArgumentError] will be thrown.
+  final List<String> sharedDirectories;
 
   /// Creates an FTP server with the provided configurations.
+  ///
+  /// The [port] is required to specify where the server will listen for connections.
+  /// The [sharedDirectories] specifies which directories are accessible through the FTP server and must be provided.
+  /// The [serverType] determines the mode (read-only or read and write) of the server.
+  /// Optional parameters include [username] and [password] for authentication and a [logFunction] for custom logging.
   FtpServer(
     this.port, {
     this.username,
     this.password,
-    required this.allowedDirectories,
+    required this.sharedDirectories,
     required this.serverType,
     Function(String)? logFunction,
   }) : logger = LoggerHandler(logFunction) {
-    if (allowedDirectories.isEmpty) {
-      throw ArgumentError("Allowed directories cannot be empty");
+    if (sharedDirectories.isEmpty) {
+      throw ArgumentError("Shared directories cannot be empty");
     }
   }
+
   Future<void> start() async {
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
     logger.generalLog('FTP Server is running on port $port');
@@ -53,7 +67,7 @@ class FtpServer {
         client,
         username: username,
         password: password,
-        allowedDirectories: allowedDirectories,
+        sharedDirectories: sharedDirectories,
         serverType: serverType,
         logger: logger,
       );
@@ -70,7 +84,7 @@ class FtpServer {
         client,
         username: username,
         password: password,
-        allowedDirectories: allowedDirectories,
+        sharedDirectories: sharedDirectories,
         serverType: serverType,
         logger: logger,
       );

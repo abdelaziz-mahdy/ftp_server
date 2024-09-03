@@ -5,6 +5,11 @@ import 'file_operations.dart';
 class VirtualFileOperations extends FileOperations {
   final Map<String, String> directoryMappings = {};
 
+
+  /// Constructs a VirtualFileOperations object for managing directories.
+  ///
+  /// The `sharedDirectories` specifies directories that are accessible in this virtual file system.
+  /// Throws [ArgumentError] if no directories are provided.
   VirtualFileOperations(List<String> allowedDirectories) : super(p.separator) {
     if (allowedDirectories.isEmpty) {
       throw ArgumentError("Allowed directories cannot be empty");
