@@ -5,7 +5,6 @@ import 'file_operations.dart';
 class VirtualFileOperations extends FileOperations {
   final Map<String, String> directoryMappings = {};
 
-
   /// Constructs a VirtualFileOperations object for managing directories.
   ///
   /// The `sharedDirectories` specifies directories that are accessible in this virtual file system.
