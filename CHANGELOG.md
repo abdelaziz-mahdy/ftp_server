@@ -1,10 +1,16 @@
 ## 0.1.0
 
-### Breaking Change
+### Breaking Changes
 
-- **Update to `allowedDirectories` Logic**: The FTP server now uses a virtual file system to manage one or more directories specified in `allowedDirectories`, providing better flexibility and scalability by seamlessly handling multiple directories under a virtual root.
+- **Virtual File System**: Replaced `allowedDirectories` and `startingDirectory` with `sharedDirectories` for better directory management under a virtual root.
 
-- **Removal of Flutter Dependency**: This update removes the dependency on Flutter, allowing the FTP server to run directly with Dart, making it more lightweight and versatile.
+- **Removed Flutter Dependency**: The server now runs directly on Dart, removing the need for Flutter and making it lighter.
+
+### Enhancements
+
+- **Improved Error Handling**: Added more robust error messages and safeguards for file operations.
+
+- **Removed Legacy Code**: Cleaned up old path handling logic, streamlining file operations with the new virtual file system.
 
 ## 0.0.7
 
