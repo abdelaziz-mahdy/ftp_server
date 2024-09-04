@@ -1,3 +1,5 @@
+
+
 # Dart FTP Server
 
 This package provides a simple FTP server implementation in Dart. It supports both read-only and read-and-write modes, making it suitable for various use cases. The server allows clients to connect and perform standard FTP operations such as listing directories, retrieving files, storing files, and more.
@@ -12,7 +14,7 @@ This package provides a simple FTP server implementation in Dart. It supports bo
 
 ## Compatibility
 
-This package has been tested on macOS. It may not work as expected on Windows. If you encounter any issues, feel free to open an issue, and we will check it out.
+This package has been tested on macOS. For Linux and Windows, CI/CD test cases have been implemented to ensure the code runs and functions without any problems.
 
 ## Usage
 
@@ -25,11 +27,10 @@ import 'package:ftp_server/ftp_server.dart';
 
 void main() async {
   final server = FtpServer(
-    21,
+    port: 21,
     username: 'user',
     password: 'pass',
-    allowedDirectories: ['/home/user/ftp'],
-    startingDirectory: '/home/user/ftp',
+    sharedDirectories: ['/home/user/ftp'],
     serverType: ServerType.readAndWrite, // or ServerType.readOnly
   );
 
@@ -41,24 +42,25 @@ void main() async {
 
 The server supports the following FTP commands:
 
-- `USER <username>`: Set the username for authentication.
-- `PASS <password>`: Set the password for authentication.
-- `QUIT`: Close the control connection.
-- `PASV`: Enter passive mode.
-- `PORT <host-port>`: Enter active mode.
-- `LIST [<directory>]`: List files in the specified directory or current directory.
-- `RETR <filename>`: Retrieve the specified file.
-- `STOR <filename>`: Store a file (disabled in read-only mode).
-- `CWD <directory>`: Change the current directory.
-- `CDUP`: Change to the parent directory.
-- `MKD <directory>`: Make a new directory (disabled in read-only mode).
-- `RMD <directory>`: Remove a directory (disabled in read-only mode).
-- `DELE <filename>`: Delete a file (disabled in read-only mode).
-- `PWD`: Print the current directory.
-- `SYST`: Return system type.
-- `NOOP`: No operation (used to keep the connection alive).
-- `TYPE <A|I>`: Set the transfer type (ASCII or binary).
-- `SIZE <filename>`: Return the size of the specified file.
+| Command             | Description                                                      |
+|---------------------|------------------------------------------------------------------|
+| `USER <username>`   | Set the username for authentication.                             |
+| `PASS <password>`   | Set the password for authentication.                             |
+| `QUIT`              | Close the control connection.                                    |
+| `PASV`              | Enter passive mode.                                              |
+| `PORT <host-port>`  | Enter active mode.                                               |
+| `LIST [<directory>]`| List files in the specified directory or current directory.      |
+| `RETR <filename>`   | Retrieve the specified file.                                     |
+| `STOR <filename>`   | Store a file.                                                    |
+| `CWD <directory>`   | Change the current directory.                                    |
+| `CDUP`              | Change to the parent directory.                                  |
+| `MKD <directory>`   | Make a new directory.                                            |
+| `RMD <directory>`   | Remove a directory.                                              |
+| `DELE <filename>`   | Delete a file.                                                   |
+| `PWD`               | Print the current directory.                                     |
+| `SYST`              | Return system type.                                              |
+| `NOOP`              | No operation (used to keep the connection alive).                |
+| `SIZE <filename>`   | Return the size of the specified file.                           |
 
 ### Authentication
 
@@ -75,6 +77,4 @@ Contributions are welcome! Please fork the repository and submit a pull request 
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-
 
