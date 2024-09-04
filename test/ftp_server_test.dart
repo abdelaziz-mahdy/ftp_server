@@ -25,11 +25,9 @@ void main() {
     const String user = 'test';
     const String password = 'password';
 
-    final String prefixCommand = 'cd ${basename(sharedDirectories.first)}\n';
     String fullCommands = '''
     open $ftpHost
     user $user $password
-    $prefixCommand
     $commands
     quit
     ''';
@@ -85,8 +83,6 @@ void main() {
     await ftpClient.stdin.flush();
     ftpClient.stdin.writeln('user test password');
     await ftpClient.stdin.flush();
-    ftpClient.stdin.writeln('cd ${basename(sharedDirectories.first)}');
-    await ftpClient.stdin.flush();
   }
 
   Future<String> readAllOutput(String logFilePath) async {
@@ -114,6 +110,7 @@ void main() {
         username: 'test',
         password: 'password',
         sharedDirectories: sharedDirectories,
+        startingDirectory: basename(sharedDirectories.first),
         serverType: ServerType.readAndWrite,
         logFunction: (String message) => print(message),
       );
@@ -186,6 +183,7 @@ void main() {
     });
 
     test('Change Directory', () async {
+      ftpClient.stdin.writeln('pwd');
       ftpClient.stdin.writeln('cd /');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
@@ -539,6 +537,7 @@ void main() {
         username: 'test',
         password: 'password',
         sharedDirectories: sharedDirectories,
+        startingDirectory: sharedDirectories.first,
         serverType: ServerType.readOnly,
         logFunction: (String message) => print(message),
       );
@@ -630,6 +629,7 @@ void main() {
       server = FtpServer(
         port,
         sharedDirectories: sharedDirectories,
+        startingDirectory: basename(sharedDirectories.first),
         serverType: ServerType.readAndWrite,
         logFunction: (String message) => print(message),
       );

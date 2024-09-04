@@ -26,16 +26,26 @@ class FtpSession {
 
   String get currentDirectory => fileOperations.getCurrentDirectory();
 
-  FtpSession(
-    this.controlSocket, {
-    this.username,
-    this.password,
-    required this.sharedDirectories,
-    required this.serverType,
-    required this.logger,
-  })  : commandHandler = FTPCommandHandler(controlSocket, logger),
+  FtpSession(this.controlSocket,
+      {this.username,
+      this.password,
+      required this.sharedDirectories,
+      required this.serverType,
+      required this.logger,
+      String? startingDirectory})
+      : commandHandler = FTPCommandHandler(controlSocket, logger),
         fileOperations = VirtualFileOperations(sharedDirectories) {
     sendResponse('220 Welcome to the FTP server');
+    // Set the starting directory if provided
+    if (startingDirectory != null && fileOperations.exists(startingDirectory)) {
+      try {
+        fileOperations.changeDirectory(startingDirectory);
+      } catch (e) {
+        logger.generalLog('Failed to set starting directory: $e');
+        sendResponse('550 Failed to set starting directory');
+      }
+    }
+
     controlSocket.listen(processCommand, onDone: closeConnection);
   }
 

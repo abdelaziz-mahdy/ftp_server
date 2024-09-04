@@ -88,7 +88,7 @@ class FTPCommandHandler {
         handleAbort(session);
         break;
       default:
-        session.sendResponse('502 Command not implemented');
+        session.sendResponse('502 Command not implemented $command $argument');
         break;
     }
   }
@@ -205,7 +205,7 @@ class FTPCommandHandler {
         session.sendResponse("200 UTF8 mode ${mode ? 'enable' : 'disable'}");
         break;
       default:
-        session.sendResponse('502 Command not implemented');
+        session.sendResponse('502 Command not implemented handleOptions');
         break;
     }
   }

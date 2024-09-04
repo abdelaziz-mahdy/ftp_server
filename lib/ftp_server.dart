@@ -38,20 +38,27 @@ class FtpServer {
   /// The list must not be empty, otherwise an [ArgumentError] will be thrown.
   final List<String> sharedDirectories;
 
+  /// The starting directory for the FTP session.
+  ///
+  /// This is optional and specifies the initial directory for the FTP session. It must be
+  /// within the [sharedDirectories]. If null, the session starts in the first directory of
+  /// [sharedDirectories].
+  final String? startingDirectory;
+
   /// Creates an FTP server with the provided configurations.
   ///
   /// The [port] is required to specify where the server will listen for connections.
   /// The [sharedDirectories] specifies which directories are accessible through the FTP server and must be provided.
   /// The [serverType] determines the mode (read-only or read and write) of the server.
   /// Optional parameters include [username] and [password] for authentication and a [logFunction] for custom logging.
-  FtpServer(
-    this.port, {
-    this.username,
-    this.password,
-    required this.sharedDirectories,
-    required this.serverType,
-    Function(String)? logFunction,
-  }) : logger = LoggerHandler(logFunction) {
+  FtpServer(this.port,
+      {this.username,
+      this.password,
+      required this.sharedDirectories,
+      required this.serverType,
+      Function(String)? logFunction,
+      this.startingDirectory})
+      : logger = LoggerHandler(logFunction) {
     if (sharedDirectories.isEmpty) {
       throw ArgumentError("Shared directories cannot be empty");
     }
@@ -69,6 +76,7 @@ class FtpServer {
         password: password,
         sharedDirectories: sharedDirectories,
         serverType: serverType,
+        startingDirectory: startingDirectory,
         logger: logger,
       );
     }
@@ -86,6 +94,7 @@ class FtpServer {
         password: password,
         sharedDirectories: sharedDirectories,
         serverType: serverType,
+        startingDirectory: startingDirectory,
         logger: logger,
       );
     });
