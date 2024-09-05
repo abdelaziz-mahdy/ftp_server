@@ -1,8 +1,8 @@
-## 0.1.0
+## 1.0.0
 
 ### Breaking Changes
 
-- **Virtual File System**: Replaced `allowedDirectories` and `startingDirectory` with `sharedDirectories` for better directory management under a virtual root.
+- **Virtual File System**: Replaced `allowedDirectories` with `sharedDirectories` for better directory management under a virtual root. All directories specified in `sharedDirectories` are now shared under a virtual root, providing a unified view of multiple directories to the FTP clients.
 
 - **Removed Flutter Dependency**: The server now runs directly on Dart, removing the need for Flutter and making it lighter.
 
