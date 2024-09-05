@@ -14,72 +14,72 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Flutter
-      uses: subosito/flutter-action@v2
-      with:
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
           channel: stable
           cache: true
-    - name: Install dependencies
-      run: flutter pub get
+      - name: Install dependencies
+        run: flutter pub get
 
-    - name: Run Flutter analyzer
-      run: flutter analyze
+      - name: Run Flutter analyzer
+        run: flutter analyze
 
-    - name: Run Flutter format check
-      run: dart format --set-exit-if-changed .
+      - name: Run Flutter format check
+        run: dart format --set-exit-if-changed .
 
-    - name: Run tests
-      run: flutter test
+      - name: Run tests
+        run: flutter test
 
   macos:
     name: macOS
     runs-on: macos-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Flutter
-      uses: subosito/flutter-action@v2
-      with:
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
           channel: stable
           cache: true
-    - name: Install dependencies
-      run: flutter pub get
+      - name: Install dependencies
+        run: flutter pub get
 
-    - name: Run Flutter analyzer
-      run: flutter analyze
+      - name: Run Flutter analyzer
+        run: flutter analyze
 
-    - name: Run Flutter format check
-      run: dart format --set-exit-if-changed .
+      - name: Run Flutter format check
+        run: dart format --set-exit-if-changed .
 
-    - name: Run tests
-      run: flutter test
+      - name: Run tests
+        run: flutter test
 
   windows:
     name: Windows
     runs-on: windows-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Flutter
-      uses: subosito/flutter-action@v2
-      with:
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
           channel: stable
           cache: true
-    - name: Install dependencies
-      run: flutter pub get
+      - name: Install dependencies
+        run: flutter pub get
 
-    - name: Run Flutter analyzer
-      run: flutter analyze
+      - name: Run Flutter analyzer
+        run: flutter analyze
 
-    - name: Run Flutter format check
-      run: dart format --set-exit-if-changed .
+      - name: Run Flutter format check
+        run: dart format --set-exit-if-changed .
 
-    - name: Run tests
-      run: flutter test
+      - name: Run tests
+        run: flutter test

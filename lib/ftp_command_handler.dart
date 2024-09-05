@@ -32,7 +32,8 @@ class FTPCommandHandler {
       case 'PORT':
         handlePort(argument, session);
         break;
-      case 'LIST' || 'NLST':
+      case 'LIST':
+      case 'NLST':
         handleList(argument, session);
         break;
       case 'RETR':
@@ -47,10 +48,12 @@ class FTPCommandHandler {
       case 'CDUP':
         handleCdup(session);
         break;
-      case 'MKD' || 'XMKD':
+      case 'MKD':
+      case 'XMKD':
         handleMkd(argument, session);
         break;
-      case 'RMD' || 'XRMD':
+      case 'RMD':
+      case 'XRMD':
         handleRmd(argument, session);
         break;
       case 'DELE':
@@ -68,8 +71,9 @@ class FTPCommandHandler {
       case 'SIZE':
         handleSize(argument, session);
         break;
-      case 'PWD' || 'XPWD':
-        handleCurPath(argument, session);
+      case 'PWD':
+      case 'XPWD':
+        handleCurPath(session);
         break;
       case 'OPTS':
         handleOptions(argument, session);
@@ -80,8 +84,11 @@ class FTPCommandHandler {
       case 'EPSV':
         handleEpsv(session);
         break;
+      case 'ABOR':
+        handleAbort(session);
+        break;
       default:
-        session.sendResponse('502 Command not implemented');
+        session.sendResponse('502 Command not implemented $command $argument');
         break;
     }
   }
@@ -184,8 +191,9 @@ class FTPCommandHandler {
     session.fileSize(argument);
   }
 
-  void handleCurPath(String argument, FtpSession session) {
-    session.currentPath();
+  void handleCurPath(FtpSession session) {
+    String currentPath = session.fileOperations.getCurrentDirectory();
+    session.sendResponse('257 "$currentPath" is current directory');
   }
 
   void handleOptions(String argument, FtpSession session) {
@@ -197,7 +205,7 @@ class FTPCommandHandler {
         session.sendResponse("200 UTF8 mode ${mode ? 'enable' : 'disable'}");
         break;
       default:
-        session.sendResponse('502 Command not implemented');
+        session.sendResponse('502 Command not implemented handleOptions');
         break;
     }
   }
@@ -213,5 +221,9 @@ class FTPCommandHandler {
 
   void handleEpsv(FtpSession session) {
     session.enterExtendedPassiveMode();
+  }
+
+  void handleAbort(FtpSession session) {
+    session.abortTransfer();
   }
 }
