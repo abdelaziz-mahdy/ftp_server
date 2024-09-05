@@ -2,11 +2,11 @@
 
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
 import 'package:path/path.dart';
+import 'package:test/test.dart';
 import 'platform_output_handler/platform_output_handler_factory.dart';
 import 'platform_output_handler/platform_output_handler.dart';
 

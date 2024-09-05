@@ -1,3 +1,7 @@
+## 1.0.2
+
+- Remove flutter test Dependency
+
 ## 1.0.1
 
 - Fix Readme.
