@@ -31,7 +31,7 @@ void main() async {
     username: 'user',
     password: 'pass',
     sharedDirectories: ['/home/user/ftp'],
-    startingDirectory: basename('/home/user/ftp'),
+    startingDirectory: 'ftp',
     serverType: ServerType.readAndWrite, // or ServerType.readOnly
   );
 
