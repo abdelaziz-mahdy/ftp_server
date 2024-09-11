@@ -101,6 +101,7 @@ class MyAppState extends State<MyApp> {
         port ?? Random().nextInt(65535),
         sharedDirectories: [serverDirectory],
         serverType: ServerType.readAndWrite,
+        logFunction: (p0) => print(p0),
       );
 
       Future serverFuture = server.start();
