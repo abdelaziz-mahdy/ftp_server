@@ -118,7 +118,7 @@ void main() {
 
       ftpClient = await Process.start(
         Platform.isWindows ? 'ftp' : 'bash',
-        Platform.isWindows ? ['-n', '-v'] : ['-c', 'sudo ftp -n -v'],
+        Platform.isWindows ? ['-n', '-v'] : ['-c', 'ftp -n -v'],
         runInShell: true,
       );
 
@@ -545,7 +545,7 @@ void main() {
 
       ftpClient = await Process.start(
         Platform.isWindows ? 'ftp' : 'bash',
-        Platform.isWindows ? ['-n', '-v'] : ['-c', 'sudo ftp -n -v'],
+        Platform.isWindows ? ['-n', '-v'] : ['-c', 'ftp -n -v'],
         runInShell: true,
       );
 
@@ -637,7 +637,7 @@ void main() {
 
       ftpClient = await Process.start(
         Platform.isWindows ? 'ftp' : 'bash',
-        Platform.isWindows ? ['-n', '-v'] : ['-c', 'sudo ftp -n -v'],
+        Platform.isWindows ? ['-n', '-v'] : ['-c', 'ftp -n -v'],
         runInShell: true,
       );
 
@@ -689,6 +689,117 @@ void main() {
 
       expect(output, contains('257 "test_no_auth_dir" created'));
       expect(output, contains('test_no_auth_dir'));
+    });
+  });
+
+  group('Server handles multiple clients simultaneously', () {
+    final int numClients = 5;
+    final List<Process> ftpClients = [];
+    final List<String> logFilePaths = [];
+    final List<String> clientDirs = [];
+
+    setUpAll(() async {
+      if (!await isFtpAvailable()) {
+        await installFtp();
+      }
+      if (!await isFtpAvailable()) {
+        throw Exception(
+            'FTP command is not available and could not be installed.');
+      }
+
+      server = FtpServer(
+        port,
+        sharedDirectories: sharedDirectories,
+        startingDirectory: basename(sharedDirectories.first),
+        serverType: ServerType.readAndWrite,
+        logFunction: (String message) => print(message),
+      );
+      await server.startInBackground();
+      for (int i = 0; i < numClients; i++) {
+        final logFilePath =
+            '${sharedDirectories.first}/ftpsession_client_$i.log';
+        logFilePaths.add(logFilePath);
+
+        // Start the FTP clients
+        ftpClients.add(await Process.start(
+          Platform.isWindows ? 'ftp' : 'bash',
+          Platform.isWindows ? ['-n', '-v'] : ['-c', 'ftp -n -v'],
+          runInShell: true,
+        ));
+
+        // Authenticate the clients
+        await connectAndAuthenticate(ftpClients[i], logFilePath);
+      }
+    });
+
+    tearDownAll(() async {
+      // Clean up each client and its resources
+      for (var i = 0; i < numClients; i++) {
+        ftpClients[i].kill(); // Kill the client process
+      }
+
+      // Delete the logs created during the test
+      for (var logPath in logFilePaths) {
+        if (File(logPath).existsSync()) {
+          File(logPath).deleteSync();
+        }
+      }
+    });
+
+    test('Multiple clients execute commands simultaneously', () async {
+      final List<Future<void>> clientTasks = [];
+
+      for (int i = 0; i < numClients; i++) {
+        clientTasks.add(Future<void>(() async {
+          // Client-specific directory
+          final dirName = 'test_dir_client_$i';
+          clientDirs.add(dirName);
+
+          if (Platform.isWindows) {
+            // Windows-specific commands
+            var output =
+                await execFTPCmdOnWin('mkdir $dirName\nls\nrmdir $dirName\nls');
+
+            // Check directory creation
+            expect(output, contains('257 "$dirName" created'));
+
+            // Check directory listing contains the newly created directory
+            expect(output, contains(dirName));
+
+            // Check directory deletion
+            expect(output, contains('250 Directory deleted'));
+
+            // Check directory listing after deletion
+            expect(output, contains(dirName));
+          } else {
+            // Non-Windows (Linux/Mac) commands
+            ftpClients[i].stdin.writeln('mkdir $dirName');
+            ftpClients[i].stdin.writeln('ls');
+            ftpClients[i].stdin.writeln('rmdir $dirName');
+            ftpClients[i].stdin.writeln('ls');
+            ftpClients[i].stdin.writeln('quit');
+            await ftpClients[i].stdin.flush();
+
+            // Check the output for client `i`
+            var output = await readAllOutput(logFilePaths[i]);
+
+            // Check directory creation
+            expect(output, contains('257 "$dirName" created'));
+
+            // Check directory listing contains the newly created directory
+            expect(output, contains(dirName));
+
+            // Check directory deletion
+            expect(output, contains('250 Directory deleted'));
+
+            // Check directory listing after deletion
+            expect(output, contains(dirName));
+          }
+        }));
+      }
+
+      // Run all client tasks in parallel
+      await Future.wait(clientTasks);
     });
   });
 }
