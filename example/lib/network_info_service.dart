@@ -12,7 +12,7 @@ class NetworkInfoService {
     String? ipAddress;
 
     try {
-      // Try to get the IP address from Wi-Fi (192.x.x.x preferred)
+      // Try to get the IP address from Wi-Fi
       ipAddress = await info.getWifiIP();
       if (ipAddress != null) {
         _logger.info('Wifi IP Address: $ipAddress');
@@ -31,10 +31,10 @@ class NetworkInfoService {
           .where((ip) => ip.type == InternetAddressType.IPv4)
           .toList();
 
-      // Filter IPs that start with '192' (Wi-Fi IPs)
+      // Filter IPs that start with '192' 
       final wifiIp = ipList.firstWhere(
         (address) => address.address.startsWith('192'),
-        orElse: () => ipList.first, // Fallback to first if no '192' found
+        orElse: () => ipList.first, 
       );
 
       ipAddress = wifiIp.address;
