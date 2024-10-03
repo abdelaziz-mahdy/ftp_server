@@ -3,6 +3,7 @@
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
+import 'package:example/network_info_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:ftp_server/ftp_server.dart';
@@ -55,15 +56,8 @@ class MyAppState extends State<MyApp> {
     }
   }
 
-  Future<String> getIpAddress() async {
-    for (var interface in await NetworkInterface.list()) {
-      for (var addr in interface.addresses) {
-        if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-          return addr.address;
-        }
-      }
-    }
-    return 'Unknown IP';
+  Future<String?> getIpAddress() async {
+    return await NetworkInfoService.getDeviceIpAddress();
   }
 
   Future<String?> pickDirectory() async {
