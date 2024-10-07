@@ -53,8 +53,8 @@ class FtpSession {
     try {
       String commandLine = utf8.decode(data).trim();
       commandHandler.handleCommand(commandLine, this);
-    } catch (e) {
-      logger.generalLog(e.toString());
+    } catch (e, s) {
+      logger.generalLog("error: $e stack: $s ,input bytes $data");
       sendResponse('500 Internal server error');
     }
   }
