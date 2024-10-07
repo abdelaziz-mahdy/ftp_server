@@ -23,7 +23,7 @@ class FtpSession {
   final ServerType serverType;
   final LoggerHandler logger;
   bool transferInProgress = false;
-
+  Future? _gettingDataSocket;
   String get currentDirectory => fileOperations.getCurrentDirectory();
 
   FtpSession(this.controlSocket,
@@ -71,7 +71,8 @@ class FtpSession {
     logger.generalLog('Connection closed');
   }
 
-  bool openDataConnection() {
+  Future<bool> openDataConnection() async {
+    await _gettingDataSocket;
     if (dataSocket == null) {
       sendResponse('425 Can\'t open data connection');
       return false;
@@ -83,11 +84,14 @@ class FtpSession {
   Future<void> waitForClientDataSocket({Duration? timeout}) {
     var result = dataListener!.first;
     if (timeout != null) {
-      result = result.timeout(timeout);
+      result = result.timeout(timeout, onTimeout: () {
+        throw TimeoutException(
+            'Timeout reached while waiting for client data socket');
+      });
     }
     return result.then((value) => dataSocket = value);
   }
-  //TODO: make the open data function wait for the waitForClientDataSocket result 
+
   Future<void> enterPassiveMode() async {
     try {
       dataListener = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
@@ -96,7 +100,11 @@ class FtpSession {
       int p2 = port & 0xFF;
       var address = (await _getIpAddress()).replaceAll('.', ',');
       sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
-      await waitForClientDataSocket(timeout: Duration(seconds: 30));
+
+      /// assigning the future to make sure it finishes before running any other operation
+      /// check [openDataConnection]
+      _gettingDataSocket =
+          waitForClientDataSocket(timeout: Duration(seconds: 30));
     } catch (e) {
       sendResponse('425 Can\'t enter passive mode');
       logger.generalLog('Error entering passive mode: $e');
@@ -139,7 +147,7 @@ class FtpSession {
   }
 
   Future<void> listDirectory(String path) async {
-    if (!openDataConnection()) {
+    if (!await openDataConnection()) {
       return;
     }
 
@@ -198,7 +206,7 @@ class FtpSession {
 
 // Method to retrieve a file from the server
   Future<void> retrieveFile(String filename) async {
-    if (!openDataConnection()) {
+    if (!await openDataConnection()) {
       return;
     }
 
@@ -252,7 +260,7 @@ class FtpSession {
 
 // Method to store a file on the server
   Future<void> storeFile(String filename) async {
-    if (!openDataConnection()) {
+    if (!await openDataConnection()) {
       return;
     }
 

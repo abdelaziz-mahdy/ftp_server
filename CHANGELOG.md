@@ -1,3 +1,7 @@
+## 1.0.3
+- Android fix ip address
+- Fix race condition for passive transfer
+
 ## 1.0.2
 
 - Remove flutter test Dependency
