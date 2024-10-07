@@ -212,10 +212,12 @@ class FTPCommandHandler {
 
   void handleFeat(FtpSession session) {
     session.sendResponse('211-Features:');
+
     session.sendResponse(' SIZE');
     session.sendResponse(' MDTM');
     session.sendResponse(' EPSV');
     session.sendResponse(' PASV');
+    session.sendResponse(' UTF8');
     session.sendResponse('211 End');
   }
 

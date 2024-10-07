@@ -696,7 +696,6 @@ void main() {
     final int numClients = 5;
     final List<Process> ftpClients = [];
     final List<String> logFilePaths = [];
-    final List<String> clientDirs = [];
 
     setUpAll(() async {
       if (!await isFtpAvailable()) {
@@ -753,7 +752,6 @@ void main() {
         clientTasks.add(Future<void>(() async {
           // Client-specific directory
           final dirName = 'test_dir_client_$i';
-          clientDirs.add(dirName);
 
           if (Platform.isWindows) {
             // Windows-specific commands
