@@ -71,15 +71,21 @@ class FtpSession {
     logger.generalLog('Connection closed');
   }
 
-  Future<bool> openDataConnection() async {
-    await Future.delayed(const Duration(milliseconds: 100));
-
+  bool openDataConnection() {
     if (dataSocket == null) {
       sendResponse('425 Can\'t open data connection');
       return false;
     }
     sendResponse('150 Opening data connection');
     return true;
+  }
+
+  Future<void> waitForClientDataSocket({Duration? timeout}) {
+    var result = dataListener!.first;
+    if (timeout != null) {
+      result = result.timeout(timeout);
+    }
+    return result.then((value) => dataSocket = value);
   }
 
   Future<void> enterPassiveMode() async {
@@ -90,9 +96,7 @@ class FtpSession {
       int p2 = port & 0xFF;
       var address = (await _getIpAddress()).replaceAll('.', ',');
       sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
-      dataListener!.first.then((socket) {
-        dataSocket = socket;
-      });
+      await waitForClientDataSocket(timeout: Duration(seconds: 30));
     } catch (e) {
       sendResponse('425 Can\'t enter passive mode');
       logger.generalLog('Error entering passive mode: $e');
@@ -135,7 +139,7 @@ class FtpSession {
   }
 
   Future<void> listDirectory(String path) async {
-    if (!await openDataConnection()) {
+    if (!openDataConnection()) {
       return;
     }
 
@@ -194,7 +198,7 @@ class FtpSession {
 
 // Method to retrieve a file from the server
   Future<void> retrieveFile(String filename) async {
-    if (!await openDataConnection()) {
+    if (!openDataConnection()) {
       return;
     }
 
@@ -248,7 +252,7 @@ class FtpSession {
 
 // Method to store a file on the server
   Future<void> storeFile(String filename) async {
-    if (!await openDataConnection()) {
+    if (!openDataConnection()) {
       return;
     }
 
