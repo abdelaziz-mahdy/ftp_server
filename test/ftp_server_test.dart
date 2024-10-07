@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
@@ -31,14 +32,16 @@ void main() {
     $commands
     quit
     ''';
-
-    File scriptFile = File('ftp_win_script.txt');
+    // this to avoid conflicting commands
+    int randomNumber = Random().nextInt(100000);
+    String fileName = 'ftp_win_script_$randomNumber.txt';
+    File scriptFile = File(fileName);
     await scriptFile.writeAsString(fullCommands);
 
     try {
       ProcessResult result = await Process.run(
         'ftp',
-        ['-n', '-v', '-s:ftp_win_script.txt'],
+        ['-n', '-v', '-s:$fileName'],
         runInShell: true,
       );
       return result.stdout + result.stderr;
