@@ -31,10 +31,10 @@ class NetworkInfoService {
           .where((ip) => ip.type == InternetAddressType.IPv4)
           .toList();
 
-      // Filter IPs that start with '192' 
+      // Filter IPs that start with '192'
       final wifiIp = ipList.firstWhere(
         (address) => address.address.startsWith('192'),
-        orElse: () => ipList.first, 
+        orElse: () => ipList.first,
       );
 
       ipAddress = wifiIp.address;
