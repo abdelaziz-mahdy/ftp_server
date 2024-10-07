@@ -114,13 +114,20 @@ class FtpSession {
 
   Future<String> _getIpAddress() async {
     try {
-      for (var interface in await NetworkInterface.list()) {
-        for (var addr in interface.addresses) {
-          if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-            return addr.address;
-          }
-        }
-      }
+      final networkInterfaces = await NetworkInterface.list();
+      final ipList = networkInterfaces
+          .map((interface) => interface.addresses)
+          .expand((ip) => ip)
+          .where((ip) => ip.type == InternetAddressType.IPv4)
+          .toList();
+
+      // Filter IPs that start with '192'
+      final wifiIp = ipList.firstWhere(
+        (address) => address.address.startsWith('192'),
+        orElse: () => ipList.first,
+      );
+
+      return wifiIp.address;
     } catch (e) {
       logger.generalLog('Error getting IP address: $e');
     }
