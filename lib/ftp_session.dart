@@ -87,7 +87,7 @@ class FtpSession {
     }
     return result.then((value) => dataSocket = value);
   }
-
+  //TODO: make the open data function wait for the waitForClientDataSocket result 
   Future<void> enterPassiveMode() async {
     try {
       dataListener = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
