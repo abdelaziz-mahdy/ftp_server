@@ -9,11 +9,13 @@ import 'logger_handler.dart';
 import 'file_operations/file_operations.dart';
 
 class FtpSession {
-  final Socket controlSocket;
+  Socket controlSocket;
   bool isAuthenticated = false;
   final FTPCommandHandler commandHandler;
   ServerSocket? dataListener;
+  SecureServerSocket? secureDataListener;
   Socket? dataSocket;
+  SecureSocket? secureDataSocket;
   final String? username;
   final String? password;
   String? cachedUsername;
@@ -26,13 +28,18 @@ class FtpSession {
   Future? _gettingDataSocket;
   String get currentDirectory => fileOperations.getCurrentDirectory();
 
+  final bool secure;
+  final SecurityContext? securityContext;
+
   FtpSession(this.controlSocket,
       {this.username,
       this.password,
       required this.sharedDirectories,
       required this.serverType,
       required this.logger,
-      String? startingDirectory})
+      String? startingDirectory,
+      this.secure = true,
+      this.securityContext})
       : commandHandler = FTPCommandHandler(controlSocket, logger),
         fileOperations = VirtualFileOperations(sharedDirectories) {
     sendResponse('220 Welcome to the FTP server');
@@ -82,27 +89,46 @@ class FtpSession {
   }
 
   Future<void> waitForClientDataSocket({Duration? timeout}) {
-    var result = dataListener!.first;
+    var result;
+    if (secure) {
+      result = secureDataListener!.first;
+    } else {
+      result = dataListener!.first;
+    }
     if (timeout != null) {
       result = result.timeout(timeout, onTimeout: () {
         throw TimeoutException(
             'Timeout reached while waiting for client data socket');
       });
     }
-    return result.then((value) => dataSocket = value);
+
+    return result.then((value) {
+      if (value is SecureSocket) {
+        secureDataSocket = value;
+      } else {
+        dataSocket = value;
+      }
+    });
   }
 
   Future<void> enterPassiveMode() async {
     try {
-      dataListener = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
+      // Secure the data connection if needed
+      if (secure) {
+        secureDataListener = await SecureServerSocket.bind(
+            InternetAddress.anyIPv4, 0, securityContext
+            // onBadCertificate: (X509Certificate cert) => true,
+            );
+      } else {
+        dataListener = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
+      }
+
       int port = dataListener!.port;
       int p1 = port >> 8;
       int p2 = port & 0xFF;
       var address = (await _getIpAddress()).replaceAll('.', ',');
       sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
 
-      /// assigning the future to make sure it finishes before running any other operation
-      /// check [openDataConnection]
       _gettingDataSocket =
           waitForClientDataSocket(timeout: Duration(seconds: 30));
     } catch (e) {
@@ -116,7 +142,11 @@ class FtpSession {
       List<String> parts = parameters.split(',');
       String ip = parts.take(4).join('.');
       int port = int.parse(parts[4]) * 256 + int.parse(parts[5]);
-      dataSocket = await Socket.connect(ip, port);
+      if (secure) {
+        secureDataSocket = await SecureSocket.connect(ip, port);
+      } else {
+        dataSocket = await Socket.connect(ip, port);
+      }
       sendResponse('200 Active mode connection established');
     } catch (e) {
       sendResponse('425 Can\'t enter active mode');

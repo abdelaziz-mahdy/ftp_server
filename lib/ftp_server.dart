@@ -7,6 +7,7 @@ import 'logger_handler.dart';
 
 class FtpServer {
   ServerSocket? _server;
+  SecureServerSocket? _secureServerSocket;
 
   /// The port on which the FTP server will listen for incoming connections.
   final int port;
@@ -45,6 +46,12 @@ class FtpServer {
   /// [sharedDirectories].
   final String? startingDirectory;
 
+  /// if the ftp server should be secured by ssl
+  /// a [securityContext] needs to be provided for this to work
+  final bool secure;
+
+  final SecurityContext? securityContext;
+
   /// Creates an FTP server with the provided configurations.
   ///
   /// The [port] is required to specify where the server will listen for connections.
@@ -57,51 +64,75 @@ class FtpServer {
       required this.sharedDirectories,
       required this.serverType,
       Function(String)? logFunction,
-      this.startingDirectory})
+      this.startingDirectory,
+      this.secure = true,
+      this.securityContext})
       : logger = LoggerHandler(logFunction) {
     if (sharedDirectories.isEmpty) {
       throw ArgumentError("Shared directories cannot be empty");
     }
   }
+  _startServer() async {
+    if (secure) {
+      _secureServerSocket = await SecureServerSocket.bind(
+          InternetAddress.anyIPv4,
+          port,
+          securityContext ?? SecurityContext.defaultContext);
+    } else {
+      _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
+    }
+  }
 
   Future<void> start() async {
-    _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
+    await _startServer();
     logger.generalLog('FTP Server is running on port $port');
-    await for (var client in _server!) {
+    var socket;
+    if (secure) {
+      socket = _secureServerSocket;
+    } else {
+      socket = _server;
+    }
+    await for (var client in socket!) {
       logger.generalLog(
           'New client connected from ${client.remoteAddress.address}:${client.remotePort}');
-      FtpSession(
-        client,
-        username: username,
-        password: password,
-        sharedDirectories: sharedDirectories,
-        serverType: serverType,
-        startingDirectory: startingDirectory,
-        logger: logger,
-      );
+      FtpSession(client,
+          username: username,
+          password: password,
+          sharedDirectories: sharedDirectories,
+          serverType: serverType,
+          startingDirectory: startingDirectory,
+          logger: logger,
+          secure: secure);
     }
   }
 
   Future<void> startInBackground() async {
-    _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
+    await _startServer();
     logger.generalLog('FTP Server is running on port $port');
-    _server!.listen((client) {
+    var socket;
+    if (secure) {
+      socket = _secureServerSocket;
+    } else {
+      socket = _server;
+    }
+
+    socket!.listen((client) {
       logger.generalLog(
           'New client connected from ${client.remoteAddress.address}:${client.remotePort}');
-      FtpSession(
-        client,
-        username: username,
-        password: password,
-        sharedDirectories: sharedDirectories,
-        serverType: serverType,
-        startingDirectory: startingDirectory,
-        logger: logger,
-      );
+      FtpSession(client,
+          username: username,
+          password: password,
+          sharedDirectories: sharedDirectories,
+          serverType: serverType,
+          startingDirectory: startingDirectory,
+          logger: logger,
+          secure: secure);
     });
   }
 
   Future<void> stop() async {
     await _server?.close();
+    await _secureServerSocket?.close();
     logger.generalLog('FTP Server stopped');
   }
 }
