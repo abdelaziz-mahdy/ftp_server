@@ -67,7 +67,8 @@ class FtpSession {
       String commandLine = utf8.decode(data).trim();
       commandHandler.handleCommand(commandLine, this);
     } catch (e, s) {
-      logger.generalLog("error: $e stack: $s ,input bytes $data");
+      logger.generalLog(
+          "error: $e stack: $s ,input bytes $data, malformed ${utf8.decode(data, allowMalformed: true)}");
       sendResponse('500 Internal server error');
     }
   }

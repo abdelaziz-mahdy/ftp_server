@@ -30,7 +30,7 @@ class MyAppState extends State<MyApp> {
   bool isLoading = false;
   Isolate? isolate;
   ReceivePort? receivePort;
-  int? port;
+  int? port = 8012;
   @override
   void initState() {
     super.initState();
@@ -98,6 +98,7 @@ class MyAppState extends State<MyApp> {
         sharedDirectories: [serverDirectory],
         serverType: ServerType.readAndWrite,
         logFunction: (p0) => print(p0),
+        secure: true,
       );
 
       Future serverFuture = server.start();
@@ -107,7 +108,7 @@ class MyAppState extends State<MyApp> {
       setState(() {
         serverStatus = 'Server is running';
         connectionInfo =
-            'Connect using FTP client:\nftp://$address:${server.port}';
+            'Connect using FTP client:\n${server.secure ? "ftps" : "ftp"}://$address:${server.port}';
         isLoading = false;
       });
 

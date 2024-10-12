@@ -217,6 +217,7 @@ class FTPCommandHandler {
   void handleFeat(FtpSession session) {
     session.sendResponse('211-Features:');
 
+    session.sendResponse(' AUTH TLS');
     session.sendResponse(' SIZE');
     session.sendResponse(' MDTM');
     session.sendResponse(' EPSV');
@@ -234,14 +235,15 @@ class FTPCommandHandler {
   }
 
   void handleAuth(String argument, FtpSession session) async {
-    if (argument.toUpperCase() == 'TLS') {
+    if (argument.toUpperCase() == 'TLS' && session.secure) {
       session.sendResponse('234 AUTH TLS successful');
-      session.controlSocket = await SecureSocket.secure(
-        session.controlSocket,
-        onBadCertificate: (X509Certificate cert) =>
-            true, // Handle certificate validation
-        // certificateName: 'Your Certificate Name',
-      );
+      session.controlSocket = await SecureSocket.secure(session.controlSocket,
+          onBadCertificate: (X509Certificate cert) =>
+              true, // Handle certificate validation
+          context: session.securityContext
+          // certificateName: 'Your Certificate Name',
+          );
+
       session.logger.generalLog('TLS negotiation completed');
     } else {
       session.sendResponse('504 AUTH type not supported');

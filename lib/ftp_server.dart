@@ -4,6 +4,7 @@ library ftp_server;
 import 'dart:io';
 import 'dart:async';
 
+import 'package:ftp_server/certificate_service.dart';
 import 'package:ftp_server/socket_handler/plain_socket_handler.dart';
 import 'package:ftp_server/socket_handler/secure_socket_handler.dart';
 import 'package:ftp_server/socket_handler/socket_handler.dart';
@@ -80,16 +81,24 @@ class FtpServer {
     }
 
     // Initialize the appropriate SocketHandler based on the 'secure' flag
+    // if (secure) {
+    //   securityContext ??= SecurityContext.defaultContext;
+    //   if (securityContext == null) {
+    //     throw ArgumentError(
+    //         "SecurityContext must be provided for secure connections");
+    //   }
+    //   _socketHandler = SecureSocketHandlerImpl(securityContext!);
+    // } else {
     if (secure) {
-      securityContext ??= SecurityContext.defaultContext;
-      if (securityContext == null) {
-        throw ArgumentError(
-            "SecurityContext must be provided for secure connections");
-      }
-      _socketHandler = SecureSocketHandlerImpl(securityContext!);
-    } else {
-      _socketHandler = PlainSocketHandler();
+      // securityContext ??= SecurityContext.defaultContext;
+
+      securityContext ??=
+          CertificateService.generateSecurityContext().createSecurityContext();
+                _socketHandler = SecureSocketHandlerImpl(securityContext!);
+
     }
+    _socketHandler = PlainSocketHandler();
+    // }
   }
 
   Future<void> _startServer() async {
