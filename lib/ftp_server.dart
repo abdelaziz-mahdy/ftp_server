@@ -89,15 +89,24 @@ class FtpServer {
     //   }
     //   _socketHandler = SecureSocketHandlerImpl(securityContext!);
     // } else {
-    if (secure) {
-      // securityContext ??= SecurityContext.defaultContext;
+    // if (secure) {
+    //   // securityContext ??= SecurityContext.defaultContext;
 
-      securityContext ??=
-          CertificateService.generateSecurityContext().createSecurityContext();
+    //   securityContext ??=
+    //       CertificateService.generateSecurityContext().createSecurityContext();
+    //   _socketHandler = SecureSocketHandlerImpl(securityContext!);
+    // } else {
+    // securityContext ??=
+    //     CertificateService.generateSecurityContext().createSecurityContext();
+    // securityContext ??= SecurityContext.defaultContext;
+    securityContext ??=
+        CertificateService.generateSecurityContext().createSecurityContext();
+    if (secure) {
       _socketHandler = SecureSocketHandlerImpl(securityContext!);
     } else {
       _socketHandler = PlainSocketHandler();
     }
+    // }
     // }
   }
 

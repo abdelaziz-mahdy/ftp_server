@@ -241,6 +241,7 @@ class FTPCommandHandler {
           onBadCertificate: (X509Certificate cert) =>
               true, // Handle certificate validation
           context: session.securityContext
+          // context: SecurityContext.defaultContext
           // certificateName: 'Your Certificate Name',
           );
 

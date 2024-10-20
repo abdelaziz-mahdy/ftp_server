@@ -21,6 +21,9 @@ class StoredSecurityContext {
 
   /// Creates and returns a [SecurityContext] from this stored security context.
   SecurityContext createSecurityContext() {
+    return SecurityContext()
+      ..usePrivateKeyBytes(privateKey.codeUnits)
+      ..useCertificateChainBytes(certificate.codeUnits);
     final context = SecurityContext();
 
     try {
@@ -40,38 +43,6 @@ class StoredSecurityContext {
 
     return context;
   }
-
-  /// Creates and returns a [SecurityContext] from this stored security context.
-  SecurityContext createSecurityContextDem() {
-    final context = SecurityContext();
-
-    try {
-      // Convert PEM to DER for certificate and private key
-      final certDer = _pemToDer(certificate);
-      final keyDer = _pemToDer(privateKey);
-
-      // Load the certificate chain from the DER bytes
-      context.useCertificateChainBytes(certDer);
-
-      // Load the private key from the DER bytes
-      context.usePrivateKeyBytes(keyDer);
-    } catch (e) {
-      print('Error setting up SecurityContext: $e');
-      rethrow;
-    }
-
-    return context;
-  }
-
-  /// Helper method to convert PEM string to DER bytes
-  Uint8List _pemToDer(String pem) {
-    final lines = pem
-        .replaceAll('\r\n', '\n')
-        .split('\n')
-        .where((line) => line.isNotEmpty && !line.startsWith('---'))
-        .join();
-    return base64Decode(lines);
-  }
 }
 
 class CertificateService {
@@ -83,12 +54,13 @@ class CertificateService {
     final publicKey = keyPair.publicKey as RSAPublicKey;
     final dn = {
       'CN': 'Ftp User',
-      'O': '',
-      'OU': '',
-      'L': '',
-      'S': '',
-      'C': '',
+      'O': 'Your Organization',
+      'OU': 'Your Organizational Unit',
+      'L': 'Your City',
+      'S': 'Your State',
+      'C': 'Your Country Code',
     };
+
     final csr = X509Utils.generateRsaCsrPem(dn, privateKey, publicKey);
     final certificate = X509Utils.generateSelfSignedCertificate(
       keyPair.privateKey,
