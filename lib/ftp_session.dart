@@ -32,7 +32,7 @@ class FtpSession {
   Future? _gettingDataSocket;
   String get currentDirectory => fileOperations.getCurrentDirectory();
 
-  final bool secure;
+  bool secure;
   final SecurityContext? securityContext;
 
   FtpSession(

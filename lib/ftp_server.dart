@@ -53,10 +53,15 @@ class FtpServer {
   /// [sharedDirectories].
   final String? startingDirectory;
 
-  /// if the ftp server should be secured by ssl
-  /// a [securityContext] needs to be provided for this to work
+  /// if the server is running secure by TLS or not
+  /// the default value is `false`
+  /// if `true` normal FTP will not work only TLS will be started (some clients may not be able to connect)
+  /// if `false` normal FTP will work and it can be upgraded to TLS using the command `AUTH TLS`
+  /// a [securityContext] can be provided or it will be created automatically
   final bool secure;
 
+  /// the security context for the server
+  /// a [securityContext] can be provided or it will be created automatically
   SecurityContext? securityContext;
 
   /// Creates an FTP server with the provided configurations.
@@ -106,6 +111,7 @@ class FtpServer {
     } else {
       _socketHandler = PlainSocketHandler();
     }
+    _socketHandler = PlainSocketHandler();
     // }
     // }
   }
