@@ -94,8 +94,7 @@ class FtpServer {
 
       securityContext ??=
           CertificateService.generateSecurityContext().createSecurityContext();
-                _socketHandler = SecureSocketHandlerImpl(securityContext!);
-
+      _socketHandler = SecureSocketHandlerImpl(securityContext!);
     }
     _socketHandler = PlainSocketHandler();
     // }

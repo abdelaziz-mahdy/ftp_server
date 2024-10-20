@@ -76,7 +76,8 @@ class StoredSecurityContext {
 
 class CertificateService {
   /// Generates a random [StoredSecurityContext].
-  static StoredSecurityContext generateSecurityContext([AsymmetricKeyPair? keyPair]) {
+  static StoredSecurityContext generateSecurityContext(
+      [AsymmetricKeyPair? keyPair]) {
     keyPair ??= CryptoUtils.generateRSAKeyPair();
     final privateKey = keyPair.privateKey as RSAPrivateKey;
     final publicKey = keyPair.publicKey as RSAPublicKey;
@@ -120,6 +121,4 @@ class CertificateService {
       algorithmName: 'SHA-256',
     );
   }
-
-  
 }
