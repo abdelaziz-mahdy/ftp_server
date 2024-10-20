@@ -1,19 +1,25 @@
+// lib/ftp_session.dart
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
-import 'package:ftp_server/file_operations/virtual_file_operations.dart';
-import 'package:ftp_server/server_type.dart';
-import 'package:intl/intl.dart';
+import 'package:ftp_server/socket_handler/plain_socket_handler.dart';
+import 'package:ftp_server/socket_handler/secure_socket_handler.dart';
+import 'package:ftp_server/socket_handler/socket_handler.dart';
+
+import 'file_operations/virtual_file_operations.dart';
+import 'server_type.dart';
 import 'ftp_command_handler.dart';
 import 'logger_handler.dart';
 import 'file_operations/file_operations.dart';
+import 'package:intl/intl.dart';
 
 class FtpSession {
-  final Socket controlSocket;
+  Socket controlSocket;
   bool isAuthenticated = false;
   final FTPCommandHandler commandHandler;
-  ServerSocket? dataListener;
+  SocketHandler? dataSocketHandler;
   Socket? dataSocket;
+  SecureSocket? secureDataSocket;
   final String? username;
   final String? password;
   String? cachedUsername;
@@ -26,16 +32,23 @@ class FtpSession {
   Future? _gettingDataSocket;
   String get currentDirectory => fileOperations.getCurrentDirectory();
 
-  FtpSession(this.controlSocket,
-      {this.username,
-      this.password,
-      required this.sharedDirectories,
-      required this.serverType,
-      required this.logger,
-      String? startingDirectory})
-      : commandHandler = FTPCommandHandler(controlSocket, logger),
+  bool secure;
+  final SecurityContext? securityContext;
+
+  FtpSession(
+    this.controlSocket, {
+    this.username,
+    this.password,
+    required this.sharedDirectories,
+    required this.serverType,
+    required this.logger,
+    String? startingDirectory,
+    this.secure = true,
+    this.securityContext,
+  })  : commandHandler = FTPCommandHandler(controlSocket, logger),
         fileOperations = VirtualFileOperations(sharedDirectories) {
     sendResponse('220 Welcome to the FTP server');
+
     // Set the starting directory if provided
     if (startingDirectory != null && fileOperations.exists(startingDirectory)) {
       try {
@@ -54,7 +67,8 @@ class FtpSession {
       String commandLine = utf8.decode(data).trim();
       commandHandler.handleCommand(commandLine, this);
     } catch (e, s) {
-      logger.generalLog("error: $e stack: $s ,input bytes $data");
+      logger.generalLog(
+          "error: $e stack: $s ,input bytes $data, malformed ${utf8.decode(data, allowMalformed: true)}");
       sendResponse('500 Internal server error');
     }
   }
@@ -67,13 +81,13 @@ class FtpSession {
   void closeConnection() {
     controlSocket.close();
     dataSocket?.close();
-    dataListener?.close();
+    dataSocketHandler?.close();
     logger.generalLog('Connection closed');
   }
 
   Future<bool> openDataConnection() async {
     await _gettingDataSocket;
-    if (dataSocket == null) {
+    if (dataSocket == null && secureDataSocket == null) {
       sendResponse('425 Can\'t open data connection');
       return false;
     }
@@ -81,28 +95,53 @@ class FtpSession {
     return true;
   }
 
-  Future<void> waitForClientDataSocket({Duration? timeout}) {
-    var result = dataListener!.first;
+  Future<void> waitForClientDataSocket({Duration? timeout}) async {
+    if (dataSocketHandler == null) {
+      sendResponse('425 No data connection handler available');
+      throw Exception('Data connection handler not initialized');
+    }
+
+    var connectionFuture = dataSocketHandler!.connections.first;
     if (timeout != null) {
-      result = result.timeout(timeout, onTimeout: () {
+      connectionFuture = connectionFuture.timeout(timeout, onTimeout: () {
         throw TimeoutException(
             'Timeout reached while waiting for client data socket');
       });
     }
-    return result.then((value) => dataSocket = value);
+
+    try {
+      var socket = await connectionFuture;
+      if (socket is SecureSocket) {
+        secureDataSocket = socket;
+      } else {
+        dataSocket = socket;
+      }
+    } catch (e) {
+      sendResponse('425 Can\'t open data connection: $e');
+      logger.generalLog('Error waiting for data socket: $e');
+    }
   }
 
   Future<void> enterPassiveMode() async {
     try {
-      dataListener = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
-      int port = dataListener!.port;
+      // Initialize the appropriate SocketHandler for data connection
+      if (secure) {
+        if (securityContext == null) {
+          sendResponse('500 Server misconfiguration');
+          return;
+        }
+        dataSocketHandler = SecureSocketHandlerImpl(securityContext!);
+      } else {
+        dataSocketHandler = PlainSocketHandler();
+      }
+
+      await dataSocketHandler!.bind(InternetAddress.anyIPv4, 0);
+      int port = dataSocketHandler!.port!;
       int p1 = port >> 8;
       int p2 = port & 0xFF;
       var address = (await _getIpAddress()).replaceAll('.', ',');
       sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
 
-      /// assigning the future to make sure it finishes before running any other operation
-      /// check [openDataConnection]
       _gettingDataSocket =
           waitForClientDataSocket(timeout: Duration(seconds: 30));
     } catch (e) {
@@ -116,7 +155,18 @@ class FtpSession {
       List<String> parts = parameters.split(',');
       String ip = parts.take(4).join('.');
       int port = int.parse(parts[4]) * 256 + int.parse(parts[5]);
-      dataSocket = await Socket.connect(ip, port);
+
+      if (secure) {
+        secureDataSocket = await SecureSocket.connect(
+          ip,
+          port,
+          context: securityContext!,
+          onBadCertificate: (X509Certificate cert) => true, // Adjust as needed
+        );
+      } else {
+        dataSocket = await Socket.connect(ip, port);
+      }
+
       sendResponse('200 Active mode connection established');
     } catch (e) {
       sendResponse('425 Can\'t enter active mode');
@@ -167,21 +217,26 @@ class FtpSession {
         String fileName = entity.path.split(Platform.pathSeparator).last;
         String entry =
             '$permissions 1 ftp ftp $fileSize $modificationTime $fileName\r\n';
-        dataSocket!.write(entry);
+
+        if (secure ? secureDataSocket != null : dataSocket != null) {
+          if (secure) {
+            secureDataSocket!.write(entry);
+          } else {
+            dataSocket!.write(entry);
+          }
+        }
       }
 
       if (transferInProgress) {
         transferInProgress = false;
-        await dataSocket!.close();
-        dataSocket = null;
+        await _closeDataSocket();
         sendResponse('226 Transfer complete');
       }
     } catch (e) {
       sendResponse('550 Failed to list directory');
       logger.generalLog('Error listing directory: $e');
       transferInProgress = false;
-      dataSocket?.close();
-      dataSocket = null;
+      await _closeDataSocket();
     }
   }
 
@@ -204,7 +259,6 @@ class FtpSession {
     return DateFormat('MMM dd HH:mm').format(dateTime);
   }
 
-// Method to retrieve a file from the server
   Future<void> retrieveFile(String filename) async {
     if (!await openDataConnection()) {
       return;
@@ -218,22 +272,26 @@ class FtpSession {
         transferInProgress = false;
         return;
       }
-      String fullPath = fileOperations.resolvePath(filename);
 
+      String fullPath = fileOperations.resolvePath(filename);
       File file = File(fullPath);
+
       if (await file.exists()) {
         Stream<List<int>> fileStream = file.openRead();
         fileStream.listen(
           (data) {
             if (transferInProgress) {
-              dataSocket?.add(data);
+              if (secure) {
+                secureDataSocket?.add(data);
+              } else {
+                dataSocket?.add(data);
+              }
             }
           },
           onDone: () async {
             if (transferInProgress) {
               transferInProgress = false;
-              await dataSocket?.close();
-              dataSocket = null;
+              await _closeDataSocket();
               sendResponse('226 Transfer complete');
             }
           },
@@ -241,8 +299,7 @@ class FtpSession {
             if (transferInProgress) {
               sendResponse('426 Connection closed; transfer aborted');
               transferInProgress = false;
-              await dataSocket?.close();
-              dataSocket = null;
+              await _closeDataSocket();
             }
           },
           cancelOnError: true,
@@ -254,11 +311,10 @@ class FtpSession {
     } catch (e) {
       sendResponse('550 File transfer failed');
       transferInProgress = false;
-      dataSocket = null;
+      await _closeDataSocket();
     }
   }
 
-// Method to store a file on the server
   Future<void> storeFile(String filename) async {
     if (!await openDataConnection()) {
       return;
@@ -278,46 +334,86 @@ class FtpSession {
       File file = File(fullPath);
       IOSink fileSink = file.openWrite();
 
-      dataSocket!.listen(
-        (data) {
-          if (transferInProgress) {
-            fileSink.add(data);
-          }
-        },
-        onDone: () async {
-          if (transferInProgress) {
-            await fileSink.close();
-            transferInProgress = false;
-            await dataSocket!.close();
-            dataSocket = null;
-            sendResponse('226 Transfer complete');
-          }
-        },
-        onError: (error) async {
-          if (transferInProgress) {
-            sendResponse('426 Connection closed; transfer aborted');
-            await fileSink.close();
-            transferInProgress = false;
-            await dataSocket!.close();
-            dataSocket = null;
-          }
-        },
-        cancelOnError: true,
-      );
+      if (secure) {
+        secureDataSocket!.listen(
+          (data) {
+            if (transferInProgress) {
+              fileSink.add(data);
+            }
+          },
+          onDone: () async {
+            if (transferInProgress) {
+              await fileSink.close();
+              transferInProgress = false;
+              await _closeDataSocket();
+              sendResponse('226 Transfer complete');
+            }
+          },
+          onError: (error) async {
+            if (transferInProgress) {
+              sendResponse('426 Connection closed; transfer aborted');
+              await fileSink.close();
+              transferInProgress = false;
+              await _closeDataSocket();
+            }
+          },
+          cancelOnError: true,
+        );
+      } else {
+        dataSocket!.listen(
+          (data) {
+            if (transferInProgress) {
+              fileSink.add(data);
+            }
+          },
+          onDone: () async {
+            if (transferInProgress) {
+              await fileSink.close();
+              transferInProgress = false;
+              await _closeDataSocket();
+              sendResponse('226 Transfer complete');
+            }
+          },
+          onError: (error) async {
+            if (transferInProgress) {
+              sendResponse('426 Connection closed; transfer aborted');
+              await fileSink.close();
+              transferInProgress = false;
+              await _closeDataSocket();
+            }
+          },
+          cancelOnError: true,
+        );
+      }
     } catch (e) {
       sendResponse('550 Error creating file or directory: $e');
       transferInProgress = false;
-      dataSocket = null;
+      await _closeDataSocket();
     }
   }
 
-// Method to abort a file transfer
+  Future<void> _closeDataSocket() async {
+    if (secure) {
+      await secureDataSocket?.close();
+      secureDataSocket = null;
+    } else {
+      await dataSocket?.close();
+      dataSocket = null;
+    }
+    dataSocketHandler?.close();
+    dataSocketHandler = null;
+  }
+
   void abortTransfer() async {
     if (transferInProgress) {
       transferInProgress = false;
-      dataSocket?.destroy(); // Forcefully close the data socket
+      if (secure) {
+        secureDataSocket?.destroy();
+      } else {
+        dataSocket?.destroy();
+      }
       sendResponse('426 Transfer aborted');
-      dataSocket = null;
+      await _closeDataSocket();
     } else {
       sendResponse('226 No transfer in progress');
     }
@@ -385,12 +481,24 @@ class FtpSession {
 
   Future<void> enterExtendedPassiveMode() async {
     try {
-      dataListener = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
-      int port = dataListener!.port;
+      // Initialize the appropriate SocketHandler for data connection
+      if (secure) {
+        if (securityContext == null) {
+          sendResponse('500 Server misconfiguration');
+          return;
+        }
+        dataSocketHandler = SecureSocketHandlerImpl(securityContext!);
+      } else {
+        dataSocketHandler = PlainSocketHandler();
+      }
+
+      await dataSocketHandler!.bind(InternetAddress.anyIPv4, 0);
+      int port = dataSocketHandler!.port!;
+
       sendResponse('229 Entering Extended Passive Mode (|||$port|)');
-      dataListener!.first.then((socket) {
-        dataSocket = socket;
-      });
+
+      _gettingDataSocket =
+          waitForClientDataSocket(timeout: Duration(seconds: 30));
     } catch (e) {
       sendResponse('425 Can\'t enter extended passive mode');
       logger.generalLog('Error entering extended passive mode: $e');

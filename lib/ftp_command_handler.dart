@@ -87,6 +87,10 @@ class FTPCommandHandler {
       case 'ABOR':
         handleAbort(session);
         break;
+      case 'AUTH':
+        handleAuth(argument, session);
+        break;
+
       default:
         session.sendResponse('502 Command not implemented $command $argument');
         break;
@@ -213,6 +217,7 @@ class FTPCommandHandler {
   void handleFeat(FtpSession session) {
     session.sendResponse('211-Features:');
 
+    session.sendResponse(' AUTH TLS');
     session.sendResponse(' SIZE');
     session.sendResponse(' MDTM');
     session.sendResponse(' EPSV');
@@ -227,5 +232,24 @@ class FTPCommandHandler {
 
   void handleAbort(FtpSession session) {
     session.abortTransfer();
+  }
+
+  void handleAuth(String argument, FtpSession session) async {
+    if (argument.toUpperCase() == 'TLS' && session.secure) {
+      session.sendResponse('234 AUTH TLS successful');
+
+      session.controlSocket = await SecureSocket.secure(session.controlSocket,
+          onBadCertificate: (X509Certificate cert) =>
+              true, // Handle certificate validation
+          context: session.securityContext
+          // context: SecurityContext.defaultContext
+          // certificateName: 'Your Certificate Name',
+          );
+
+      session.secure = true;
+      session.logger.generalLog('TLS negotiation completed');
+    } else {
+      session.sendResponse('504 AUTH type not supported');
+    }
   }
 }
