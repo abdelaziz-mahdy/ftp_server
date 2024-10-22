@@ -98,7 +98,7 @@ class MyAppState extends State<MyApp> {
         sharedDirectories: [serverDirectory],
         serverType: ServerType.readAndWrite,
         logFunction: (p0) => print(p0),
-        secure: true,
+        enforceSecureConnections: true,
       );
 
       Future serverFuture = server.start();
@@ -108,7 +108,7 @@ class MyAppState extends State<MyApp> {
       setState(() {
         serverStatus = 'Server is running';
         connectionInfo =
-            'Connect using FTP client:\n${server.secure ? "ftps" : "ftp"}://$address:${server.port}';
+            'Connect using FTP client:\n${server.enforceSecureConnections ? "ftps" : "ftp"}://$address:${server.port}';
         isLoading = false;
       });
 

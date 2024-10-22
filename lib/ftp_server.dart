@@ -53,12 +53,16 @@ class FtpServer {
   /// [sharedDirectories].
   final String? startingDirectory;
 
-  /// if the server is running secure by TLS or not
-  /// the default value is `false`
-  /// if `true` normal FTP will not work only TLS will be started (some clients may not be able to connect)
-  /// if `false` normal FTP will work and it can be upgraded to TLS using the command `AUTH TLS`
-  /// a [securityContext] can be provided or it will be created automatically
-  final bool secure;
+  /// Whether the server will only accept secure connections using TLS or not.
+  ///
+  /// If `true`, the server will only accept connections that are secured using TLS.
+  /// If `false`, the server will accept normal FTP connections and can optionally be upgraded to TLS using the command `AUTH TLS`.
+  ///
+  /// Even if this is set to `false`, the server will still accept TLS upgrades, but it will not be the default.
+  /// If a client wants to upgrade to TLS, it can still send the `AUTH TLS` command.
+  ///
+  /// A [securityContext] can be provided or it will be created automatically.
+  final bool enforceSecureConnections;
 
   /// the security context for the server
   /// a [securityContext] can be provided or it will be created automatically
@@ -78,7 +82,7 @@ class FtpServer {
     required this.serverType,
     Function(String)? logFunction,
     this.startingDirectory,
-    this.secure = false,
+    this.enforceSecureConnections = false,
     this.securityContext,
   }) : logger = LoggerHandler(logFunction) {
     if (sharedDirectories.isEmpty) {
@@ -106,12 +110,11 @@ class FtpServer {
     // securityContext ??= SecurityContext.defaultContext;
     securityContext ??=
         CertificateService.generateSecurityContext().createSecurityContext();
-    if (secure) {
+    if (enforceSecureConnections) {
       _socketHandler = SecureSocketHandlerImpl(securityContext!);
     } else {
       _socketHandler = PlainSocketHandler();
     }
-    _socketHandler = PlainSocketHandler();
     // }
     // }
   }
@@ -135,7 +138,7 @@ class FtpServer {
         serverType: serverType,
         startingDirectory: startingDirectory,
         logger: logger,
-        secure: secure,
+        secure: enforceSecureConnections,
         securityContext: securityContext,
       );
     }
@@ -156,7 +159,7 @@ class FtpServer {
         serverType: serverType,
         startingDirectory: startingDirectory,
         logger: logger,
-        secure: secure,
+        secure: enforceSecureConnections,
         securityContext: securityContext,
       );
     });
