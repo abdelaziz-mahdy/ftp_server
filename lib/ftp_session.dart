@@ -59,6 +59,10 @@ class FtpSession {
       }
     }
 
+    listenToControlMessages();
+  }
+
+  void listenToControlMessages() {
     controlSocket.listen(processCommand, onDone: closeConnection);
   }
 

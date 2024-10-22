@@ -238,15 +238,17 @@ class FTPCommandHandler {
     if (argument.toUpperCase() == 'TLS' && session.secure) {
       session.sendResponse('234 AUTH TLS successful');
 
-      session.controlSocket = await SecureSocket.secure(session.controlSocket,
-          onBadCertificate: (X509Certificate cert) =>
-              true, // Handle certificate validation
-          context: session.securityContext
+      session.controlSocket = await SecureSocket.secureServer(
+          session.controlSocket,
+          // onBadCertificate: (X509Certificate cert) =>
+          //     true, // Handle certificate validation
+          session.securityContext
           // context: SecurityContext.defaultContext
           // certificateName: 'Your Certificate Name',
           );
 
       session.secure = true;
+      session.listenToControlMessages();
       session.logger.generalLog('TLS negotiation completed');
     } else {
       session.sendResponse('504 AUTH type not supported');

@@ -6,26 +6,27 @@ import 'socket_handler.dart';
 class SecureSocketHandlerImpl implements SecureSocketHandler {
   @override
   SecurityContext securityContext;
+  ServerSocket? _serverSocket;
   SecureServerSocket? _secureServerSocket;
-  final StreamController<SecureSocket> _controller =
-      StreamController<SecureSocket>();
+  final StreamController<Socket> _controller = StreamController<Socket>();
 
   SecureSocketHandlerImpl(this.securityContext);
 
   @override
   Future<void> bind(InternetAddress address, int port) async {
-    _secureServerSocket = await SecureServerSocket.bind(
+    _serverSocket = await ServerSocket.bind(
       address,
       port,
-      securityContext,
     );
-    _secureServerSocket!.listen((socket) {
+
+    _serverSocket!.listen((socket) async {
+      // socket = await SecureSocket.secureServer(socket, securityContext);
       _controller.add(socket);
     });
   }
 
   @override
-  Stream<SecureSocket> get connections => _controller.stream;
+  Stream<Socket> get connections => _controller.stream;
 
   @override
   Future<SecureSocket> accept() async {
@@ -39,5 +40,5 @@ class SecureSocketHandlerImpl implements SecureSocketHandler {
   }
 
   @override
-  int? get port => _secureServerSocket?.port;
+  int? get port => _secureServerSocket?.port ?? _serverSocket?.port;
 }
