@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:ftp_server/ftp_session.dart';
 import 'package:ftp_server/server_type.dart';
+import 'package:intl/intl.dart';
 import 'logger_handler.dart';
 
 class FTPCommandHandler {
@@ -98,6 +99,9 @@ class FTPCommandHandler {
         break;
       case 'MLSD':
         handleMlsd(argument, session);
+        break;
+      case 'MDTM':
+        handleMdtm(argument, session);
         break;
       default:
         session.sendResponse('502 Command not implemented $command $argument');
@@ -287,5 +291,31 @@ class FTPCommandHandler {
     } else {
       session.sendResponse('504 AUTH type not supported');
     }
+  }
+
+  void handleMdtm(String argument, FtpSession session) {
+    try {
+      if (!session.fileOperations.exists(argument)) {
+        session.sendResponse('550 File not found');
+        return;
+      }
+
+      String fullPath = session.fileOperations.resolvePath(argument);
+      File file = File(fullPath);
+      if (file.existsSync()) {
+        var stat = file.statSync();
+        String modificationTime = _formatMdtmTimestamp(stat.modified);
+        session.sendResponse('213 $modificationTime');
+      } else {
+        session.sendResponse('550 File not found');
+      }
+    } catch (e) {
+      session.sendResponse('550 Could not get modification time: $e');
+      logger.generalLog('Error getting modification time: $e');
+    }
+  }
+
+  String _formatMdtmTimestamp(DateTime dateTime) {
+    return DateFormat('yyyyMMddHHmmss').format(dateTime.toUtc()); // Use UTC
   }
 }
