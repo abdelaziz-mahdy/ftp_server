@@ -98,7 +98,7 @@ class MyAppState extends State<MyApp> {
         sharedDirectories: [serverDirectory],
         serverType: ServerType.readAndWrite,
         logFunction: (p0) => print(p0),
-        enforceSecureConnections: true,
+        enforceSecureConnections: false,
       );
 
       Future serverFuture = server.start();

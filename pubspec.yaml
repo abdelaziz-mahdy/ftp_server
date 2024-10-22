@@ -13,4 +13,5 @@ dependencies:
 dev_dependencies:
   test: ^1.25.5
   lints: ^4.0.0
+  pure_ftp: ^0.7.5
 

@@ -34,6 +34,8 @@ class FtpSession {
   bool secure;
   final SecurityContext? securityContext;
 
+  // this is not currently used
+  // String? dataChannelProtectionLevel;
   FtpSession(
     this.controlSocket, {
     this.username,
@@ -114,8 +116,11 @@ class FtpSession {
 
     try {
       var socket = await connectionFuture;
-
-      dataSocket = socket;
+      if (secure) {
+        dataSocket = await SecureSocket.secureServer(socket, securityContext!);
+      } else {
+        dataSocket = socket;
+      }
     } catch (e) {
       sendResponse('425 Can\'t open data connection: $e');
       logger.generalLog('Error waiting for data socket: $e');
@@ -353,6 +358,46 @@ class FtpSession {
       transferInProgress = false;
       await _closeDataSocket();
     }
+  }
+
+  Future<void> handleMlsd(String argument, FtpSession session) async {
+    if (!await session.openDataConnection()) {
+      return;
+    }
+
+    try {
+      session.transferInProgress = true;
+      var dirContents = await session.fileOperations.listDirectory(argument);
+      logger.generalLog('Listing directory with MLSD: $argument');
+
+      for (FileSystemEntity entity in dirContents) {
+        if (!session.transferInProgress) break;
+        var stat = await entity.stat();
+        String facts = _formatMlsdFacts(entity, stat);
+        dataSocket!.write(facts);
+      }
+
+      if (session.transferInProgress) {
+        session.transferInProgress = false;
+        await session._closeDataSocket();
+        session.sendResponse('226 Transfer complete.');
+      }
+    } catch (e) {
+      session.sendResponse('550 Failed to list directory: $e');
+      logger.generalLog('Error listing directory with MLSD: $e');
+      session.transferInProgress = false;
+      await session._closeDataSocket();
+    }
+  }
+
+  String _formatMlsdFacts(FileSystemEntity entity, FileStat stat) {
+    String type = stat.type == FileSystemEntityType.directory ? "dir" : "file";
+    String modify = DateFormat("yyyyMMddHHmmss")
+        .format(stat.modified.toUtc()); // Use UTC time
+    String size = stat.size.toString();
+    String name = entity.path.split(Platform.pathSeparator).last;
+
+    return "type=$type;modify=$modify;size=$size; $name\r\n";
   }
 
   Future<void> _closeDataSocket() async {

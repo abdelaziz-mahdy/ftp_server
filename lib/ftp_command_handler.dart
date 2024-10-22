@@ -90,7 +90,15 @@ class FTPCommandHandler {
       case 'AUTH':
         handleAuth(argument, session);
         break;
-
+      case 'PBSZ':
+        handlePbsz(argument, session);
+        break;
+      case 'PROT':
+        handleProt(argument, session);
+        break;
+      case 'MLSD':
+        handleMlsd(argument, session);
+        break;
       default:
         session.sendResponse('502 Command not implemented $command $argument');
         break;
@@ -234,8 +242,34 @@ class FTPCommandHandler {
     session.abortTransfer();
   }
 
+  void handlePbsz(String argument, FtpSession session) {
+    if (session.secure) {
+      if (argument == '0') {
+        session.sendResponse('200 PBSZ command successful.');
+      } else {
+        session.sendResponse('501 Invalid PBSZ argument.');
+      }
+    } else {
+      session.sendResponse('530 Secure connection required.');
+    }
+  }
+
+  void handleProt(String argument, FtpSession session) {
+    if (argument == 'C' || argument == 'P') {
+      // Add 'P' for Private (TLS)
+      // session.dataChannelProtectionLevel = argument;
+      session.sendResponse('200 PROT command successful.');
+    } else {
+      session.sendResponse('501 Invalid PROT argument.');
+    }
+  }
+
+  void handleMlsd(String argument, FtpSession session) {
+    session.handleMlsd(argument, session);
+  }
+
   void handleAuth(String argument, FtpSession session) async {
-    if (argument.toUpperCase() == 'TLS' && session.secure) {
+    if (argument.toUpperCase() == 'TLS') {
       session.sendResponse('234 AUTH TLS successful');
 
       session.controlSocket = await SecureSocket.secureServer(
