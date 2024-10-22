@@ -269,7 +269,7 @@ class FTPCommandHandler {
   }
 
   void handleAuth(String argument, FtpSession session) async {
-    if (argument.toUpperCase() == 'TLS') {
+    if (argument.toUpperCase() == 'TLS' && session.secureConnectionAllowed) {
       session.sendResponse('234 AUTH TLS successful');
 
       session.controlSocket = await SecureSocket.secureServer(

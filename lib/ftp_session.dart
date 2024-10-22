@@ -34,6 +34,26 @@ class FtpSession {
   bool secure;
   final SecurityContext? securityContext;
 
+  /// Whether the server will only accept secure connections using TLS or not.
+  ///
+  /// If `true`, the server will only accept connections that are secured using TLS.
+  /// If `false`, the server will accept normal FTP connections and can optionally be upgraded to TLS using the command `AUTH TLS` if [secureConnectionAllowed] is `true`.
+  ///
+  /// Even if this is set to `false`, the server will still accept TLS upgrades, but it will not be the default.
+  /// If a client wants to upgrade to TLS, it can still send the `AUTH TLS` command.
+  ///
+  /// A [securityContext] can be provided or it will be created automatically.
+  final bool enforceSecureConnections;
+
+  /// Whether the server will only accept secure connections using TLS or not in data connections.
+  ///
+  /// If `true`, the server will only accept connections that are secured using TLS.
+  /// If `false`, the server will accept normal FTP data connections.
+  final bool forceSecureDataConnection;
+
+  /// Whether the server will be able to upgrade to TLS using the `AUTH TLS` command.
+  final bool secureConnectionAllowed;
+
   // this is not currently used
   // String? dataChannelProtectionLevel;
   FtpSession(
@@ -46,6 +66,9 @@ class FtpSession {
     String? startingDirectory,
     this.secure = true,
     this.securityContext,
+    this.enforceSecureConnections = false,
+    this.forceSecureDataConnection = false,
+    this.secureConnectionAllowed = false,
   })  : commandHandler = FTPCommandHandler(controlSocket, logger),
         fileOperations = VirtualFileOperations(sharedDirectories) {
     sendResponse('220 Welcome to the FTP server');
@@ -96,7 +119,12 @@ class FtpSession {
       sendResponse('425 Can\'t open data connection');
       return false;
     }
+    if (secure && securityContext != null && forceSecureDataConnection) {
+      dataSocket =
+          await SecureSocket.secureServer(dataSocket!, securityContext!);
+    }
     sendResponse('150 Opening data connection');
+
     return true;
   }
 
@@ -116,11 +144,8 @@ class FtpSession {
 
     try {
       var socket = await connectionFuture;
-      if (secure) {
-        dataSocket = await SecureSocket.secureServer(socket, securityContext!);
-      } else {
-        dataSocket = socket;
-      }
+
+      dataSocket = socket;
     } catch (e) {
       sendResponse('425 Can\'t open data connection: $e');
       logger.generalLog('Error waiting for data socket: $e');
@@ -210,7 +235,8 @@ class FtpSession {
       transferInProgress = true;
 
       var dirContents = await fileOperations.listDirectory(path);
-      logger.generalLog('Listing directory: $path');
+      logger
+          .generalLog('Listing directory: ${fileOperations.resolvePath(path)}');
 
       for (FileSystemEntity entity in dirContents) {
         if (!transferInProgress) break; // Abort if transfer is cancelled
@@ -401,9 +427,9 @@ class FtpSession {
   }
 
   Future<void> _closeDataSocket() async {
+    await dataSocket?.flush();
     await dataSocket?.close();
     dataSocket = null;
-
     dataSocketHandler?.close();
     dataSocketHandler = null;
   }
