@@ -24,24 +24,6 @@ class StoredSecurityContext {
     return SecurityContext()
       ..usePrivateKeyBytes(privateKey.codeUnits)
       ..useCertificateChainBytes(certificate.codeUnits);
-    final context = SecurityContext();
-
-    try {
-      // Load the certificate chain from the stored certificate
-      context.useCertificateChainBytes(
-        utf8.encode(certificate),
-      );
-
-      // Load the private key from the stored private key
-      context.usePrivateKeyBytes(
-        utf8.encode(privateKey),
-      );
-    } catch (e) {
-      print('Error setting up SecurityContext: $e');
-      rethrow;
-    }
-
-    return context;
   }
 }
 
