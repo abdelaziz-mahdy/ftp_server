@@ -68,7 +68,7 @@ class FtpServer {
   ///
   /// If `true`, the server will only accept connections that are secured using TLS.
   /// If `false`, the server will accept normal FTP data connections.
-  final bool forceSecureDataConnection;
+  final bool secureDataConnection;
 
   /// Whether the server will be able to upgrade to TLS using the `AUTH TLS` command.
   final bool secureConnectionAllowed;
@@ -92,7 +92,7 @@ class FtpServer {
     Function(String)? logFunction,
     this.startingDirectory,
     this.enforceSecureConnections = false,
-    this.forceSecureDataConnection = false,
+    this.secureDataConnection = false,
     this.secureConnectionAllowed = false,
     this.securityContext,
   }) : logger = LoggerHandler(logFunction) {
@@ -150,6 +150,8 @@ class FtpServer {
         startingDirectory: startingDirectory,
         logger: logger,
         secure: enforceSecureConnections,
+        secureDataConnection: secureDataConnection,
+        secureConnectionAllowed: secureConnectionAllowed,
         securityContext: securityContext,
       );
     }

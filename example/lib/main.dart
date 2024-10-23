@@ -99,6 +99,8 @@ class MyAppState extends State<MyApp> {
         serverType: ServerType.readAndWrite,
         logFunction: (p0) => print(p0),
         enforceSecureConnections: false,
+        secureConnectionAllowed: true,
+        secureDataConnection: true,
       );
 
       Future serverFuture = server.start();

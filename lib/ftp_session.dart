@@ -49,7 +49,7 @@ class FtpSession {
   ///
   /// If `true`, the server will only accept connections that are secured using TLS.
   /// If `false`, the server will accept normal FTP data connections.
-  final bool forceSecureDataConnection;
+  final bool secureDataConnection;
 
   /// Whether the server will be able to upgrade to TLS using the `AUTH TLS` command.
   final bool secureConnectionAllowed;
@@ -67,7 +67,7 @@ class FtpSession {
     this.secure = true,
     this.securityContext,
     this.enforceSecureConnections = false,
-    this.forceSecureDataConnection = false,
+    this.secureDataConnection = false,
     this.secureConnectionAllowed = false,
   })  : commandHandler = FTPCommandHandler(controlSocket, logger),
         fileOperations = VirtualFileOperations(sharedDirectories) {
@@ -119,7 +119,7 @@ class FtpSession {
       sendResponse('425 Can\'t open data connection');
       return false;
     }
-    if (secure && securityContext != null && forceSecureDataConnection) {
+    if (secure && securityContext != null && secureDataConnection) {
       dataSocket =
           await SecureSocket.secureServer(dataSocket!, securityContext!);
     }
@@ -250,6 +250,7 @@ class FtpSession {
             '$permissions 1 ftp ftp $fileSize $modificationTime $fileName\r\n';
 
         dataSocket!.write(entry);
+        await dataSocket!.flush();
       }
 
       if (transferInProgress) {
@@ -426,6 +427,9 @@ class FtpSession {
     return "type=$type;modify=$modify;size=$size; $name\r\n";
   }
 
+  /// Close the data socket and associated handler.
+  ///
+  /// This function is intended to be private.
   Future<void> _closeDataSocket() async {
     await dataSocket?.flush();
     await dataSocket?.close();
