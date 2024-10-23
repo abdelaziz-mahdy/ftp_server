@@ -3,10 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 import 'package:ftp_server/socket_handler/plain_socket_handler.dart';
-import 'package:ftp_server/socket_handler/secure_socket_handler.dart';
 import 'package:ftp_server/socket_handler/abstract_socket_handler.dart';
 import 'package:ftp_server/socket_wrapper/plain_socket_wrapper.dart';
-import 'package:ftp_server/socket_wrapper/secure_socket_wrapper.dart';
 import 'package:ftp_server/socket_wrapper/socket_wrapper.dart';
 
 import 'file_operations/virtual_file_operations.dart';
@@ -502,7 +500,6 @@ class FtpSession {
 
   Future<void> enterExtendedPassiveMode() async {
     try {
-
       dataSocketHandler = PlainSocketHandler();
 
       await dataSocketHandler!.bind(InternetAddress.anyIPv4, 0);
