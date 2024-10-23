@@ -2,10 +2,12 @@
 import 'dart:io';
 import 'dart:async';
 
+import 'package:ftp_server/socket_wrapper/socket_wrapper.dart';
+
 abstract class AbstractSocketHandler {
   Future<void> bind(InternetAddress address, int port);
-  Stream<Socket> get connections;
-  Future<Socket> accept();
+  Stream<SocketWrapper> get connections;
+  Future<SocketWrapper> accept();
   void close();
   int? get port;
 }

@@ -1,11 +1,13 @@
 import 'dart:io';
 import 'package:ftp_server/ftp_session.dart';
 import 'package:ftp_server/server_type.dart';
+import 'package:ftp_server/socket_wrapper/plain_socket_wrapper.dart';
+import 'package:ftp_server/socket_wrapper/socket_wrapper.dart';
 import 'package:intl/intl.dart';
 import 'logger_handler.dart';
 
 class FTPCommandHandler {
-  final Socket controlSocket;
+  final SocketWrapper controlSocket;
   final LoggerHandler logger;
 
   FTPCommandHandler(this.controlSocket, this.logger);
@@ -273,17 +275,14 @@ class FTPCommandHandler {
   }
 
   void handleAuth(String argument, FtpSession session) async {
-    if (argument.toUpperCase() == 'TLS' && session.secureConnectionAllowed) {
+    if (argument.toUpperCase() == 'TLS' &&
+        session.secureConnectionAllowed &&
+        session.controlSocket is PlainSocketWrapper) {
       session.sendResponse('234 AUTH TLS successful');
 
-      session.controlSocket = await SecureSocket.secureServer(
-          session.controlSocket,
-          // onBadCertificate: (X509Certificate cert) =>
-          //     true, // Handle certificate validation
-          session.securityContext
-          // context: SecurityContext.defaultContext
-          // certificateName: 'Your Certificate Name',
-          );
+      session.controlSocket =
+          await (session.controlSocket as PlainSocketWrapper)
+              .upgradeToSecure(securityContext: session.securityContext!);
 
       session.secure = true;
       session.listenToControlMessages();

@@ -173,6 +173,8 @@ class FtpServer {
         startingDirectory: startingDirectory,
         logger: logger,
         secure: enforceSecureConnections,
+        secureDataConnection: secureDataConnection,
+        secureConnectionAllowed: secureConnectionAllowed,
         securityContext: securityContext,
       );
     });

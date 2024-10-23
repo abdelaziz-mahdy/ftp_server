@@ -48,4 +48,16 @@ class SecureSocketWrapper implements SocketWrapper {
 
   @override
   void write(Object obj) => _socket.write(obj);
+
+  @override
+  int get port => _socket.port;
+
+  @override
+  int get remotePort => _socket.remotePort;
+
+  @override
+  InternetAddress get address => _socket.address;
+
+  @override
+  InternetAddress get remoteAddress => _socket.remoteAddress;
 }

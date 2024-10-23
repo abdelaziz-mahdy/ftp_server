@@ -17,7 +17,7 @@ import 'file_operations/file_operations.dart';
 import 'package:intl/intl.dart';
 
 class FtpSession {
-  Socket controlSocket;
+  SocketWrapper controlSocket;
   bool isAuthenticated = false;
   final FTPCommandHandler commandHandler;
   AbstractSocketHandler? dataSocketHandler;
@@ -122,14 +122,15 @@ class FtpSession {
       sendResponse('425 Can\'t open data connection');
       return false;
     }
-    if (secure &&
-        securityContext != null &&
-        secureDataConnection &&
-        dataSocket is PlainSocketWrapper) {
-      dataSocket = await (dataSocket as PlainSocketWrapper)
-          .upgradeToSecure(securityContext: securityContext!);
-    }
     sendResponse('150 Opening data connection');
+
+    // if (secure &&
+    //     securityContext != null &&
+    //     secureDataConnection &&
+    //     dataSocket is PlainSocketWrapper) {
+    //   dataSocket = await (dataSocket as PlainSocketWrapper)
+    //       .upgradeToSecure(securityContext: securityContext!);
+    // }
 
     return true;
   }
@@ -151,7 +152,7 @@ class FtpSession {
     try {
       var socket = await connectionFuture;
 
-      dataSocket = PlainSocketWrapper(socket);
+      dataSocket = socket;
     } catch (e) {
       sendResponse('425 Can\'t open data connection: $e');
       logger.generalLog('Error waiting for data socket: $e');
@@ -170,6 +171,7 @@ class FtpSession {
       } else {
         dataSocketHandler = PlainSocketHandler();
       }
+      // dataSocketHandler = PlainSocketHandler();
 
       await dataSocketHandler!.bind(InternetAddress.anyIPv4, 0);
       int port = dataSocketHandler!.port!;
@@ -252,7 +254,6 @@ class FtpSession {
             '$permissions 1 ftp ftp $fileSize $modificationTime $fileName\r\n';
 
         dataSocket!.write(entry);
-        await dataSocket!.flush();
       }
 
       if (transferInProgress) {
@@ -444,7 +445,7 @@ class FtpSession {
     if (transferInProgress) {
       transferInProgress = false;
 
-      dataSocket?.destroy();
+      await dataSocket?.close();
 
       sendResponse('426 Transfer aborted');
       await _closeDataSocket();
@@ -525,6 +526,8 @@ class FtpSession {
       } else {
         dataSocketHandler = PlainSocketHandler();
       }
+
+      // dataSocketHandler = PlainSocketHandler();
 
       await dataSocketHandler!.bind(InternetAddress.anyIPv4, 0);
       int port = dataSocketHandler!.port!;
