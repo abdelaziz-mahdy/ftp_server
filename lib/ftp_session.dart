@@ -124,13 +124,14 @@ class FtpSession {
     }
     sendResponse('150 Opening data connection');
 
-    // if (secure &&
-    //     securityContext != null &&
-    //     secureDataConnection &&
-    //     dataSocket is PlainSocketWrapper) {
-    //   dataSocket = await (dataSocket as PlainSocketWrapper)
-    //       .upgradeToSecure(securityContext: securityContext!);
-    // }
+    // Following https://datatracker.ietf.org/doc/html/rfc4217 - TLS upgrade
+    if (secure &&
+        securityContext != null &&
+        secureDataConnection &&
+        dataSocket is PlainSocketWrapper) {
+      dataSocket = await (dataSocket as PlainSocketWrapper)
+          .upgradeToSecure(securityContext: securityContext!);
+    }
 
     return true;
   }
@@ -161,17 +162,7 @@ class FtpSession {
 
   Future<void> enterPassiveMode() async {
     try {
-      // Initialize the appropriate SocketHandler for data connection
-      if (secure) {
-        if (securityContext == null) {
-          sendResponse('500 Server misconfiguration');
-          return;
-        }
-        dataSocketHandler = SecureSocketHandler(securityContext!);
-      } else {
-        dataSocketHandler = PlainSocketHandler();
-      }
-      // dataSocketHandler = PlainSocketHandler();
+      dataSocketHandler = PlainSocketHandler();
 
       await dataSocketHandler!.bind(InternetAddress.anyIPv4, 0);
       int port = dataSocketHandler!.port!;
@@ -194,12 +185,7 @@ class FtpSession {
       String ip = parts.take(4).join('.');
       int port = int.parse(parts[4]) * 256 + int.parse(parts[5]);
 
-      if (secure) {
-        dataSocket = await SecureSocketWrapper.connect(ip, port,
-            securityContext: securityContext!);
-      } else {
-        dataSocket = await PlainSocketWrapper.connect(ip, port);
-      }
+      dataSocket = await PlainSocketWrapper.connect(ip, port);
 
       sendResponse('200 Active mode connection established');
     } catch (e) {
@@ -516,18 +502,8 @@ class FtpSession {
 
   Future<void> enterExtendedPassiveMode() async {
     try {
-      // Initialize the appropriate SocketHandler for data connection
-      if (secure) {
-        if (securityContext == null) {
-          sendResponse('500 Server misconfiguration');
-          return;
-        }
-        dataSocketHandler = SecureSocketHandler(securityContext!);
-      } else {
-        dataSocketHandler = PlainSocketHandler();
-      }
 
-      // dataSocketHandler = PlainSocketHandler();
+      dataSocketHandler = PlainSocketHandler();
 
       await dataSocketHandler!.bind(InternetAddress.anyIPv4, 0);
       int port = dataSocketHandler!.port!;
