@@ -7,14 +7,14 @@ import 'dart:async';
 import 'package:ftp_server/certificate_service.dart';
 import 'package:ftp_server/socket_handler/plain_socket_handler.dart';
 import 'package:ftp_server/socket_handler/secure_socket_handler.dart';
-import 'package:ftp_server/socket_handler/socket_handler.dart';
+import 'package:ftp_server/socket_handler/abstract_socket_handler.dart';
 
 import 'ftp_session.dart';
 import 'server_type.dart';
 import 'logger_handler.dart';
 
 class FtpServer {
-  late SocketHandler _socketHandler;
+  late AbstractSocketHandler _socketHandler;
 
   /// The port on which the FTP server will listen for incoming connections.
   final int port;
@@ -122,7 +122,7 @@ class FtpServer {
     securityContext ??=
         CertificateService.generateSecurityContext().createSecurityContext();
     if (enforceSecureConnections) {
-      _socketHandler = SecureSocketHandlerImpl(securityContext!);
+      _socketHandler = SecureSocketHandler(securityContext!);
     } else {
       _socketHandler = PlainSocketHandler();
     }

@@ -1,9 +1,9 @@
 // lib/plain_socket_handler.dart
 import 'dart:async';
 import 'dart:io';
-import 'socket_handler.dart';
+import 'abstract_socket_handler.dart';
 
-class PlainSocketHandler implements SocketHandler {
+class PlainSocketHandler implements AbstractSocketHandler {
   ServerSocket? _serverSocket;
   final StreamController<Socket> _controller = StreamController<Socket>();
 

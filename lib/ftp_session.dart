@@ -4,7 +4,10 @@ import 'dart:io';
 import 'dart:async';
 import 'package:ftp_server/socket_handler/plain_socket_handler.dart';
 import 'package:ftp_server/socket_handler/secure_socket_handler.dart';
-import 'package:ftp_server/socket_handler/socket_handler.dart';
+import 'package:ftp_server/socket_handler/abstract_socket_handler.dart';
+import 'package:ftp_server/socket_wrapper/plain_socket_wrapper.dart';
+import 'package:ftp_server/socket_wrapper/secure_socket_wrapper.dart';
+import 'package:ftp_server/socket_wrapper/socket_wrapper.dart';
 
 import 'file_operations/virtual_file_operations.dart';
 import 'server_type.dart';
@@ -17,8 +20,8 @@ class FtpSession {
   Socket controlSocket;
   bool isAuthenticated = false;
   final FTPCommandHandler commandHandler;
-  SocketHandler? dataSocketHandler;
-  Socket? dataSocket;
+  AbstractSocketHandler? dataSocketHandler;
+  SocketWrapper? dataSocket;
   final String? username;
   final String? password;
   String? cachedUsername;
@@ -119,9 +122,12 @@ class FtpSession {
       sendResponse('425 Can\'t open data connection');
       return false;
     }
-    if (secure && securityContext != null && secureDataConnection) {
-      dataSocket =
-          await SecureSocket.secureServer(dataSocket!, securityContext!);
+    if (secure &&
+        securityContext != null &&
+        secureDataConnection &&
+        dataSocket is PlainSocketWrapper) {
+      dataSocket = await (dataSocket as PlainSocketWrapper)
+          .upgradeToSecure(securityContext: securityContext!);
     }
     sendResponse('150 Opening data connection');
 
@@ -145,7 +151,7 @@ class FtpSession {
     try {
       var socket = await connectionFuture;
 
-      dataSocket = socket;
+      dataSocket = PlainSocketWrapper(socket);
     } catch (e) {
       sendResponse('425 Can\'t open data connection: $e');
       logger.generalLog('Error waiting for data socket: $e');
@@ -160,7 +166,7 @@ class FtpSession {
           sendResponse('500 Server misconfiguration');
           return;
         }
-        dataSocketHandler = SecureSocketHandlerImpl(securityContext!);
+        dataSocketHandler = SecureSocketHandler(securityContext!);
       } else {
         dataSocketHandler = PlainSocketHandler();
       }
@@ -187,14 +193,10 @@ class FtpSession {
       int port = int.parse(parts[4]) * 256 + int.parse(parts[5]);
 
       if (secure) {
-        dataSocket = await SecureSocket.connect(
-          ip,
-          port,
-          context: securityContext!,
-          onBadCertificate: (X509Certificate cert) => true, // Adjust as needed
-        );
+        dataSocket = await SecureSocketWrapper.connect(ip, port,
+            securityContext: securityContext!);
       } else {
-        dataSocket = await Socket.connect(ip, port);
+        dataSocket = await PlainSocketWrapper.connect(ip, port);
       }
 
       sendResponse('200 Active mode connection established');
@@ -519,7 +521,7 @@ class FtpSession {
           sendResponse('500 Server misconfiguration');
           return;
         }
-        dataSocketHandler = SecureSocketHandlerImpl(securityContext!);
+        dataSocketHandler = SecureSocketHandler(securityContext!);
       } else {
         dataSocketHandler = PlainSocketHandler();
       }

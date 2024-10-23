@@ -1,16 +1,17 @@
 // lib/secure_socket_handler.dart
 import 'dart:async';
 import 'dart:io';
-import 'socket_handler.dart';
+import 'package:ftp_server/socket_handler/abstract_secure_socket_handler.dart';
 
-class SecureSocketHandlerImpl implements SecureSocketHandler {
+
+class SecureSocketHandler implements AbstractSecureSocketHandler {
   @override
   SecurityContext securityContext;
   ServerSocket? _serverSocket;
   SecureServerSocket? _secureServerSocket;
   final StreamController<Socket> _controller = StreamController<Socket>();
 
-  SecureSocketHandlerImpl(this.securityContext);
+  SecureSocketHandler(this.securityContext);
 
   @override
   Future<void> bind(InternetAddress address, int port) async {
