@@ -1,6 +1,6 @@
 name: ftp_server
 description: "This package provides a simple FTP server implementation in Dart. It supports both read-only and read-and-write modes, making it suitable for various use cases. The server allows clients to connect and perform standard FTP operations such as listing directories, retrieving files, storing files, and more."
-version: 1.0.3
+version: 1.0.4
 homepage: https://github.com/abdelaziz-mahdy/ftp_server
 
 environment:

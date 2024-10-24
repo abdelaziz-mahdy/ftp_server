@@ -172,16 +172,14 @@ class FtpSession {
 
       if (transferInProgress) {
         transferInProgress = false;
-        await dataSocket!.close();
-        dataSocket = null;
+        await _closeDataSocket();
         sendResponse('226 Transfer complete');
       }
     } catch (e) {
       sendResponse('550 Failed to list directory');
       logger.generalLog('Error listing directory: $e');
       transferInProgress = false;
-      dataSocket?.close();
-      dataSocket = null;
+      await _closeDataSocket();
     }
   }
 
@@ -232,8 +230,7 @@ class FtpSession {
           onDone: () async {
             if (transferInProgress) {
               transferInProgress = false;
-              await dataSocket?.close();
-              dataSocket = null;
+              await _closeDataSocket();
               sendResponse('226 Transfer complete');
             }
           },
@@ -241,8 +238,7 @@ class FtpSession {
             if (transferInProgress) {
               sendResponse('426 Connection closed; transfer aborted');
               transferInProgress = false;
-              await dataSocket?.close();
-              dataSocket = null;
+              await _closeDataSocket();
             }
           },
           cancelOnError: true,
@@ -288,8 +284,7 @@ class FtpSession {
           if (transferInProgress) {
             await fileSink.close();
             transferInProgress = false;
-            await dataSocket!.close();
-            dataSocket = null;
+            await _closeDataSocket();
             sendResponse('226 Transfer complete');
           }
         },
@@ -298,6 +293,7 @@ class FtpSession {
             sendResponse('426 Connection closed; transfer aborted');
             await fileSink.close();
             transferInProgress = false;
+
             await dataSocket!.close();
             dataSocket = null;
           }
@@ -309,6 +305,12 @@ class FtpSession {
       transferInProgress = false;
       dataSocket = null;
     }
+  }
+
+  Future<void> _closeDataSocket() async {
+    await dataSocket!.flush();
+    await dataSocket!.close();
+    dataSocket = null;
   }
 
 // Method to abort a file transfer
@@ -395,5 +397,72 @@ class FtpSession {
       sendResponse('425 Can\'t enter extended passive mode');
       logger.generalLog('Error entering extended passive mode: $e');
     }
+  }
+
+  Future<void> handleMlsd(String argument, FtpSession session) async {
+    if (!await session.openDataConnection()) {
+      return;
+    }
+
+    try {
+      session.transferInProgress = true;
+      var dirContents = await session.fileOperations.listDirectory(argument);
+      logger.generalLog('Listing directory with MLSD: $argument');
+
+      for (FileSystemEntity entity in dirContents) {
+        if (!session.transferInProgress) break;
+        var stat = await entity.stat();
+        String facts = _formatMlsdFacts(entity, stat);
+        dataSocket!.write(facts);
+      }
+
+      if (session.transferInProgress) {
+        session.transferInProgress = false;
+        await session._closeDataSocket();
+        session.sendResponse('226 Transfer complete.');
+      }
+    } catch (e) {
+      session.sendResponse('550 Failed to list directory: $e');
+      logger.generalLog('Error listing directory with MLSD: $e');
+      session.transferInProgress = false;
+      await session._closeDataSocket();
+    }
+  }
+
+// Method to abort a file transfer
+  String _formatMlsdFacts(FileSystemEntity entity, FileStat stat) {
+    String type = stat.type == FileSystemEntityType.directory ? "dir" : "file";
+    String modify = DateFormat("yyyyMMddHHmmss")
+        .format(stat.modified.toUtc()); // Use UTC time
+    String size = stat.size.toString();
+    String name = entity.path.split(Platform.pathSeparator).last;
+
+    return "type=$type;modify=$modify;size=$size; $name\r\n";
+  }
+
+  void handleMdtm(String argument, FtpSession session) {
+    try {
+      if (!session.fileOperations.exists(argument)) {
+        session.sendResponse('550 File not found');
+        return;
+      }
+
+      String fullPath = session.fileOperations.resolvePath(argument);
+      File file = File(fullPath);
+      if (file.existsSync()) {
+        var stat = file.statSync();
+        String modificationTime = _formatMdtmTimestamp(stat.modified);
+        session.sendResponse('213 $modificationTime');
+      } else {
+        session.sendResponse('550 File not found');
+      }
+    } catch (e) {
+      session.sendResponse('550 Could not get modification time: $e');
+      logger.generalLog('Error getting modification time: $e');
+    }
+  }
+
+  String _formatMdtmTimestamp(DateTime dateTime) {
+    return DateFormat('yyyyMMddHHmmss').format(dateTime.toUtc()); // Use UTC
   }
 }
