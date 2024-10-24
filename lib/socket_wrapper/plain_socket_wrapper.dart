@@ -1,5 +1,3 @@
-// lib/services/certificate_service.dart
-
 import 'dart:async';
 import 'dart:io';
 import 'package:ftp_server/socket_wrapper/secure_socket_wrapper.dart';
@@ -24,30 +22,36 @@ class PlainSocketWrapper implements SocketWrapper {
           {Function? onError, void Function()? onDone, bool? cancelOnError}) =>
       _socket.listen(onData,
           onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+
   @override
   void destroy() => _socket.destroy();
 
   /// Upgrades the plain socket to a secure socket (TLS).
   ///
-  /// Returns a [Future] that completes with a [SecureSocketWrapper] if the upgrade is successful,
-  /// or throws an exception if it fails.
+  /// This method wraps the plain socket in a `SecureSocket`, allowing
+  /// secure communication using the provided `SecurityContext`.
+  ///
+  /// Returns a [SecureSocketWrapper] on success, or throws an error on failure.
   Future<SecureSocketWrapper> upgradeToSecure({
     required SecurityContext securityContext,
   }) async {
     try {
-      return SecureSocketWrapper(await SecureSocket.secureServer(
-        _socket,
-        securityContext,
-        // onBadCertificate: (X509Certificate cert) => true, // Handle certificate validation if needed
-      ));
+      return SecureSocketWrapper(
+        await SecureSocket.secureServer(
+          _socket,
+          securityContext,
+        ),
+      );
     } catch (e) {
-      // Handle upgrade errors (e.g., certificate issues, network problems)
-      print("Upgrade failed: $e"); // Or use your logger
-      rethrow; // Re-throw the exception to be handled by the caller
+      print("Upgrade failed: $e");
+      rethrow;
     }
   }
 
-  /// Connects to the specified IP address and port.
+  /// Connects to the specified IP address and port using plain socket connection.
+  ///
+  /// Returns a [PlainSocketWrapper] on successful connection.
+  /// Throws an error if the connection fails.
   static Future<PlainSocketWrapper> connect(
     String ip,
     int port,
@@ -56,7 +60,7 @@ class PlainSocketWrapper implements SocketWrapper {
       final socket = await Socket.connect(ip, port);
       return PlainSocketWrapper(socket);
     } catch (e) {
-      print('Error connecting: $e'); // Or use your logger
+      print('Error connecting: $e');
       rethrow;
     }
   }
