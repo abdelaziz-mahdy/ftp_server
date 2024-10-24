@@ -87,6 +87,12 @@ class FTPCommandHandler {
       case 'ABOR':
         handleAbort(session);
         break;
+      case 'MLSD':
+        handleMlsd(argument, session);
+        break;
+      case 'MDTM':
+        handleMdtm(argument, session);
+        break;
       default:
         session.sendResponse('502 Command not implemented $command $argument');
         break;
@@ -129,6 +135,14 @@ class FTPCommandHandler {
 
   void handleRetr(String argument, FtpSession session) {
     session.retrieveFile(argument);
+  }
+
+  void handleMlsd(String argument, FtpSession session) {
+    session.handleMlsd(argument, session);
+  }
+
+  void handleMdtm(String argument, FtpSession session) {
+    session.handleMdtm(argument, session);
   }
 
   void handleStor(String argument, FtpSession session) {
