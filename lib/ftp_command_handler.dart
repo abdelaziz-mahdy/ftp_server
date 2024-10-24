@@ -1,10 +1,13 @@
 import 'dart:io';
 import 'package:ftp_server/ftp_session.dart';
 import 'package:ftp_server/server_type.dart';
+import 'package:ftp_server/socket_wrapper/plain_socket_wrapper.dart';
+import 'package:ftp_server/socket_wrapper/socket_wrapper.dart';
+import 'package:intl/intl.dart';
 import 'logger_handler.dart';
 
 class FTPCommandHandler {
-  final Socket controlSocket;
+  final SocketWrapper controlSocket;
   final LoggerHandler logger;
 
   FTPCommandHandler(this.controlSocket, this.logger);
@@ -86,6 +89,21 @@ class FTPCommandHandler {
         break;
       case 'ABOR':
         handleAbort(session);
+        break;
+      case 'AUTH':
+        handleAuth(argument, session);
+        break;
+      case 'PBSZ':
+        handlePbsz(argument, session);
+        break;
+      case 'PROT':
+        handleProt(argument, session);
+        break;
+      case 'MLSD':
+        handleMlsd(argument, session);
+        break;
+      case 'MDTM':
+        handleMdtm(argument, session);
         break;
       default:
         session.sendResponse('502 Command not implemented $command $argument');
@@ -213,6 +231,7 @@ class FTPCommandHandler {
   void handleFeat(FtpSession session) {
     session.sendResponse('211-Features:');
 
+    session.sendResponse(' AUTH TLS');
     session.sendResponse(' SIZE');
     session.sendResponse(' MDTM');
     session.sendResponse(' EPSV');
@@ -227,5 +246,75 @@ class FTPCommandHandler {
 
   void handleAbort(FtpSession session) {
     session.abortTransfer();
+  }
+
+  void handlePbsz(String argument, FtpSession session) {
+    if (session.secure) {
+      if (argument == '0') {
+        session.sendResponse('200 PBSZ command successful.');
+      } else {
+        session.sendResponse('501 Invalid PBSZ argument.');
+      }
+    } else {
+      session.sendResponse('530 Secure connection required.');
+    }
+  }
+
+  void handleProt(String argument, FtpSession session) {
+    if (argument == 'C' || argument == 'P') {
+      // Add 'P' for Private (TLS)
+      // session.dataChannelProtectionLevel = argument;
+      session.sendResponse('200 PROT command successful.');
+    } else {
+      session.sendResponse('501 Invalid PROT argument.');
+    }
+  }
+
+  void handleMlsd(String argument, FtpSession session) {
+    session.handleMlsd(argument, session);
+  }
+
+  void handleAuth(String argument, FtpSession session) async {
+    if (argument.toUpperCase() == 'TLS' &&
+        session.secureConnectionAllowed &&
+        session.controlSocket is PlainSocketWrapper) {
+      session.sendResponse('234 AUTH TLS successful');
+
+      session.controlSocket =
+          await (session.controlSocket as PlainSocketWrapper)
+              .upgradeToSecure(securityContext: session.securityContext!);
+
+      session.secure = true;
+      session.listenToControlMessages();
+      session.logger.generalLog('TLS negotiation completed');
+    } else {
+      session.sendResponse('504 AUTH type not supported');
+    }
+  }
+
+  void handleMdtm(String argument, FtpSession session) {
+    try {
+      if (!session.fileOperations.exists(argument)) {
+        session.sendResponse('550 File not found');
+        return;
+      }
+
+      String fullPath = session.fileOperations.resolvePath(argument);
+      File file = File(fullPath);
+      if (file.existsSync()) {
+        var stat = file.statSync();
+        String modificationTime = _formatMdtmTimestamp(stat.modified);
+        session.sendResponse('213 $modificationTime');
+      } else {
+        session.sendResponse('550 File not found');
+      }
+    } catch (e) {
+      session.sendResponse('550 Could not get modification time: $e');
+      logger.generalLog('Error getting modification time: $e');
+    }
+  }
+
+  String _formatMdtmTimestamp(DateTime dateTime) {
+    return DateFormat('yyyyMMddHHmmss').format(dateTime.toUtc()); // Use UTC
   }
 }
