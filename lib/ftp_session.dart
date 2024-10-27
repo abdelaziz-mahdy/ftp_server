@@ -400,32 +400,32 @@ class FtpSession {
   }
 
   Future<void> handleMlsd(String argument, FtpSession session) async {
-    if (!await session.openDataConnection()) {
+    if (!await openDataConnection()) {
       return;
     }
 
     try {
-      session.transferInProgress = true;
-      var dirContents = await session.fileOperations.listDirectory(argument);
+      transferInProgress = true;
+      var dirContents = await fileOperations.listDirectory(argument);
       logger.generalLog('Listing directory with MLSD: $argument');
 
       for (FileSystemEntity entity in dirContents) {
-        if (!session.transferInProgress) break;
+        if (!transferInProgress) break;
         var stat = await entity.stat();
         String facts = _formatMlsdFacts(entity, stat);
         dataSocket!.write(facts);
       }
 
-      if (session.transferInProgress) {
-        session.transferInProgress = false;
-        await session._closeDataSocket();
-        session.sendResponse('226 Transfer complete.');
+      if (transferInProgress) {
+        transferInProgress = false;
+        await _closeDataSocket();
+        sendResponse('226 Transfer complete.');
       }
     } catch (e) {
-      session.sendResponse('550 Failed to list directory: $e');
+      sendResponse('550 Failed to list directory: $e');
       logger.generalLog('Error listing directory with MLSD: $e');
-      session.transferInProgress = false;
-      await session._closeDataSocket();
+      transferInProgress = false;
+      await _closeDataSocket();
     }
   }
 
@@ -442,22 +442,22 @@ class FtpSession {
 
   void handleMdtm(String argument, FtpSession session) {
     try {
-      if (!session.fileOperations.exists(argument)) {
-        session.sendResponse('550 File not found');
+      if (!fileOperations.exists(argument)) {
+        sendResponse('550 File not found');
         return;
       }
 
-      String fullPath = session.fileOperations.resolvePath(argument);
+      String fullPath = fileOperations.resolvePath(argument);
       File file = File(fullPath);
       if (file.existsSync()) {
         var stat = file.statSync();
         String modificationTime = _formatMdtmTimestamp(stat.modified);
-        session.sendResponse('213 $modificationTime');
+        sendResponse('213 $modificationTime');
       } else {
-        session.sendResponse('550 File not found');
+        sendResponse('550 File not found');
       }
     } catch (e) {
-      session.sendResponse('550 Could not get modification time: $e');
+      sendResponse('550 Could not get modification time: $e');
       logger.generalLog('Error getting modification time: $e');
     }
   }
