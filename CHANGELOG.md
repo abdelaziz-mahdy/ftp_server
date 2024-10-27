@@ -1,4 +1,9 @@
+# 1.0.4
+
+- Adding MLSD,MDTM
+
 ## 1.0.3
+
 - Android fix ip address
 - Fix race condition for passive transfer
 - Added UTF8 to Feat command
