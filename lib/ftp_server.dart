@@ -1,12 +1,20 @@
+// lib/ftp_server.dart
 library ftp_server;
 
 import 'dart:io';
-import 'package:ftp_server/ftp_session.dart';
-import 'package:ftp_server/server_type.dart';
+import 'dart:async';
+
+import 'package:ftp_server/certificate_service.dart';
+import 'package:ftp_server/socket_handler/plain_socket_handler.dart';
+import 'package:ftp_server/socket_handler/secure_socket_handler.dart';
+import 'package:ftp_server/socket_handler/abstract_socket_handler.dart';
+
+import 'ftp_session.dart';
+import 'server_type.dart';
 import 'logger_handler.dart';
 
 class FtpServer {
-  ServerSocket? _server;
+  late AbstractSocketHandler _socketHandler;
 
   /// The port on which the FTP server will listen for incoming connections.
   final int port;
@@ -45,29 +53,92 @@ class FtpServer {
   /// [sharedDirectories].
   final String? startingDirectory;
 
+  /// Whether the server will only accept secure connections using TLS or not.
+  ///
+  /// If `true`, the server will only accept connections that are secured using TLS.
+  /// If `false`, the server will accept normal FTP connections and can optionally be upgraded to TLS using the command `AUTH TLS` if [secureConnectionAllowed] is `true`.
+  ///
+  /// Even if this is set to `false`, the server will still accept TLS upgrades, but it will not be the default.
+  /// If a client wants to upgrade to TLS, it can still send the `AUTH TLS` command.
+  ///
+  /// A [securityContext] can be provided or it will be created automatically.
+  final bool enforceSecureConnections;
+
+  /// Whether the server will only accept secure connections using TLS or not in data connections.
+  ///
+  /// If `true`, the server will only accept connections that are secured using TLS.
+  /// If `false`, the server will accept normal FTP data connections.
+  final bool secureDataConnection;
+
+  /// Whether the server will be able to upgrade to TLS using the `AUTH TLS` command.
+  final bool secureConnectionAllowed;
+
+  /// the security context for the server
+  /// a [securityContext] can be provided or it will be created automatically
+  SecurityContext? securityContext;
+
   /// Creates an FTP server with the provided configurations.
   ///
   /// The [port] is required to specify where the server will listen for connections.
   /// The [sharedDirectories] specifies which directories are accessible through the FTP server and must be provided.
   /// The [serverType] determines the mode (read-only or read and write) of the server.
   /// Optional parameters include [username] and [password] for authentication and a [logFunction] for custom logging.
-  FtpServer(this.port,
-      {this.username,
-      this.password,
-      required this.sharedDirectories,
-      required this.serverType,
-      Function(String)? logFunction,
-      this.startingDirectory})
-      : logger = LoggerHandler(logFunction) {
+  FtpServer(
+    this.port, {
+    this.username,
+    this.password,
+    required this.sharedDirectories,
+    required this.serverType,
+    Function(String)? logFunction,
+    this.startingDirectory,
+    this.enforceSecureConnections = false,
+    this.secureDataConnection = false,
+    this.secureConnectionAllowed = false,
+    this.securityContext,
+  }) : logger = LoggerHandler(logFunction) {
     if (sharedDirectories.isEmpty) {
       throw ArgumentError("Shared directories cannot be empty");
     }
+
+    // Initialize the appropriate SocketHandler based on the 'secure' flag
+    // if (secure) {
+    //   securityContext ??= SecurityContext.defaultContext;
+    //   if (securityContext == null) {
+    //     throw ArgumentError(
+    //         "SecurityContext must be provided for secure connections");
+    //   }
+    //   _socketHandler = SecureSocketHandlerImpl(securityContext!);
+    // } else {
+    // if (secure) {
+    //   // securityContext ??= SecurityContext.defaultContext;
+
+    //   securityContext ??=
+    //       CertificateService.generateSecurityContext().createSecurityContext();
+    //   _socketHandler = SecureSocketHandlerImpl(securityContext!);
+    // } else {
+    // securityContext ??=
+    //     CertificateService.generateSecurityContext().createSecurityContext();
+    // securityContext ??= SecurityContext.defaultContext;
+    securityContext ??=
+        CertificateService.generateSecurityContext().createSecurityContext();
+    if (enforceSecureConnections) {
+      _socketHandler = SecureSocketHandler(securityContext!);
+    } else {
+      _socketHandler = PlainSocketHandler();
+    }
+    // }
+    // }
+  }
+
+  Future<void> _startServer() async {
+    await _socketHandler.bind(InternetAddress.anyIPv4, port);
   }
 
   Future<void> start() async {
-    _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
+    await _startServer();
     logger.generalLog('FTP Server is running on port $port');
-    await for (var client in _server!) {
+
+    await for (var client in _socketHandler.connections) {
       logger.generalLog(
           'New client connected from ${client.remoteAddress.address}:${client.remotePort}');
       FtpSession(
@@ -78,14 +149,19 @@ class FtpServer {
         serverType: serverType,
         startingDirectory: startingDirectory,
         logger: logger,
+        secure: enforceSecureConnections,
+        secureDataConnection: secureDataConnection,
+        secureConnectionAllowed: secureConnectionAllowed,
+        securityContext: securityContext,
       );
     }
   }
 
   Future<void> startInBackground() async {
-    _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
+    await _startServer();
     logger.generalLog('FTP Server is running on port $port');
-    _server!.listen((client) {
+
+    _socketHandler.connections.listen((client) {
       logger.generalLog(
           'New client connected from ${client.remoteAddress.address}:${client.remotePort}');
       FtpSession(
@@ -96,12 +172,16 @@ class FtpServer {
         serverType: serverType,
         startingDirectory: startingDirectory,
         logger: logger,
+        secure: enforceSecureConnections,
+        secureDataConnection: secureDataConnection,
+        secureConnectionAllowed: secureConnectionAllowed,
+        securityContext: securityContext,
       );
     });
   }
 
   Future<void> stop() async {
-    await _server?.close();
+    _socketHandler.close();
     logger.generalLog('FTP Server stopped');
   }
 }
