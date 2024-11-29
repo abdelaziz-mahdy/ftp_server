@@ -73,7 +73,7 @@ class FtpServer {
     logger.generalLog('FTP Server is running on port $port');
     await for (var socket in _server!) {
       logger.generalLog(
-          'New socket connected from ${socket.remoteAddress.address}:${socket.remotePort}');
+          'New client connected from ${socket.remoteAddress.address}:${socket.remotePort}');
       var session = FtpSession(
         socket,
         username: username,
@@ -91,9 +91,9 @@ class FtpServer {
   Future<void> startInBackground() async {
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
     logger.generalLog('FTP Server is running on port $port');
-    _server!.listen((client) {
+    _server!.listen((socket) {
       logger.generalLog(
-          'New client connected from ${client.remoteAddress.address}:${client.remotePort}');
+          'New client connected from ${socket.remoteAddress.address}:${socket.remotePort}');
       var session = FtpSession(
         socket,
         username: username,
