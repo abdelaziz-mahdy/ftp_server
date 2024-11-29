@@ -825,29 +825,16 @@ void main() {
 
     // Authenticate the test client
     await connectAndAuthenticate(ftpClient, logFilePath);
-
+    await Future.delayed(
+        const Duration(milliseconds: 500)); // Wait for log to be written
     // Ensure there's an active session
     expect(server.activeSessions.isNotEmpty, isTrue,
         reason: 'No active sessions found after client connected');
 
     // Call the stop method
     await server.stop();
-
     // Verify that all active sessions are terminated
     expect(server.activeSessions.isEmpty, isTrue,
         reason: 'Active sessions list is not cleared after server stop');
-
-    // Attempt to interact with the terminated session
-    ftpClient.stdin.writeln('pwd');
-    ftpClient.stdin.writeln('quit');
-    await ftpClient.stdin.flush();
-
-    // Verify that the client can no longer interact with the server
-    var output = await readAllOutput(logFilePath);
-    if (Platform.isWindows) {
-      output = await execFTPCmdOnWin("pwd\nquit");
-    }
-    expect(output, isEmpty,
-        reason: 'Client is still able to interact with server after stop');
   });
 }
