@@ -45,6 +45,13 @@ class FtpServer {
   /// [sharedDirectories].
   final String? startingDirectory;
 
+  ///Create a List to collect new sessions.
+  ///When you call _server?.stop() it should disconnect all active connections.
+  final List<FtpSession> _sessionList = [];
+
+  /// Get the list of current active sessions.
+  List<FtpSession> get activeSessions => _sessionList;
+
   /// Creates an FTP server with the provided configurations.
   ///
   /// The [port] is required to specify where the server will listen for connections.
@@ -64,9 +71,6 @@ class FtpServer {
     }
   }
 
-  ///Create a List to collect new sessions.
-  ///When you call _server?.stop() it should disconnect all active connections.
-  List<FtpSession> sessionList = [];
 
   Future<void> start() async {
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
@@ -84,7 +88,7 @@ class FtpServer {
         logger: logger,
       );
       //Fill sessionList with new sessions.
-      sessionList.add(session);
+      _sessionList.add(session);
     }
   }
 
@@ -104,15 +108,16 @@ class FtpServer {
         logger: logger,
       );
       //Fill sessionList with new sessions.
-      sessionList.add(session);
+      _sessionList.add(session);
     });
   }
 
   Future<void> stop() async {
     //Disconnect all active sessions
-    for (var session in sessionList) {
+    for (var session in _sessionList) {
       session.closeConnection();
     }
+    _sessionList.clear();
     await _server?.close();
     _server = null;
     logger.generalLog('FTP Server stopped');

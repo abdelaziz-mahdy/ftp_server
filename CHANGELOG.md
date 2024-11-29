@@ -1,3 +1,7 @@
+# 1.0.6
+
+- Added a getter for getting a list of active sessions
+
 # 1.0.5
 
 - Fix: Active sessions are not terminated when calling `_server?.stop();` by [kkerimov](https://github.com/kkerimov)
