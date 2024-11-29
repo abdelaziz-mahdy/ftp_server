@@ -64,14 +64,18 @@ class FtpServer {
     }
   }
 
+  ///Create a List to collect new sessions.
+  ///When you call _server?.stop() it should disconnect all active connections.
+  List<FtpSession> sessionList = [];
+
   Future<void> start() async {
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
     logger.generalLog('FTP Server is running on port $port');
-    await for (var client in _server!) {
+    await for (var socket in _server!) {
       logger.generalLog(
-          'New client connected from ${client.remoteAddress.address}:${client.remotePort}');
-      FtpSession(
-        client,
+          'New socket connected from ${socket.remoteAddress.address}:${socket.remotePort}');
+      var session = FtpSession(
+        socket,
         username: username,
         password: password,
         sharedDirectories: sharedDirectories,
@@ -79,6 +83,8 @@ class FtpServer {
         startingDirectory: startingDirectory,
         logger: logger,
       );
+      //Fill sessionList with new sessions.
+      sessionList.add(session);
     }
   }
 
@@ -88,8 +94,8 @@ class FtpServer {
     _server!.listen((client) {
       logger.generalLog(
           'New client connected from ${client.remoteAddress.address}:${client.remotePort}');
-      FtpSession(
-        client,
+      var session = FtpSession(
+        socket,
         username: username,
         password: password,
         sharedDirectories: sharedDirectories,
@@ -97,11 +103,18 @@ class FtpServer {
         startingDirectory: startingDirectory,
         logger: logger,
       );
+      //Fill sessionList with new sessions.
+      sessionList.add(session);
     });
   }
 
   Future<void> stop() async {
+    //Disconnect all active sessions
+    for (var session in sessionList) {
+      session.closeConnection();
+    }
     await _server?.close();
+    _server = null;
     logger.generalLog('FTP Server stopped');
   }
 }
