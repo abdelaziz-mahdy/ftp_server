@@ -746,6 +746,7 @@ void main() {
           File(logPath).deleteSync();
         }
       }
+      server.stop();
     });
 
     test('Multiple clients execute commands simultaneously', () async {
@@ -803,38 +804,40 @@ void main() {
       await Future.wait(clientTasks);
     });
   });
+  group('Server termination', () {
+    test(
+        'Close method terminates active sessions and clears activeSessions list',
+        () async {
+      server = FtpServer(
+        port,
+        username: 'test',
+        password: 'password',
+        sharedDirectories: sharedDirectories,
+        startingDirectory: basename(sharedDirectories.first),
+        serverType: ServerType.readAndWrite,
+        logFunction: (String message) => print(message),
+      );
+      await server.startInBackground();
+      // Create a test client and connect to the server
+      ftpClient = await Process.start(
+        Platform.isWindows ? 'ftp' : 'bash',
+        Platform.isWindows ? ['-n', '-v'] : ['-c', 'ftp -n -v'],
+        runInShell: true,
+      );
 
-  test('Close method terminates active sessions and clears activeSessions list',
-      () async {
-    server = FtpServer(
-      port,
-      username: 'test',
-      password: 'password',
-      sharedDirectories: sharedDirectories,
-      startingDirectory: basename(sharedDirectories.first),
-      serverType: ServerType.readAndWrite,
-      logFunction: (String message) => print(message),
-    );
-    await server.startInBackground();
-    // Create a test client and connect to the server
-    ftpClient = await Process.start(
-      Platform.isWindows ? 'ftp' : 'bash',
-      Platform.isWindows ? ['-n', '-v'] : ['-c', 'ftp -n -v'],
-      runInShell: true,
-    );
+      // Authenticate the test client
+      await connectAndAuthenticate(ftpClient, logFilePath);
+      await Future.delayed(
+          const Duration(milliseconds: 500)); // Wait for log to be written
+      // Ensure there's an active session
+      expect(server.activeSessions.isNotEmpty, isTrue,
+          reason: 'No active sessions found after client connected');
 
-    // Authenticate the test client
-    await connectAndAuthenticate(ftpClient, logFilePath);
-    await Future.delayed(
-        const Duration(milliseconds: 500)); // Wait for log to be written
-    // Ensure there's an active session
-    expect(server.activeSessions.isNotEmpty, isTrue,
-        reason: 'No active sessions found after client connected');
-
-    // Call the stop method
-    await server.stop();
-    // Verify that all active sessions are terminated
-    expect(server.activeSessions.isEmpty, isTrue,
-        reason: 'Active sessions list is not cleared after server stop');
+      // Call the stop method
+      await server.stop();
+      // Verify that all active sessions are terminated
+      expect(server.activeSessions.isEmpty, isTrue,
+          reason: 'Active sessions list is not cleared after server stop');
+    });
   });
 }
