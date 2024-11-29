@@ -71,7 +71,6 @@ class FtpServer {
     }
   }
 
-
   Future<void> start() async {
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
     logger.generalLog('FTP Server is running on port $port');
