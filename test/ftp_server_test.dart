@@ -824,9 +824,12 @@ void main() {
         Platform.isWindows ? ['-n', '-v'] : ['-c', 'ftp -n -v'],
         runInShell: true,
       );
-
-      // Authenticate the test client
-      await connectAndAuthenticate(ftpClient, logFilePath);
+      if (Platform.isWindows) {
+        await execFTPCmdOnWin('pwd');
+      } else {
+        // Authenticate the test client
+        await connectAndAuthenticate(ftpClient, logFilePath);
+      }
       await Future.delayed(
           const Duration(milliseconds: 500)); // Wait for log to be written
       // Ensure there's an active session
