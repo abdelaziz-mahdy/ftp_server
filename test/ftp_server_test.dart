@@ -803,4 +803,51 @@ void main() {
       await Future.wait(clientTasks);
     });
   });
+
+  test('Close method terminates active sessions and clears activeSessions list',
+      () async {
+    server = FtpServer(
+      port,
+      username: 'test',
+      password: 'password',
+      sharedDirectories: sharedDirectories,
+      startingDirectory: basename(sharedDirectories.first),
+      serverType: ServerType.readAndWrite,
+      logFunction: (String message) => print(message),
+    );
+    await server.startInBackground();
+    // Create a test client and connect to the server
+    ftpClient = await Process.start(
+      Platform.isWindows ? 'ftp' : 'bash',
+      Platform.isWindows ? ['-n', '-v'] : ['-c', 'ftp -n -v'],
+      runInShell: true,
+    );
+
+    // Authenticate the test client
+    await connectAndAuthenticate(ftpClient, logFilePath);
+
+    // Ensure there's an active session
+    expect(server.activeSessions.isNotEmpty, isTrue,
+        reason: 'No active sessions found after client connected');
+
+    // Call the stop method
+    await server.stop();
+
+    // Verify that all active sessions are terminated
+    expect(server.activeSessions.isEmpty, isTrue,
+        reason: 'Active sessions list is not cleared after server stop');
+
+    // Attempt to interact with the terminated session
+    ftpClient.stdin.writeln('pwd');
+    ftpClient.stdin.writeln('quit');
+    await ftpClient.stdin.flush();
+
+    // Verify that the client can no longer interact with the server
+    var output = await readAllOutput(logFilePath);
+    if (Platform.isWindows) {
+      output = await execFTPCmdOnWin("pwd\nquit");
+    }
+    expect(output, isEmpty,
+        reason: 'Client is still able to interact with server after stop');
+  });
 }
