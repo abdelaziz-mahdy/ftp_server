@@ -1,3 +1,7 @@
+# 1.0.5
+
+- Fix: Active sessions are not terminated when calling `_server?.stop();` by [kkerimov](https://github.com/kkerimov)
+
 # 1.0.4
 
 - Adding MLSD,MDTM
