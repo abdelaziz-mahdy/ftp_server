@@ -1,3 +1,8 @@
+## 1.0.7
+
+- Improve pub points
+- Update deps versions
+
 ## 1.0.6+1
 
 - Fixing ChangeLog Styling
