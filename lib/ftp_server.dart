@@ -1,4 +1,4 @@
-library ftp_server;
+library;
 
 import 'dart:io';
 import 'package:ftp_server/ftp_session.dart';
