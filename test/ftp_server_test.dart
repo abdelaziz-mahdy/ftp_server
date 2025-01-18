@@ -523,6 +523,108 @@ void main() {
       }
       expect(output, contains(filename));
     });
+    test('All commands sequence in one test', () async {
+      // Create a directory
+      ftpClient.stdin.writeln('mkdir test_sequence_dir');
+      await ftpClient.stdin.flush();
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Change to the new directory
+      ftpClient.stdin.writeln('cd test_sequence_dir');
+      await ftpClient.stdin.flush();
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Upload a file
+      var filename = 'test_sequence_file.txt';
+      final testFile = File('${clientTempDir.path}/$filename')
+        ..writeAsStringSync('Sequence Test Content');
+      ftpClient.stdin.writeln('put ${testFile.path} $filename');
+      await ftpClient.stdin.flush();
+      await Future.delayed(const Duration(seconds: 2));
+
+      // Download the file
+      ftpClient.stdin.writeln('get $filename downloaded_$filename');
+      await ftpClient.stdin.flush();
+      await Future.delayed(const Duration(seconds: 2));
+
+      // Delete the file
+      ftpClient.stdin.writeln('delete $filename');
+      await ftpClient.stdin.flush();
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Go back to parent directory
+      ftpClient.stdin.writeln('cd ..');
+      await ftpClient.stdin.flush();
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Remove the directory
+      ftpClient.stdin.writeln('rmdir test_sequence_dir');
+      await ftpClient.stdin.flush();
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // List directory contents to verify
+      ftpClient.stdin.writeln('ls');
+      await ftpClient.stdin.flush();
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      var output = await readAllOutput(logFilePath);
+
+      if (Platform.isWindows) {
+        // Execute sequence of commands for Windows
+        output = await execFTPCmdOnWin("mkdir test_sequence_dir\n"
+            "cd test_sequence_dir\n"
+            "put ${testFile.path} $filename\n"
+            "get $filename downloaded_$filename\n"
+            "delete $filename\n"
+            "cd ..\n"
+            "rmdir test_sequence_dir\n"
+            "ls");
+      }
+
+      // Placeholder check for the logs - Replace with actual assertions
+      // You can check for specific log messages indicating success or failure
+      // of each command (mkdir, cd, put, get, delete, rmdir, ls)
+      expect(
+          output,
+          contains(
+              '257 "test_sequence_dir" created')); // Check for directory creation
+      expect(
+          output,
+          contains(
+              'Directory changed to')); // Check for successful directory change
+      expect(
+          output,
+          contains(
+              '226 Transfer complete')); // Check for successful file upload and download
+      expect(output,
+          contains('250 File deleted')); // Check for successful file deletion
+      expect(
+          output,
+          contains(
+              '250 Directory deleted')); // Check for successful directory removal
+
+      // Verify that the downloaded file exists and has the correct content
+      final downloadedFile = File('downloaded_$filename');
+      expect(downloadedFile.existsSync(), isTrue);
+      expect(
+          downloadedFile.readAsStringSync(), contains('Sequence Test Content'));
+
+      // Clean up downloaded file
+      if (downloadedFile.existsSync()) {
+        downloadedFile.deleteSync();
+      }
+
+      // Verify that the directory and the uploaded file no longer exist
+      expect(
+          Directory('${sharedDirectories.first}/test_sequence_dir')
+              .existsSync(),
+          isFalse);
+      expect(
+          File('${sharedDirectories.first}/$filename').existsSync(), isFalse);
+    });
   });
 
   group('FTP Server Read-Only Mode', () {
@@ -804,6 +906,7 @@ void main() {
       await Future.wait(clientTasks);
     });
   });
+
   group('Server termination', () {
     test(
         'Close method terminates active sessions and clears activeSessions list',
