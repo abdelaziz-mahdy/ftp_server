@@ -61,7 +61,11 @@ class FtpSession {
 
   void sendResponse(String message) {
     logger.logResponse(message);
-    controlSocket.write("$message\r\n");
+    try {
+      controlSocket.write('$message\r\n');
+    } catch (e) {
+      logger.generalLog('Error sending response: $e');
+    }
   }
 
   void closeConnection() {
