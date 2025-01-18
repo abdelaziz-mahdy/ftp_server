@@ -72,7 +72,11 @@ class FtpSession {
   }
 
   Future<bool> openDataConnection() async {
-    await _gettingDataSocket;
+    try {
+      await _gettingDataSocket;
+    } catch (e) {
+      logger.generalLog('Error while waiting for data socket: $e');
+    }
     if (dataSocket == null) {
       sendResponse('425 Can\'t open data connection');
       return false;
