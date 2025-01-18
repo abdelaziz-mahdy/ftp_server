@@ -124,7 +124,8 @@ class VirtualFileOperations extends FileOperations {
   Future<List<int>> readFile(String path) async {
     final file = await getFile(path);
     if (!await file.exists()) {
-      throw FileSystemException("File not found: $path, resolvedPath: ${resolvePath(path)}");
+      throw FileSystemException(
+          "File not found: $path, resolvedPath: ${resolvePath(path)}");
     }
     return file.readAsBytes();
   }
@@ -146,7 +147,8 @@ class VirtualFileOperations extends FileOperations {
     if (await file.exists()) {
       await file.delete();
     } else {
-      throw FileSystemException("File not found: $path, resolvedPath: ${resolvePath(path)}");
+      throw FileSystemException(
+          "File not found: $path, resolvedPath: ${resolvePath(path)}");
     }
   }
 
