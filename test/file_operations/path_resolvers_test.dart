@@ -24,6 +24,14 @@ void main() {
           .createSync(recursive: true);
       File(p.join(tempDir1.path, 'relative', 'path'))
           .createSync(recursive: true);
+
+      // Create deep nested directories for issue reproduction
+      Directory(
+              p.join(tempDir1.path, '2025-04-25', 'ILCE-7M3_4529168', '200527'))
+          .createSync(recursive: true);
+      File(p.join(tempDir1.path, '2025-04-25', 'ILCE-7M3_4529168', '200527',
+              'test.jpg'))
+          .createSync(recursive: true);
     });
 
     tearDown(() {
@@ -115,9 +123,14 @@ void main() {
       expect(() => fileOps.resolvePath('/outside/path'),
           throwsA(isA<FileSystemException>()));
 
-      // Windows-style outside path
-      expect(() => fileOps.resolvePath('outside\\path'),
-          throwsA(isA<FileSystemException>()));
+      // Windows-style outside path - make sure it's properly normalized
+      if (Platform.isWindows) {
+        expect(() => fileOps.resolvePath('outside\\path'),
+            throwsA(isA<FileSystemException>()));
+      } else {
+        expect(() => fileOps.resolvePath('outside/path'),
+            throwsA(isA<FileSystemException>()));
+      }
     });
 
     test('Throws error for navigating above root from root', () {
@@ -125,10 +138,103 @@ void main() {
       expect(() => fileOps.resolvePath('../../../../../../some/absolute/path'),
           throwsA(isA<FileSystemException>()));
 
-      // Windows-style navigation above root
-      fileOps.changeDirectory('');
-      expect(() => fileOps.resolvePath(r'..\..\..\..\some\absolute\path'),
+      // Windows-style navigation above root - make sure it's properly normalized
+      fileOps.changeDirectory('/');
+      if (Platform.isWindows) {
+        expect(
+            () => fileOps.resolvePath('..\\..\\..\\..\\some\\absolute\\path'),
+            throwsA(isA<FileSystemException>()));
+      } else {
+        expect(() => fileOps.resolvePath('../../../../some/absolute/path'),
+            throwsA(isA<FileSystemException>()));
+      }
+    });
+
+    test('Resolves complex nested subdirectory path - issue #19 reproduction',
+        () {
+      // Test case 1: Direct access using absolute path
+      final resolvedPath = fileOps.resolvePath(
+          '/${p.basename(tempDir1.path)}/2025-04-25/ILCE-7M3_4529168/200527/test.jpg');
+      expect(
+          resolvedPath,
+          equals(p.join(tempDir1.path, '2025-04-25', 'ILCE-7M3_4529168',
+              '200527', 'test.jpg')));
+
+      // Test case 2: Access using relative path when in a directory
+      fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
+      final relativeResolved =
+          fileOps.resolvePath('2025-04-25/ILCE-7M3_4529168/200527/test.jpg');
+      expect(
+          relativeResolved,
+          equals(p.join(tempDir1.path, '2025-04-25', 'ILCE-7M3_4529168',
+              '200527', 'test.jpg')));
+    });
+
+    test(
+        'Successfully changes directory to deep nested path - issue #19 reproduction',
+        () {
+      // Test changing directory to a deep path
+      fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
+      fileOps.changeDirectory('2025-04-25/ILCE-7M3_4529168/200527');
+
+      // Verify current directory is set correctly
+      expect(
+          fileOps.currentDirectory,
+          equals(p.normalize(p.join('/', p.basename(tempDir1.path),
+              '2025-04-25', 'ILCE-7M3_4529168', '200527'))));
+
+      // Test we can resolve a file in this directory
+      final resolvedPath = fileOps.resolvePath('test.jpg');
+      expect(
+          resolvedPath,
+          equals(p.join(tempDir1.path, '2025-04-25', 'ILCE-7M3_4529168',
+              '200527', 'test.jpg')));
+    });
+
+    test(
+        'Resolves path that begins with non-mapped directory name - issue #19 reproduction',
+        () {
+      // Create the specific path structure from the GitHub issue
+      final deepDir = Directory(
+          p.join(tempDir1.path, '2025-04-27', 'ILCE-7M3_4529168', '092926'))
+        ..createSync(recursive: true);
+
+      // This should throw when at root - exactly like the issue describes
+      fileOps.changeDirectory('/');
+      expect(() => fileOps.resolvePath('2025-04-27/ILCE-7M3_4529168/092926'),
           throwsA(isA<FileSystemException>()));
+
+      // But should work when inside the proper directory
+      fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
+      final resolvedPath =
+          fileOps.resolvePath('2025-04-27/ILCE-7M3_4529168/092926');
+      expect(resolvedPath, equals(deepDir.path));
+    });
+
+    test(
+        'Successfully resolves subdirectories of allowed directories when positioned correctly',
+        () {
+      // First create the nested directory structure
+      final deepDir = Directory(
+          p.join(tempDir1.path, '2025-04-27', 'ILCE-7M3_4529168', '092926'))
+        ..createSync(recursive: true);
+
+      // This should fail from root (reproducing issue #19)
+      fileOps.changeDirectory('/');
+      expect(
+          () => fileOps.changeDirectory('2025-04-27/ILCE-7M3_4529168/092926'),
+          throwsA(isA<FileSystemException>()));
+
+      // But when we first change to the correct parent directory, it should work
+      fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
+
+      // Now we can navigate down the path
+      expect(() => fileOps.changeDirectory('2025-04-27'),
+          isNot(throwsA(isA<FileSystemException>())));
+      expect(() => fileOps.changeDirectory('ILCE-7M3_4529168'),
+          isNot(throwsA(isA<FileSystemException>())));
+      expect(() => fileOps.changeDirectory('092926'),
+          isNot(throwsA(isA<FileSystemException>())));
     });
   });
 }

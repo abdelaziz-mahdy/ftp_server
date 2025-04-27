@@ -23,8 +23,8 @@ class VirtualFileOperations extends FileOperations {
   }
   @override
   String resolvePath(String path) {
-    // // Convert Windows-style backslashes to forward slashes for consistency
-    // path = path.replaceAll(r'\', '/');
+    // Normalize path separators to use platform-specific separators
+    path = path.replaceAll('\\', p.separator).replaceAll('/', p.separator);
 
     // If the path is empty or a relative path, append it to the current directory
     final effectivePath =
@@ -39,24 +39,80 @@ class VirtualFileOperations extends FileOperations {
     }
 
     // Extract the first segment of the path to match against directory mappings
-    final firstSegment = p.split(virtualPath).firstWhere(
-        (part) => part.isNotEmpty && part != p.rootPrefix(rootDirectory),
-        orElse: () => rootDirectory);
-
-    // Check if the first segment is mapped to an allowed directory
-    if (!directoryMappings.containsKey(firstSegment)) {
-      throw FileSystemException(
-          "Access denied or directory not found: path requested $path, firstSegment is $firstSegment, directoryMappings $directoryMappings");
+    final pathParts = p.split(virtualPath).where((part) => 
+        part.isNotEmpty && part != p.rootPrefix(rootDirectory)).toList();
+    
+    if (pathParts.isEmpty) {
+      return rootDirectory;
     }
+    
+    final firstSegment = pathParts.first;
 
-    // Get the mapped directory and construct the remaining path
-    final mappedDir = directoryMappings[firstSegment]!;
-    final remainingPath =
-        p.relative(virtualPath, from: '$rootDirectory$firstSegment');
+    // Direct mapping check: first segment is a known mapped directory
+    if (directoryMappings.containsKey(firstSegment)) {
+      // Get the mapped directory and construct the remaining path
+      final mappedDir = directoryMappings[firstSegment]!;
+      final remainingPath =
+          p.relative(virtualPath, from: '$rootDirectory$firstSegment');
 
-    // Resolve the final path and ensure it is within the allowed directories
-    final resolvedPath = p.normalize(p.join(mappedDir, remainingPath));
-    return _resolvePathWithinRoot(resolvedPath);
+      // Resolve the final path
+      final resolvedPath = p.normalize(p.join(mappedDir, remainingPath));
+      return _resolvePathWithinRoot(resolvedPath);
+    }
+    
+    // If we're at root and the path doesn't start with a mapped directory, it's invalid
+    if (currentDirectory == rootDirectory) {
+      throw FileSystemException(
+          "Access denied or directory not found: path requested $path, firstSegment is $firstSegment, "
+          "currentDirectory is $currentDirectory, directoryMappings $directoryMappings");
+    }
+    
+    // Handle relative paths from current directory
+    if (currentDirectory != rootDirectory) {
+      // Extract the first segment of the current directory to identify which mapped dir we're in
+      final currentDirParts = p.split(currentDirectory)
+          .where((part) => part.isNotEmpty && part != p.rootPrefix(rootDirectory))
+          .toList();
+      
+      if (currentDirParts.isNotEmpty) {
+        final currentDirRoot = currentDirParts.first;
+        if (directoryMappings.containsKey(currentDirRoot)) {
+          final mappedDir = directoryMappings[currentDirRoot]!;
+          // Get the relative part of the current directory from the virtual root
+          final relativePart = p.relative(currentDirectory, from: '$rootDirectory$currentDirRoot');
+          // Construct physical path
+          final fullPhysicalPath = p.normalize(p.join(mappedDir, relativePart, path));
+          
+          // Verify this path is still within the allowed directory
+          if (p.isWithin(mappedDir, fullPhysicalPath) || p.equals(mappedDir, fullPhysicalPath)) {
+            return fullPhysicalPath;
+          }
+        }
+      }
+    }
+    
+    // At this point, the path is not directly accessible via the virtual file system
+    throw FileSystemException(
+        "Access denied or directory not found: path requested $path, firstSegment is $firstSegment, "
+        "currentDirectory is $currentDirectory, directoryMappings $directoryMappings");
+  }
+
+  // Helper method to check if a path is within any allowed directory
+  bool _isWithinAllowedDirectories(String path) {
+    return directoryMappings.values
+        .any((dir) => p.isWithin(dir, path) || p.equals(dir, path));
+  }
+
+  String _resolvePathWithinRoot(String path) {
+    final normalizedPath = p.normalize(path);
+
+    // Ensure that the resolved path is within the allowed directories
+    if (_isWithinAllowedDirectories(normalizedPath)) {
+      return normalizedPath;
+    } else {
+      throw FileSystemException(
+          "Access denied: Path is outside the allowed directories", path);
+    }
   }
 
   @override
@@ -179,19 +235,6 @@ class VirtualFileOperations extends FileOperations {
       return File(fullPath).existsSync() || Directory(fullPath).existsSync();
     } catch (e) {
       return false;
-    }
-  }
-
-  String _resolvePathWithinRoot(String path) {
-    final normalizedPath = p.normalize(path);
-
-    // Ensure that the resolved path is within the allowed directories
-    if (directoryMappings.values.any((dir) =>
-        p.isWithin(dir, normalizedPath) || p.equals(dir, normalizedPath))) {
-      return normalizedPath;
-    } else {
-      throw FileSystemException(
-          "Access denied: Path is outside the allowed directories", path);
     }
   }
 }
