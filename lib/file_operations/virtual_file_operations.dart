@@ -93,7 +93,7 @@ class VirtualFileOperations extends FileOperations {
           "Available mapped directories: $availableDirs\n"
           "Try navigating to one of the mapped directories first with 'cd /$availableDirs'");
     }
-    
+
     // Handle relative paths from current directory
     if (currentDirectory != rootDirectory) {
       // Extract the first segment of the current directory to identify which mapped dir we're in
@@ -128,7 +128,7 @@ class VirtualFileOperations extends FileOperations {
     final mappedDirsList = directoryMappings.entries
         .map((e) => "${e.key} → ${e.value}")
         .join('\n  ');
-        
+
     throw FileSystemException(
         "Path resolution failed: '$path' cannot be accessed from your current location.\n"
         "Current directory: $currentDirInfo\n"
@@ -153,7 +153,7 @@ class VirtualFileOperations extends FileOperations {
       throw FileSystemException(
           "Security constraint violated: Path is outside the allowed directories.\n"
           "Requested path: $path\n"
-          "Allowed directories:\n  $allowedDirs", 
+          "Allowed directories:\n  $allowedDirs",
           path);
     }
   }
@@ -175,7 +175,8 @@ class VirtualFileOperations extends FileOperations {
                 from: directoryMappings[virtualDirName] ?? rootDirectory)));
       } else {
         throw FileSystemException(
-            "Directory not found: '$path' resolved to '$fullPath' but it doesn't exist", path);
+            "Directory not found: '$path' resolved to '$fullPath' but it doesn't exist",
+            path);
       }
     } catch (e) {
       if (e is FileSystemException) {

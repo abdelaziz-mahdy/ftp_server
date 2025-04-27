@@ -217,8 +217,8 @@ void main() {
         () {
       // Create the nested directory structure
       Directory(
-          p.join(tempDir1.path, '2025-04-27', 'ILCE-7M3_4529168', '092926'))
-        ..createSync(recursive: true);
+              p.join(tempDir1.path, '2025-04-27', 'ILCE-7M3_4529168', '092926'))
+          .createSync(recursive: true);
 
       // After our fix, this should now work from root
       fileOps.changeDirectory('/');
@@ -250,8 +250,7 @@ void main() {
         ..createSync(recursive: true);
 
       // Create a test file in the deep nested directory
-      final testFile = File(p.join(deepNestedDir.path, 'test.jpg'))
-        ..createSync();
+      File(p.join(deepNestedDir.path, 'test.jpg')).createSync();
 
       // Test case 1: Now with our fix, we should be able to access existing paths directly from root
       mediaFileOps.changeDirectory('/');
