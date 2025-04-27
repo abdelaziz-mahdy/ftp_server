@@ -215,9 +215,6 @@ void main() {
         'Successfully resolves subdirectories of allowed directories when positioned correctly',
         () {
       // First create the nested directory structure
-      final deepDir = Directory(
-          p.join(tempDir1.path, '2025-04-27', 'ILCE-7M3_4529168', '092926'))
-        ..createSync(recursive: true);
 
       // This should fail from root (reproducing issue #19)
       fileOps.changeDirectory('/');
