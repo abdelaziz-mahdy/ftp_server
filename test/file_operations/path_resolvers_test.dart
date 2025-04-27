@@ -199,38 +199,131 @@ void main() {
           p.join(tempDir1.path, '2025-04-27', 'ILCE-7M3_4529168', '092926'))
         ..createSync(recursive: true);
 
-      // This should throw when at root - exactly like the issue describes
+      // After our fix, this should now work from root instead of throwing
       fileOps.changeDirectory('/');
-      expect(() => fileOps.resolvePath('2025-04-27/ILCE-7M3_4529168/092926'),
-          throwsA(isA<FileSystemException>()));
-
-      // But should work when inside the proper directory
-      fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
       final resolvedPath =
           fileOps.resolvePath('2025-04-27/ILCE-7M3_4529168/092926');
       expect(resolvedPath, equals(deepDir.path));
+
+      // And it still works when inside the proper directory
+      fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
+      final resolvedPath2 =
+          fileOps.resolvePath('2025-04-27/ILCE-7M3_4529168/092926');
+      expect(resolvedPath2, equals(deepDir.path));
     });
 
     test(
         'Successfully resolves subdirectories of allowed directories when positioned correctly',
         () {
-      // First create the nested directory structure
+      // Create the nested directory structure
+      Directory(
+          p.join(tempDir1.path, '2025-04-27', 'ILCE-7M3_4529168', '092926'))
+        ..createSync(recursive: true);
 
-      // This should fail from root (reproducing issue #19)
+      // After our fix, this should now work from root
       fileOps.changeDirectory('/');
       expect(
           () => fileOps.changeDirectory('2025-04-27/ILCE-7M3_4529168/092926'),
-          throwsA(isA<FileSystemException>()));
+          isNot(throwsA(isA<FileSystemException>())));
 
-      // But when we first change to the correct parent directory, it should work
+      // And it still works when properly positioned in the parent directory
       fileOps.changeDirectory('/${p.basename(tempDir1.path)}');
+      expect(() {
+        fileOps.changeDirectory('2025-04-27');
+        fileOps.changeDirectory('ILCE-7M3_4529168');
+        fileOps.changeDirectory('092926');
+      }, isNot(throwsA(isA<FileSystemException>())));
+    });
 
-      // Now we can navigate down the path
-      expect(() => fileOps.changeDirectory('2025-04-27'),
+    test('Reproduces FTP server path resolution issues with media directories',
+        () {
+      // Setup an environment similar to the Android media structure in the logs
+      final mediaDir = Directory(p.join(tempDir1.path, 'media'))
+        ..createSync(recursive: true);
+
+      // Create a new file operations instance with just the media directory
+      final mediaFileOps = VirtualFileOperations([mediaDir.path]);
+
+      // Create the test directories to simulate the Android structure
+      final deepNestedDir = Directory(
+          p.join(mediaDir.path, '2025-04-27', 'ILCE-7M3_4529168', '133119'))
+        ..createSync(recursive: true);
+
+      // Create a test file in the deep nested directory
+      final testFile = File(p.join(deepNestedDir.path, 'test.jpg'))
+        ..createSync();
+
+      // Test case 1: Now with our fix, we should be able to access existing paths directly from root
+      mediaFileOps.changeDirectory('/');
+      final resolvedPath = mediaFileOps
+          .resolvePath('2025-04-27/ILCE-7M3_4529168/133119/test.jpg');
+      expect(resolvedPath, equals(p.join(deepNestedDir.path, 'test.jpg')));
+
+      // Test case 2: We should be able to change directory directly to a deep path
+      expect(
+          () => mediaFileOps
+              .changeDirectory('2025-04-27/ILCE-7M3_4529168/133119'),
           isNot(throwsA(isA<FileSystemException>())));
-      expect(() => fileOps.changeDirectory('ILCE-7M3_4529168'),
+
+      // Test case 3: Creating a new directory in a deep path should work
+      final newDirPath =
+          p.join(mediaDir.path, '2025-04-27', 'ILCE-7M3_4529168', 'newdir');
+      Directory(p.dirname(newDirPath))
+          .createSync(recursive: true); // Ensure parent exists
+
+      mediaFileOps.changeDirectory('/');
+      final resolvedNewDir =
+          mediaFileOps.resolvePath('2025-04-27/ILCE-7M3_4529168/newdir');
+      expect(resolvedNewDir, equals(newDirPath));
+
+      // Test case 4: The path resolution should work correctly for both absolute and relative paths
+      mediaFileOps.changeDirectory('/media');
+      final relativeResolved = mediaFileOps
+          .resolvePath('2025-04-27/ILCE-7M3_4529168/133119/test.jpg');
+      expect(relativeResolved, equals(p.join(deepNestedDir.path, 'test.jpg')));
+
+      mediaFileOps.changeDirectory('/');
+      final absoluteResolved = mediaFileOps
+          .resolvePath('/media/2025-04-27/ILCE-7M3_4529168/133119/test.jpg');
+      expect(absoluteResolved, equals(p.join(deepNestedDir.path, 'test.jpg')));
+    });
+
+    test('Validates full FTP server use case with fixed path resolution', () {
+      // Setup an environment like in the FTP logs
+      final androidMediaDir =
+          Directory(p.join(tempDir1.path, 'Android', 'media'))
+            ..createSync(recursive: true);
+
+      // Create FTP instance with Android media mapping
+      final ftpFileOps = VirtualFileOperations([androidMediaDir.path]);
+
+      // Create nested test directories
+      final testPath = p.join(
+          androidMediaDir.path, '2025-04-27', 'ILCE-7M3_4529168', '133119');
+      Directory(testPath).createSync(recursive: true);
+      File(p.join(testPath, 'testfile.jpg')).createSync();
+
+      // Test case 1: Access deep path directly from root (should now work)
+      ftpFileOps.changeDirectory('/');
+      final resolvedPath = ftpFileOps
+          .resolvePath('2025-04-27/ILCE-7M3_4529168/133119/testfile.jpg');
+      expect(resolvedPath, equals(p.join(testPath, 'testfile.jpg')));
+
+      // Test case 2: Create directory at deep path (should now work)
+      final newPath = p.join(
+          androidMediaDir.path, '2025-04-27', 'ILCE-7M3_4529168', 'newdir');
+      ftpFileOps.changeDirectory('/');
+      final newDirResolved =
+          ftpFileOps.resolvePath('2025-04-27/ILCE-7M3_4529168/newdir');
+      expect(newDirResolved, equals(newPath));
+
+      // Test case 3: Verify we can navigate to subdirectories step by step
+      ftpFileOps.changeDirectory('/');
+      expect(() => ftpFileOps.changeDirectory('2025-04-27'),
           isNot(throwsA(isA<FileSystemException>())));
-      expect(() => fileOps.changeDirectory('092926'),
+      expect(() => ftpFileOps.changeDirectory('ILCE-7M3_4529168'),
+          isNot(throwsA(isA<FileSystemException>())));
+      expect(() => ftpFileOps.changeDirectory('133119'),
           isNot(throwsA(isA<FileSystemException>())));
     });
   });

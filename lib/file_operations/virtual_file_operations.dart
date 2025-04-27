@@ -39,13 +39,15 @@ class VirtualFileOperations extends FileOperations {
     }
 
     // Extract the first segment of the path to match against directory mappings
-    final pathParts = p.split(virtualPath).where((part) => 
-        part.isNotEmpty && part != p.rootPrefix(rootDirectory)).toList();
-    
+    final pathParts = p
+        .split(virtualPath)
+        .where((part) => part.isNotEmpty && part != p.rootPrefix(rootDirectory))
+        .toList();
+
     if (pathParts.isEmpty) {
       return rootDirectory;
     }
-    
+
     final firstSegment = pathParts.first;
 
     // Direct mapping check: first segment is a known mapped directory
@@ -59,42 +61,79 @@ class VirtualFileOperations extends FileOperations {
       final resolvedPath = p.normalize(p.join(mappedDir, remainingPath));
       return _resolvePathWithinRoot(resolvedPath);
     }
-    
-    // If we're at root and the path doesn't start with a mapped directory, it's invalid
+
+    // If we're at root, try to find the path within any of the mapped directories
     if (currentDirectory == rootDirectory) {
+      // Try each mapped directory to see if the path exists within it
+      for (final entry in directoryMappings.entries) {
+        final mappedDir = entry.value;
+        final testPath = p.normalize(p.join(mappedDir, path));
+
+        // Check if the path exists physically inside this mapped directory
+        if (FileSystemEntity.isDirectorySync(testPath) ||
+            FileSystemEntity.isFileSync(testPath)) {
+          return testPath;
+        }
+
+        // Also check if we're trying to create a new path that would be valid
+        // within this mapped directory
+        if (p.isWithin(mappedDir, testPath)) {
+          final parentDir = p.dirname(testPath);
+          if (FileSystemEntity.isDirectorySync(parentDir)) {
+            return testPath;
+          }
+        }
+      }
+
+      // If we couldn't find the path in any mapped directory, throw an error
+      final availableDirs = directoryMappings.keys.join(', ');
       throw FileSystemException(
-          "Access denied or directory not found: path requested $path, firstSegment is $firstSegment, "
-          "currentDirectory is $currentDirectory, directoryMappings $directoryMappings");
+          "Path resolution failed: '$path' could not be found in any mapped directory.\n"
+          "Current directory: $currentDirectory\n"
+          "Available mapped directories: $availableDirs\n"
+          "Try navigating to one of the mapped directories first with 'cd /$availableDirs'");
     }
     
     // Handle relative paths from current directory
     if (currentDirectory != rootDirectory) {
       // Extract the first segment of the current directory to identify which mapped dir we're in
-      final currentDirParts = p.split(currentDirectory)
-          .where((part) => part.isNotEmpty && part != p.rootPrefix(rootDirectory))
+      final currentDirParts = p
+          .split(currentDirectory)
+          .where(
+              (part) => part.isNotEmpty && part != p.rootPrefix(rootDirectory))
           .toList();
-      
+
       if (currentDirParts.isNotEmpty) {
         final currentDirRoot = currentDirParts.first;
         if (directoryMappings.containsKey(currentDirRoot)) {
           final mappedDir = directoryMappings[currentDirRoot]!;
           // Get the relative part of the current directory from the virtual root
-          final relativePart = p.relative(currentDirectory, from: '$rootDirectory$currentDirRoot');
+          final relativePart = p.relative(currentDirectory,
+              from: '$rootDirectory$currentDirRoot');
           // Construct physical path
-          final fullPhysicalPath = p.normalize(p.join(mappedDir, relativePart, path));
-          
+          final fullPhysicalPath =
+              p.normalize(p.join(mappedDir, relativePart, path));
+
           // Verify this path is still within the allowed directory
-          if (p.isWithin(mappedDir, fullPhysicalPath) || p.equals(mappedDir, fullPhysicalPath)) {
+          if (p.isWithin(mappedDir, fullPhysicalPath) ||
+              p.equals(mappedDir, fullPhysicalPath)) {
             return fullPhysicalPath;
           }
         }
       }
     }
-    
+
     // At this point, the path is not directly accessible via the virtual file system
+    final currentDirInfo = p.split(currentDirectory).join('/');
+    final mappedDirsList = directoryMappings.entries
+        .map((e) => "${e.key} → ${e.value}")
+        .join('\n  ');
+        
     throw FileSystemException(
-        "Access denied or directory not found: path requested $path, firstSegment is $firstSegment, "
-        "currentDirectory is $currentDirectory, directoryMappings $directoryMappings");
+        "Path resolution failed: '$path' cannot be accessed from your current location.\n"
+        "Current directory: $currentDirInfo\n"
+        "Available mappings:\n  $mappedDirsList\n"
+        "If you're trying to access a deep path, try navigating to a mapped directory first.");
   }
 
   // Helper method to check if a path is within any allowed directory
@@ -110,27 +149,40 @@ class VirtualFileOperations extends FileOperations {
     if (_isWithinAllowedDirectories(normalizedPath)) {
       return normalizedPath;
     } else {
+      final allowedDirs = directoryMappings.values.join('\n  ');
       throw FileSystemException(
-          "Access denied: Path is outside the allowed directories", path);
+          "Security constraint violated: Path is outside the allowed directories.\n"
+          "Requested path: $path\n"
+          "Allowed directories:\n  $allowedDirs", 
+          path);
     }
   }
 
   @override
   void changeDirectory(String path) {
-    final fullPath = resolvePath(path);
+    try {
+      final fullPath = resolvePath(path);
 
-    if (Directory(fullPath).existsSync()) {
-      final virtualDirName = directoryMappings.keys.firstWhere(
-          (key) => fullPath.startsWith(directoryMappings[key]!),
-          orElse: () => rootDirectory);
+      if (Directory(fullPath).existsSync()) {
+        final virtualDirName = directoryMappings.keys.firstWhere(
+            (key) => fullPath.startsWith(directoryMappings[key]!),
+            orElse: () => rootDirectory);
 
-      currentDirectory = p.normalize(p.join(
-          rootDirectory,
-          virtualDirName,
-          p.relative(fullPath,
-              from: directoryMappings[virtualDirName] ?? rootDirectory)));
-    } else {
-      throw FileSystemException("Directory not found or access denied", path);
+        currentDirectory = p.normalize(p.join(
+            rootDirectory,
+            virtualDirName,
+            p.relative(fullPath,
+                from: directoryMappings[virtualDirName] ?? rootDirectory)));
+      } else {
+        throw FileSystemException(
+            "Directory not found: '$path' resolved to '$fullPath' but it doesn't exist", path);
+      }
+    } catch (e) {
+      if (e is FileSystemException) {
+        rethrow;
+      }
+      throw FileSystemException(
+          "Failed to change directory to '$path': ${e.toString()}", path);
     }
   }
 
@@ -150,17 +202,26 @@ class VirtualFileOperations extends FileOperations {
 
   @override
   Future<List<FileSystemEntity>> listDirectory(String path) async {
-    final fullPath = resolvePath(path);
+    try {
+      final fullPath = resolvePath(path);
 
-    if (fullPath == rootDirectory) {
-      return directoryMappings.values.map((dir) => Directory(dir)).toList();
-    }
+      if (fullPath == rootDirectory) {
+        return directoryMappings.values.map((dir) => Directory(dir)).toList();
+      }
 
-    final dir = Directory(fullPath);
-    if (!await dir.exists()) {
-      throw FileSystemException("Directory not found: $fullPath");
+      final dir = Directory(fullPath);
+      if (!await dir.exists()) {
+        throw FileSystemException(
+            "Directory not found: '$path' resolved to '$fullPath' but it doesn't exist");
+      }
+      return dir.listSync();
+    } catch (e) {
+      if (e is FileSystemException) {
+        rethrow;
+      }
+      throw FileSystemException(
+          "Failed to list directory '$path': ${e.toString()}", path);
     }
-    return dir.listSync();
   }
 
   @override
@@ -188,12 +249,21 @@ class VirtualFileOperations extends FileOperations {
 
   @override
   Future<void> createDirectory(String path) async {
-    final fullPath = resolvePath(path);
-    final dir = Directory(fullPath);
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    } else {
-      throw FileSystemException("Directory Already found: $fullPath");
+    try {
+      final fullPath = resolvePath(path);
+      final dir = Directory(fullPath);
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      } else {
+        throw FileSystemException(
+            "Directory already exists: '$path' resolved to '$fullPath'", path);
+      }
+    } catch (e) {
+      if (e is FileSystemException) {
+        rethrow;
+      }
+      throw FileSystemException(
+          "Failed to create directory '$path': ${e.toString()}", path);
     }
   }
 
