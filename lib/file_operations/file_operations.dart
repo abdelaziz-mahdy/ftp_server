@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:path/path.dart' as p;
 
 /// Interface defining common file operations for both physical and virtual file systems.
 abstract class FileOperations {

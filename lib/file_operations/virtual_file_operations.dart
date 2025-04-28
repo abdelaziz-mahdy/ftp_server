@@ -59,7 +59,7 @@ class VirtualFileOperations extends FileOperations {
     if (isInputAbsolute) {
       absoluteVirtualPath = p.normalize(cleanPath);
     } else {
-        absoluteVirtualPath = p.normalize(p.join(currentDirectory, cleanPath));
+      absoluteVirtualPath = p.normalize(p.join(currentDirectory, cleanPath));
     }
 
     // 3. Handle virtual root directory explicitly
