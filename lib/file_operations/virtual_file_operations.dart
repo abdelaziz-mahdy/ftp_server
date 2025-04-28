@@ -9,7 +9,24 @@ class VirtualFileOperations extends FileOperations {
   ///
   /// The `sharedDirectories` specifies directories that are accessible in this virtual file system.
   /// Throws [ArgumentError] if no directories are provided.
-  VirtualFileOperations(List<String> allowedDirectories) : super(p.separator) {
+  VirtualFileOperations(
+    List<String> allowedDirectories, {
+    String startingDirectory = '/',
+  }) : super(p.separator) {
+    // rootDirectory is '/'
+
+    // --- Start of changes ---
+    // Normalize startingDirectory to be an absolute virtual path
+    final String initialCurrentDirectory;
+    if (p.isAbsolute(startingDirectory)) {
+      initialCurrentDirectory = p.normalize(startingDirectory);
+    } else {
+      // Assume relative path is relative to root
+      initialCurrentDirectory =
+          p.normalize(p.join(rootDirectory, startingDirectory));
+    }
+    // --- End of changes ---
+
     if (allowedDirectories.isEmpty) {
       throw ArgumentError("Allowed directories cannot be empty");
     }
@@ -17,55 +34,88 @@ class VirtualFileOperations extends FileOperations {
     for (String dir in allowedDirectories) {
       final normalizedDir = p.normalize(dir);
       final dirName = p.basename(normalizedDir);
+      if (dirName == '.' || dirName == '..') {
+        throw ArgumentError("Mapped directory name cannot be '.' or '..'");
+      }
+      if (directoryMappings.containsKey(dirName)) {
+        throw ArgumentError("Duplicate mapped directory name: $dirName");
+      }
       directoryMappings[dirName] = normalizedDir;
     }
+
+    // --- Start of changes ---
+    // Set currentDirectory AFTER mappings are potentially available for validation (optional)
+    // We could add validation here using resolvePath, but let's try the simple fix first.
+    currentDirectory = initialCurrentDirectory;
+    // Optional validation:
+    // try {
+    //   resolvePath(currentDirectory); // Check if it resolves without error
+    // } catch (e) {
+    //   throw ArgumentError("Invalid starting directory '$startingDirectory': $e");
+    // }
+    // --- End of changes ---
   }
 
   @override
   String resolvePath(String path) {
-    // Handle empty path - return current directory's physical path
-    if (path.isEmpty) {
+    // Handle empty path or '.' - resolves relative to currentDirectory
+    if (path.isEmpty || path == '.') {
+      // If current directory is virtual root, return it.
       if (currentDirectory == rootDirectory) {
         return rootDirectory;
       }
+      // Otherwise, resolve the current virtual directory to its physical path.
+      // This assumes _virtualToPhysical correctly handles the currentDirectory format.
       return _virtualToPhysical(currentDirectory);
     }
 
-    // Normalize input path separators and clean the path
+    // Normalize input path separators (e.g., '\' to '/') and clean the path (e.g., remove '..').
     final cleanPath = p.normalize(path.replaceAll('\\', p.separator));
 
-    // Determine the absolute virtual path
+    // Determine the absolute virtual path.
+    // If the cleaned path is already absolute, use it directly.
+    // Otherwise, join it with the current virtual directory.
     final absoluteVirtualPath = p.isAbsolute(cleanPath)
         ? cleanPath
         : p.normalize(p.join(currentDirectory, cleanPath));
 
-    // Handle root directory case
+    // Handle the case where the resolved path is the virtual root directory.
     if (absoluteVirtualPath == rootDirectory) {
       return rootDirectory;
     }
 
-    // Special case: If at root and path is relative, try direct physical resolution first
+    // Optimization: If we are at the virtual root and the input path is relative,
+    // try to directly resolve it against the physical base directories first.
+    // This handles cases like accessing 'shared_docs/file.txt' directly from '/'.
     if (currentDirectory == rootDirectory && !p.isAbsolute(cleanPath)) {
       final physicalPath = _tryDirectPhysicalResolution(cleanPath);
       if (physicalPath != null) {
         return physicalPath;
       }
+      // If direct resolution fails, fall through to standard virtual path resolution.
     }
 
-    // Standard virtual path resolution
+    // Standard resolution: Convert the absolute virtual path to its corresponding physical path.
     return _virtualToPhysical(absoluteVirtualPath);
   }
 
+  /// Converts an absolute virtual path to its corresponding physical path.
+  /// Throws FileSystemException if the path is invalid or violates security constraints.
   String _virtualToPhysical(String virtualPath) {
+    // The virtual root doesn't map to a single physical path, return it directly.
     if (virtualPath == rootDirectory) return rootDirectory;
 
+    // Split the virtual path into components, removing empty parts and the root '/'.
     final parts = p
         .split(virtualPath)
         .where((part) => part.isNotEmpty && part != rootDirectory)
         .toList();
 
+    // If there are no parts after splitting (e.g., path was just '/'), return root.
+    // This case might be redundant due to the initial check, but kept for safety.
     if (parts.isEmpty) return rootDirectory;
 
+    // The first part of the virtual path must be a key in our directory mappings.
     final mapKey = parts.first;
     if (!directoryMappings.containsKey(mapKey)) {
       throw FileSystemException(
@@ -73,12 +123,16 @@ class VirtualFileOperations extends FileOperations {
           virtualPath);
     }
 
+    // Get the physical base path corresponding to the virtual directory key.
     final physicalBase = directoryMappings[mapKey]!;
+    // Get the remaining parts of the virtual path.
     final remainingParts = parts.length > 1 ? parts.sublist(1) : <String>[];
+    // Construct the full physical path by joining the base and remaining parts.
     final physicalPath =
         p.normalize(p.joinAll([physicalBase, ...remainingParts]));
 
-    // Security check: Ensure resolved path is within its physical base
+    // Security check: Ensure the resolved physical path is *within* or *equal to*
+    // its corresponding physical base directory. This prevents escaping the mapped directory.
     if (!p.isWithin(physicalBase, physicalPath) &&
         !p.equals(physicalBase, physicalPath)) {
       throw FileSystemException(
@@ -89,78 +143,83 @@ class VirtualFileOperations extends FileOperations {
     return physicalPath;
   }
 
+  /// Attempts to resolve a relative path directly against the physical mapped directories.
+  /// This is used as an optimization when the current directory is the virtual root.
+  /// Returns the physical path if found and valid, otherwise null.
   String? _tryDirectPhysicalResolution(String relativePath) {
+    // Iterate through each mapping (e.g., 'docs' -> '/path/to/docs').
     for (final entry in directoryMappings.entries) {
       final physicalBase = entry.value;
+      // Construct a potential physical path by joining the base and the relative path.
       final potentialPath = p.normalize(p.join(physicalBase, relativePath));
 
+      // Check if the potential path is valid:
+      // 1. It must be within or equal to the physical base (security).
+      // 2. The path must exist OR its parent directory must exist (allows creating new files/dirs).
       if ((p.isWithin(physicalBase, potentialPath) ||
               p.equals(physicalBase, potentialPath)) &&
           (FileSystemEntity.typeSync(potentialPath) !=
                   FileSystemEntityType.notFound ||
+              // Check parent existence for potential new file/dir creation
               Directory(p.dirname(potentialPath)).existsSync())) {
+        // If valid, return the resolved physical path.
         return potentialPath;
       }
     }
+    // No direct resolution found.
     return null;
   }
 
   // Helper to get the virtual path from a physical path
   String _getVirtualPath(String physicalPath) {
+    // Root directory maps to itself.
     if (physicalPath == rootDirectory) return rootDirectory;
 
-    // Find which mapping the physical path belongs to
+    // Find which mapping the physical path belongs to.
+    // It must be within or equal to one of the mapped physical directories.
     final entry = directoryMappings.entries.firstWhere(
       (e) =>
           p.isWithin(e.value, physicalPath) || p.equals(e.value, physicalPath),
+      // If no mapping contains this physical path, it's an internal error,
+      // likely meaning the physical path wasn't generated correctly by resolvePath.
       orElse: () => throw StateError(
           "Internal error: Cannot map physical path '$physicalPath' back to a virtual directory."),
     );
 
-    // Calculate the relative path from the physical base
+    // Calculate the path relative to the physical base directory.
     final relativePath = p.relative(physicalPath, from: entry.value);
-    // Construct the full virtual path
+    // Construct the full virtual path: / + mapping_key + relative_path
     return p.normalize(p.join(rootDirectory, entry.key, relativePath));
   }
 
   @override
   void changeDirectory(String path) {
     try {
+      // First, resolve the target path (virtual or potentially physical relative)
+      // to its absolute physical representation or the virtual root.
       final targetPhysicalPath = resolvePath(path);
 
-      // Special case for resolving to virtual root
+      // Case 1: Resolved path is the virtual root.
       if (targetPhysicalPath == rootDirectory) {
         currentDirectory = rootDirectory;
         return;
       }
 
-      // Check if the physical path exists and is a directory
+      // Case 2: Resolved path is a physical path. Check if it's a valid directory.
       final dir = Directory(targetPhysicalPath);
       if (!dir.existsSync()) {
         throw FileSystemException(
             "Directory not found: '$path' (resolved to '$targetPhysicalPath')",
             path);
       }
+      // Ensure it's actually a directory (though existsSync often suffices).
+      // Consider adding: if (FileSystemEntity.typeSync(targetPhysicalPath) != FileSystemEntityType.directory) { ... }
 
-      // If we're at root and path is relative, try to find which mapping it belongs to
-      if (currentDirectory == rootDirectory && !p.isAbsolute(path)) {
-        for (final entry in directoryMappings.entries) {
-          if (p.isWithin(entry.value, targetPhysicalPath) ||
-              p.equals(entry.value, targetPhysicalPath)) {
-            // Found the mapping, update currentDirectory with virtual path
-            final relativePath =
-                p.relative(targetPhysicalPath, from: entry.value);
-            currentDirectory =
-                p.normalize(p.join('/', entry.key, relativePath));
-            return;
-          }
-        }
-      }
-
-      // Update currentDirectory to the corresponding *virtual* path
+      // Update currentDirectory to the corresponding *virtual* path.
+      // This ensures that subsequent relative operations work correctly within the virtual structure.
       currentDirectory = _getVirtualPath(targetPhysicalPath);
     } catch (e) {
-      // Rethrow specific exceptions or wrap others
+      // Rethrow specific exceptions or wrap others for clarity.
       if (e is FileSystemException || e is StateError) {
         rethrow;
       }
@@ -185,15 +244,21 @@ class VirtualFileOperations extends FileOperations {
     try {
       final resolvedPhysicalPath = resolvePath(path);
 
-      // If resolved path is the virtual root, ONLY list the mapped virtual directories (keys).
+      // Special Case: Listing the virtual root ('/').
+      // We don't list a physical directory. Instead, we list the *keys*
+      // of the directory mappings, representing the top-level virtual folders.
       if (resolvedPhysicalPath == rootDirectory) {
-        // Return Directory objects representing the *keys* of the mappings.
+        // Return Directory objects where the path is just the mapping key (e.g., 'docs', 'pics').
+        // This represents the virtual entries available at the root.
+        // The FTP client will see these as directories.
         return directoryMappings.keys
-            .map((key) => Directory(key)) // Represent using only the key name
+            .map((key) =>
+                Directory(key)) // Represent virtual entry using its key.
             .toList();
       }
 
-      // Otherwise (resolved path is a physical path), list the contents of that directory
+      // Standard Case: Listing a directory within a mapping.
+      // The resolved path is a physical directory path.
       final dir = Directory(resolvedPhysicalPath);
       if (!await dir.exists()) {
         throw FileSystemException(
@@ -201,19 +266,23 @@ class VirtualFileOperations extends FileOperations {
             path);
       }
 
-      // Get the physical entities and map them to virtual paths
+      // Get the physical entities within the directory.
+      // NOTE: listSync() can block on large directories. Consider async list() if performance is critical.
       final physicalEntities = dir.listSync();
       final virtualEntities = <FileSystemEntity>[];
 
+      // Convert physical entities back to virtual representations.
       for (var entity in physicalEntities) {
-        // Get the virtual path for this entity
+        // Get the virtual path corresponding to the physical entity's path.
         final virtualPath = _getVirtualPath(entity.path);
-        // Create a new entity with the virtual path
+        // Create a new FileSystemEntity (File or Directory) using the *virtual* path.
+        // This is what the FTP client will see.
         if (entity is Directory) {
           virtualEntities.add(Directory(virtualPath));
         } else if (entity is File) {
           virtualEntities.add(File(virtualPath));
         }
+        // Ignore other types like Links for simplicity, or handle as needed.
       }
 
       return virtualEntities;
@@ -324,10 +393,10 @@ class VirtualFileOperations extends FileOperations {
   bool exists(String path) {
     try {
       final fullPath = resolvePath(path);
+      print("Checking existence of: $fullPath");
       if (fullPath == rootDirectory) return true; // Virtual root always exists
       // Check both file and directory existence for the resolved physical path
-      return FileSystemEntity.typeSync(fullPath) !=
-          FileSystemEntityType.notFound;
+      return File(fullPath).existsSync() || Directory(fullPath).existsSync();
     } catch (e) {
       // If resolvePath throws (e.g., invalid virtual path), it doesn't exist
       return false;

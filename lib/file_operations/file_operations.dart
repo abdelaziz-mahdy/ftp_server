@@ -4,9 +4,9 @@ import 'dart:io';
 /// Interface defining common file operations for both physical and virtual file systems.
 abstract class FileOperations {
   String rootDirectory;
-  String currentDirectory;
+  late String currentDirectory;
 
-  FileOperations(this.rootDirectory) : currentDirectory = rootDirectory;
+  FileOperations(this.rootDirectory);
 
   /// Lists the contents of the directory at the given path.
   Future<List<FileSystemEntity>> listDirectory(String path);

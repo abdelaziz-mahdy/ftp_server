@@ -629,7 +629,7 @@ void main() {
     group('Directory Listing Operations', () {
       test('List Current Directory (Internal)', () async {
         // First change to a specific directory
-        ftpClient.stdin.writeln('cd ${basename(sharedDirectories.first)}');
+        ftpClient.stdin.writeln('cd /${basename(sharedDirectories.first)}');
         await ftpClient.stdin.flush();
 
         // Then list current directory
@@ -649,8 +649,9 @@ void main() {
         }
 
         String listing = await outputHandler.generateDirectoryListing(
-            basename(sharedDirectories.first),
-            VirtualFileOperations(sharedDirectories));
+            '',
+            VirtualFileOperations(sharedDirectories,
+                startingDirectory: basename(sharedDirectories.first)));
 
         String normalizedOutput =
             outputHandler.normalizeDirectoryListing(output);
@@ -696,12 +697,11 @@ void main() {
         final testFile = File('${testDir.path}/test.txt');
         await testFile.writeAsString('test content');
 
-        ftpClient.stdin
-            .writeln('ls ${basename(sharedDirectories.first)}/test_dir');
+        ftpClient.stdin.writeln(
+            'ls test_dir'); // Use relative path from current directory '/<basename>'
         if (Platform.isLinux) {
           ftpClient.stdin.writeln('passive on');
-          ftpClient.stdin
-              .writeln('ls ${basename(sharedDirectories.first)}/test_dir');
+          ftpClient.stdin.writeln('ls test_dir'); // Use relative path
           ftpClient.stdin.writeln('passive off');
         }
         ftpClient.stdin.writeln('quit');
@@ -709,13 +709,17 @@ void main() {
 
         var output = await readAllOutput(logFilePath);
         if (Platform.isWindows) {
+          // Ensure we are in the correct starting directory before using relative path
           output = await execFTPCmdOnWin(
-              "ls ${basename(sharedDirectories.first)}/test_dir");
+              "cd ${basename(sharedDirectories.first)}\\nls test_dir");
         }
 
+        // Create VFS instance with the correct starting directory for generating expected output
+        final vfsForListing = VirtualFileOperations(sharedDirectories,
+            startingDirectory: basename(sharedDirectories.first));
         String listing = await outputHandler.generateDirectoryListing(
-            '${basename(sharedDirectories.first)}/test_dir',
-            VirtualFileOperations(sharedDirectories));
+            'test_dir', // Use relative path, resolved against vfsForListing.currentDirectory
+            vfsForListing);
 
         String normalizedOutput =
             outputHandler.normalizeDirectoryListing(output);
