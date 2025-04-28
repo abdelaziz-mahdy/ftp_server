@@ -163,7 +163,8 @@ class FtpSession {
       transferInProgress = true;
 
       var dirContents = await fileOperations.listDirectory(path);
-      logger.generalLog('Listing directory: $path');
+      logger.generalLog(
+          'Listing directory: $path, for ${fileOperations.resolvePath(path)} dir contents: $dirContents');
 
       for (FileSystemEntity entity in dirContents) {
         if (!transferInProgress) break; // Abort if transfer is cancelled
@@ -338,6 +339,8 @@ class FtpSession {
               transferInProgress = false;
               await _closeDataSocket();
               sendResponse('226 Transfer complete');
+              logger
+                  .generalLog('File transfer complete: $filename to $fullPath');
             } catch (e) {
               logger.generalLog('Error closing file after transfer: $e');
               _handleTransferError(fileSink);

@@ -946,4 +946,164 @@ void main() {
           reason: 'Active sessions list is not cleared after server stop');
     });
   });
+
+  group('Directory Mapping Tests', () {
+    // Create a separate temp directory for the mapped structure
+    final Directory mappedTempDir =
+        Directory.systemTemp.createTempSync('ftp_mapped_dir');
+
+    // Setup directory mappings similar to what's in the logs
+    final directoryMappings = ['${mappedTempDir.path}/photos'];
+
+    setUpAll(() async {
+      if (!await isFtpAvailable()) {
+        await installFtp();
+      }
+
+      // Create the mapped directory structure
+      Directory('${mappedTempDir.path}/photos').createSync(recursive: true);
+
+      // Start server with directory mappings
+      server = FtpServer(
+        port,
+        username: 'yxz',
+        password: '123456',
+        sharedDirectories: directoryMappings,
+        serverType: ServerType.readAndWrite,
+        logFunction: (String message) => print(message),
+      );
+      await server.startInBackground();
+    });
+
+    tearDownAll(() async {
+      await server.stop();
+      // Clean up the temp directory
+      if (mappedTempDir.existsSync()) {
+        mappedTempDir.deleteSync(recursive: true);
+      }
+    });
+
+    setUp(() async {
+      ftpClient = await Process.start(
+        Platform.isWindows ? 'ftp' : 'bash',
+        Platform.isWindows ? ['-n', '-v'] : ['-c', 'ftp -n -v'],
+        runInShell: true,
+      );
+
+      File(logFilePath).writeAsStringSync(''); // Clear the log file
+      ftpClient.stdout.transform(utf8.decoder).listen((data) {
+        File(logFilePath).writeAsStringSync(data, mode: FileMode.append);
+      });
+      ftpClient.stderr.transform(utf8.decoder).listen((data) {
+        File(logFilePath).writeAsStringSync(data, mode: FileMode.append);
+      });
+
+      ftpClient.stdin.writeln('open 127.0.0.1 $port');
+      await ftpClient.stdin.flush();
+      ftpClient.stdin.writeln('user yxz 123456');
+      await ftpClient.stdin.flush();
+    });
+
+    tearDown(() async {
+      ftpClient.kill();
+    });
+
+    test('Access non-existent directory structure', () async {
+      // Replicate the exact behavior from the logs
+      ftpClient.stdin.writeln('pwd'); // Should be /
+      ftpClient.stdin.writeln(
+          'cd 2025-04-27/ILCE-7M3_4529168/133119/'); // Should fail (550) - dir doesn't exist yet
+      ftpClient.stdin.writeln('cd /');
+      ftpClient.stdin.writeln(
+          'cd 2025-04-27'); // Should fail (550) - dir doesn't exist yet
+      ftpClient.stdin.writeln(
+          'mkdir 2025-04-27'); // Should SUCCEED (257) - creates inside 'photos'
+      ftpClient.stdin.writeln(
+          'cd 2025-04-27'); // Should SUCCEED (250) - enters '/photos/2025-04-27'
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin(
+            "pwd\ncd 2025-04-27/ILCE-7M3_4529168/133119/\ncd /\ncd 2025-04-27\nmkdir 2025-04-27\ncd 2025-04-27");
+      }
+
+      // Verify initial CWD attempts fail because the directory doesn't exist physically
+      expect(
+          output,
+          contains(
+              '550 Access denied or directory not found')); // For the CWD attempts on non-existent dirs
+
+      // Verify MKD succeeds because the lenient check resolves '2025-04-27' to '<mappedTempDir>/photos/2025-04-27'
+      expect(output, contains('257 "2025-04-27" created'));
+
+      // Verify subsequent CWD succeeds
+      expect(output, contains('250 Directory changed to /photos/2025-04-27'));
+
+      // Verify navigation to root still works
+      expect(output, contains('250 Directory changed to /'));
+    });
+
+    test('Access mapped directory successfully', () async {
+      // Create a valid nested structure inside the mapped directory
+      Directory('${mappedTempDir.path}/photos/2023-albums')
+          .createSync(recursive: true);
+      File('${mappedTempDir.path}/photos/2023-albums/test.jpg')
+          .writeAsStringSync('test image content');
+
+      ftpClient.stdin.writeln('cd /photos');
+      ftpClient.stdin.writeln('pwd');
+      ftpClient.stdin.writeln('ls');
+      ftpClient.stdin.writeln('cd 2023-albums');
+      ftpClient.stdin.writeln('pwd');
+      ftpClient.stdin.writeln('ls');
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin(
+            "cd /photos\npwd\nls\ncd 2023-albums\npwd\nls");
+      }
+
+      // Verify we can access the mapped directory
+      expect(output, contains('250 Directory changed to /photos'));
+      expect(output, contains('2023-albums'));
+      expect(output, contains('250 Directory changed to /photos/2023-albums'));
+      expect(output, contains('test.jpg'));
+    });
+
+    test('Try to create directory in unmapped location', () async {
+      // This test name is now slightly misleading. It tests creating dirs via relative paths from root.
+      ftpClient.stdin.writeln('cd /');
+      ftpClient.stdin.writeln(
+          'mkdir ILCE-7M3_4529168'); // Should SUCCEED (257) -> creates in 'photos'
+      ftpClient.stdin.writeln(
+          'cd ILCE-7M3_4529168'); // Should SUCCEED (250) -> enters '/photos/ILCE-7M3_4529168'
+      ftpClient.stdin.writeln(
+          'mkdir 133119'); // Should SUCCEED (257) -> creates in 'photos/ILCE-7M3_4529168'
+      ftpClient.stdin
+          .writeln('ls'); // Should list content of '/photos/ILCE-7M3_4529168'
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin(
+            "cd /\nmkdir ILCE-7M3_4529168\ncd ILCE-7M3_4529168\nmkdir 133119\nls");
+      }
+
+      // Check if directory creation succeeded as expected via lenient check
+      expect(output, contains('257 "ILCE-7M3_4529168" created'));
+      expect(
+          output,
+          contains(
+              '250 Directory changed to /photos/ILCE-7M3_4529168')); // Note the virtual path!
+      expect(output, contains('257 "133119" created'));
+
+      // Ensure the final LS lists the content of the created directory
+      expect(output, contains('133119')); // Check if the subdirectory is listed
+    });
+  });
 }

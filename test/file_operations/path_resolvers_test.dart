@@ -325,5 +325,111 @@ void main() {
       expect(() => ftpFileOps.changeDirectory('133119'),
           isNot(throwsA(isA<FileSystemException>())));
     });
+
+    test('Replicates user issue sequence from root', () async {
+      // Setup: Use tempDir1 which has a basename like 'virtual_file_operations_test1...'
+      final baseName1 = p.basename(tempDir1.path);
+      final fileOps = VirtualFileOperations(
+          [tempDir1.path]); // Use only one mapping for clarity
+
+      // Create the expected physical directory structure beforehand for CWD tests
+      final deepPhysicalPath =
+          p.join(tempDir1.path, '2025-04-27', 'ILCE-7M3_4529168', '133119');
+      Directory(deepPhysicalPath).createSync(recursive: true);
+
+      // Ensure starting at root
+      fileOps.changeDirectory('/');
+      expect(fileOps.currentDirectory, equals('/'));
+
+      // 1. Attempt CWD into deep path (should SUCCEED via lenient check)
+      expect(
+          () => fileOps.changeDirectory('2025-04-27/ILCE-7M3_4529168/133119/'),
+          returnsNormally);
+      // Verify current directory is updated correctly (maps back to virtual path)
+      expect(fileOps.currentDirectory,
+          equals('/$baseName1/2025-04-27/ILCE-7M3_4529168/133119'));
+
+      // Go back to root for next steps
+      fileOps.changeDirectory('/');
+      expect(fileOps.currentDirectory, equals('/'));
+
+      // 2. Attempt CWD into first part of path (should SUCCEED)
+      expect(() => fileOps.changeDirectory('2025-04-27'), returnsNormally);
+      expect(fileOps.currentDirectory, equals('/$baseName1/2025-04-27'));
+
+      // Go back to root
+      fileOps.changeDirectory('/');
+
+      // 3. Attempt MKD from root with relative path (should SUCCEED via lenient check)
+      // Delete first if it exists from previous step
+      final mdkPath = p.join(tempDir1.path, 'new_dir_from_root');
+      if (Directory(mdkPath).existsSync()) {
+        Directory(mdkPath).deleteSync();
+      }
+      await fileOps.createDirectory('new_dir_from_root');
+
+      expect(
+          Directory(mdkPath).existsSync(), isTrue); // Verify physical creation
+      expect(fileOps.currentDirectory,
+          equals('/')); // MKD shouldn't change current dir
+
+      // 4. Attempt CWD into the newly created dir (should SUCCEED)
+      expect(
+          () => fileOps.changeDirectory('new_dir_from_root'), returnsNormally);
+      expect(fileOps.currentDirectory, equals('/$baseName1/new_dir_from_root'));
+
+      // 5. Verify that CWD into the *explicit* mapped directory still works
+      fileOps.changeDirectory('/');
+      expect(() => fileOps.changeDirectory('/$baseName1'), returnsNormally);
+      expect(fileOps.currentDirectory, equals('/$baseName1'));
+    });
+
+    test('writeFile behavior from root directory', () async {
+      // Setup: Use tempDir1 which has a basename like 'virtual_file_operations_test1...'
+      final baseName1 = p.basename(tempDir1.path);
+      final fileOps = VirtualFileOperations(
+          [tempDir1.path, tempDir2.path]); // Use multiple mappings
+
+      final data = [1, 2, 3];
+      final fileName = 'upload_from_root.txt';
+      final expectedPhysicalPath = p.join(tempDir1.path, fileName);
+
+      // Ensure starting at root
+      fileOps.changeDirectory('/');
+      expect(fileOps.currentDirectory, equals('/'));
+
+      // 1. Attempt writeFile with a relative path (should succeed via lenient check into the first mapping)
+      await expectLater(fileOps.writeFile(fileName, data), completes);
+      // Verify the file exists in the *first* mapped physical directory
+      final file = File(expectedPhysicalPath);
+      expect(await file.exists(), isTrue);
+      expect(await file.readAsBytes(), equals(data));
+      await file.delete(); // Clean up
+
+      // 2. Attempt writeFile with an absolute path targeting a mapping (should succeed)
+      final absoluteFileName = 'upload_absolute.txt';
+      final expectedAbsolutePath = p.join(tempDir1.path, absoluteFileName);
+      await expectLater(
+          fileOps.writeFile('/$baseName1/$absoluteFileName', data), completes);
+      final absoluteFile = File(expectedAbsolutePath);
+      expect(await absoluteFile.exists(), isTrue);
+      expect(await absoluteFile.readAsBytes(), equals(data));
+      await absoluteFile.delete(); // Clean up
+
+      // 3. Attempt writeFile with an absolute path NOT starting with a mapping key (should fail in resolvePath)
+      await expectLater(
+          fileOps.writeFile('/non_mapped_dir/$fileName', data),
+          throwsA(isA<FileSystemException>().having(
+              (e) => e.message,
+              'message',
+              contains(
+                  "Path resolution failed: Virtual directory 'non_mapped_dir' not found"))));
+
+      // 4. Attempt writeFile directly to root (should fail in writeFile's check)
+      await expectLater(
+          fileOps.writeFile('/', data),
+          throwsA(isA<FileSystemException>().having((e) => e.message, 'message',
+              contains("Cannot write to root directory"))));
+    });
   });
 }
