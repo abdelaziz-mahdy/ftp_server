@@ -65,37 +65,34 @@ class VirtualFileOperations extends FileOperations {
         return rootDirectory;
       }
       // Otherwise, resolve the current virtual directory to its physical path.
-      // This assumes _virtualToPhysical correctly handles the currentDirectory format.
       return _virtualToPhysical(currentDirectory);
     }
 
-    // Normalize input path separators (e.g., '\' to '/') and clean the path (e.g., remove '..').
-    final cleanPath = p.normalize(path.replaceAll('\\', p.separator));
+    // Normalize input path separators and clean the path
+    // Replace all backslashes with forward slashes for consistency
+    // final normalizedPath = path.replaceAll('\\', '/');
+    final cleanPath = p.normalize(path);
 
-    // Determine the absolute virtual path.
-    // If the cleaned path is already absolute, use it directly.
-    // Otherwise, join it with the current virtual directory.
+    // Determine the absolute virtual path
     final absoluteVirtualPath = p.isAbsolute(cleanPath)
         ? cleanPath
         : p.normalize(p.join(currentDirectory, cleanPath));
 
-    // Handle the case where the resolved path is the virtual root directory.
+    // Handle the case where the resolved path is the virtual root directory
     if (absoluteVirtualPath == rootDirectory) {
       return rootDirectory;
     }
 
     // Optimization: If we are at the virtual root and the input path is relative,
-    // try to directly resolve it against the physical base directories first.
-    // This handles cases like accessing 'shared_docs/file.txt' directly from '/'.
+    // try to directly resolve it against the physical base directories first
     if (currentDirectory == rootDirectory && !p.isAbsolute(cleanPath)) {
       final physicalPath = _tryDirectPhysicalResolution(cleanPath);
       if (physicalPath != null) {
         return physicalPath;
       }
-      // If direct resolution fails, fall through to standard virtual path resolution.
     }
 
-    // Standard resolution: Convert the absolute virtual path to its corresponding physical path.
+    // Standard resolution: Convert the absolute virtual path to its corresponding physical path
     return _virtualToPhysical(absoluteVirtualPath);
   }
 
@@ -105,14 +102,16 @@ class VirtualFileOperations extends FileOperations {
     // The virtual root doesn't map to a single physical path, return it directly.
     if (virtualPath == rootDirectory) return rootDirectory;
 
+    // Normalize the virtual path to use forward slashes
+    final normalizedVirtualPath = p.normalize(virtualPath);
+
     // Split the virtual path into components, removing empty parts and the root '/'.
     final parts = p
-        .split(virtualPath)
+        .split(normalizedVirtualPath)
         .where((part) => part.isNotEmpty && part != rootDirectory)
         .toList();
 
     // If there are no parts after splitting (e.g., path was just '/'), return root.
-    // This case might be redundant due to the initial check, but kept for safety.
     if (parts.isEmpty) return rootDirectory;
 
     // The first part of the virtual path must be a key in our directory mappings.
@@ -132,7 +131,7 @@ class VirtualFileOperations extends FileOperations {
         p.normalize(p.joinAll([physicalBase, ...remainingParts]));
 
     // Security check: Ensure the resolved physical path is *within* or *equal to*
-    // its corresponding physical base directory. This prevents escaping the mapped directory.
+    // its corresponding physical base directory.
     if (!p.isWithin(physicalBase, physicalPath) &&
         !p.equals(physicalBase, physicalPath)) {
       throw FileSystemException(
@@ -147,11 +146,15 @@ class VirtualFileOperations extends FileOperations {
   /// This is used as an optimization when the current directory is the virtual root.
   /// Returns the physical path if found and valid, otherwise null.
   String? _tryDirectPhysicalResolution(String relativePath) {
+    // Normalize the relative path to use forward slashes
+    final normalizedRelativePath = relativePath.replaceAll('\\', '/');
+
     // Iterate through each mapping (e.g., 'docs' -> '/path/to/docs').
     for (final entry in directoryMappings.entries) {
       final physicalBase = entry.value;
       // Construct a potential physical path by joining the base and the relative path.
-      final potentialPath = p.normalize(p.join(physicalBase, relativePath));
+      final potentialPath =
+          p.normalize(p.join(physicalBase, normalizedRelativePath));
 
       // Check if the potential path is valid:
       // 1. It must be within or equal to the physical base (security).
