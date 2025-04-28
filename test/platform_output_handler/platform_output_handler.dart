@@ -8,6 +8,11 @@ abstract class PlatformOutputHandler {
   String getExpectedSizeOutput(int size);
   String getExpectedDirectoryChangeOutput(String path);
   String getExpectedDirectoryListingOutput(String listing);
+  String getExpectedMakeDirectoryOutput(String path);
+  String getExpectedDeleteDirectoryOutput(String path);
+  String getExpectedDeleteFileOutput(String filename);
+  String getExpectedTransferCompleteOutput();
+
   Future<String> generateDirectoryListing(
       String path, FileOperations fileOperations) async {
     StringBuffer listing = StringBuffer();

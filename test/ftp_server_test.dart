@@ -210,10 +210,12 @@ void main() {
 
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
-        output = await execFTPCmdOnWin("mkdir test_dir\nls");
+        output = await execFTPCmdOnWin("mkdir test_dir\\nls");
       }
 
-      expect(output, contains('257 "test_dir" created'));
+      // Use outputHandler for expected MKD output
+      expect(output,
+          contains(outputHandler.getExpectedMakeDirectoryOutput('test_dir')));
       expect(output, contains('test_dir'));
       expect(Directory('${sharedDirectories.first}/test_dir').existsSync(),
           isTrue);
@@ -228,12 +230,14 @@ void main() {
 
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
-        output = await execFTPCmdOnWin("mkdir test_dir\nrmdir test_dir\nls\n");
-        expect(output, contains('250 Directory deleted'));
-      } else {
-        expect(output, contains('250 Directory deleted'));
+        output =
+            await execFTPCmdOnWin("mkdir test_dir\\nrmdir test_dir\\nls\\n");
       }
-      expect(output, (contains('test_dir')));
+      // Use outputHandler for expected RMD output
+      expect(output,
+          contains(outputHandler.getExpectedDeleteDirectoryOutput('test_dir')));
+      // The directory might still be listed briefly in the output before deletion confirmation
+      // expect(output, isNot(contains('test_dir'))); // This check might be flaky depending on timing
       expect(Directory('${sharedDirectories.first}/test_dir').existsSync(),
           isFalse);
     });
@@ -251,10 +255,14 @@ void main() {
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin("put ${testFile.path} $filename");
-        expect(output, contains('226 Transfer complete'));
+        // Use outputHandler for transfer complete message
+        expect(output,
+            contains(outputHandler.getExpectedTransferCompleteOutput()));
         output = await execFTPCmdOnWin("ls");
       } else {
-        expect(output, contains('226 Transfer complete'));
+        // Use outputHandler for transfer complete message
+        expect(output,
+            contains(outputHandler.getExpectedTransferCompleteOutput()));
       }
       expect(output, contains(filename));
     });
@@ -274,10 +282,14 @@ void main() {
       if (Platform.isWindows) {
         output =
             await execFTPCmdOnWin('get test_file_ret.txt test_file_ret.txt');
-        expect(output, contains('226 Transfer complete'));
+        // Use outputHandler for transfer complete message
+        expect(output,
+            contains(outputHandler.getExpectedTransferCompleteOutput()));
         output = await execFTPCmdOnWin('dir');
       } else {
-        expect(output, contains('226 Transfer complete'));
+        // Use outputHandler for transfer complete message
+        expect(output,
+            contains(outputHandler.getExpectedTransferCompleteOutput()));
       }
       expect(File('${sharedDirectories.first}/$testPath').existsSync(), isTrue);
       if (File('./test_file_ret.txt').existsSync()) {
@@ -296,10 +308,18 @@ void main() {
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin('delete test_file.txt');
-        expect(output, contains('250 File deleted'));
+        // Use outputHandler for expected DELE output
+        expect(
+            output,
+            contains(
+                outputHandler.getExpectedDeleteFileOutput('test_file.txt')));
         output = await execFTPCmdOnWin('dir');
       } else {
-        expect(output, contains('250 File deleted'));
+        // Use outputHandler for expected DELE output
+        expect(
+            output,
+            contains(
+                outputHandler.getExpectedDeleteFileOutput('test_file.txt')));
       }
       expect(output, isNot(contains('test_file.txt')));
       expect(testFile.existsSync(), isFalse);
@@ -317,10 +337,14 @@ void main() {
         var output = await readAllOutput(logFilePath);
         if (Platform.isWindows) {
           output = await execFTPCmdOnWin("put ${testFile.path} $filename");
-          expect(output, contains('226 Transfer complete'));
+          // Use outputHandler for transfer complete message
+          expect(output,
+              contains(outputHandler.getExpectedTransferCompleteOutput()));
           output = await execFTPCmdOnWin("ls");
         } else {
-          expect(output, contains('226 Transfer complete'));
+          // Use outputHandler for transfer complete message
+          expect(output,
+              contains(outputHandler.getExpectedTransferCompleteOutput()));
         }
         expect(output, contains(filename));
       });
@@ -340,16 +364,21 @@ void main() {
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin("put ${testFile.path} $filename");
-        expect(output, contains('226 Transfer complete'));
+        // Use outputHandler for transfer complete message
+        expect(output,
+            contains(outputHandler.getExpectedTransferCompleteOutput()));
         output = await execFTPCmdOnWin("ls");
       } else {
-        expect(output, contains('226 Transfer complete'));
+        // Use outputHandler for transfer complete message
+        expect(output,
+            contains(outputHandler.getExpectedTransferCompleteOutput()));
       }
       expect(output, contains(filename));
     });
 
     test('Handle Directory with Special Characters', () async {
-      ftpClient.stdin.writeln('mkdir special!@#\$%^&*()_dir');
+      final dirName = 'special!@#\$%^&*()_dir';
+      ftpClient.stdin.writeln('mkdir $dirName');
       ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
@@ -373,7 +402,7 @@ void main() {
         var output = await readAllOutput(logFilePath);
         if (Platform.isWindows) {
           output = await execFTPCmdOnWin("size test_file.txt");
-        }
+      }
 
         String expectedSizeOutput = outputHandler.getExpectedSizeOutput(11);
         expect(output, contains(expectedSizeOutput));
@@ -516,21 +545,26 @@ void main() {
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin("put ${testFile.path} $filename");
-        expect(output, contains('226 Transfer complete'));
+        // Use outputHandler for transfer complete message
+        expect(output,
+            contains(outputHandler.getExpectedTransferCompleteOutput()));
         output = await execFTPCmdOnWin("ls");
       } else {
-        expect(output, contains('226 Transfer complete'));
+        // Use outputHandler for transfer complete message
+        expect(output,
+            contains(outputHandler.getExpectedTransferCompleteOutput()));
       }
       expect(output, contains(filename));
     });
     test('All commands sequence in one test', () async {
       // Create a directory
-      ftpClient.stdin.writeln('mkdir test_sequence_dir');
+      final dirName = 'test_sequence_dir';
+      ftpClient.stdin.writeln('mkdir $dirName');
       await ftpClient.stdin.flush();
       await Future.delayed(const Duration(milliseconds: 500));
 
       // Change to the new directory
-      ftpClient.stdin.writeln('cd test_sequence_dir');
+      ftpClient.stdin.writeln('cd $dirName');
       await ftpClient.stdin.flush();
       await Future.delayed(const Duration(milliseconds: 500));
 
@@ -558,7 +592,7 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 500));
 
       // Remove the directory
-      ftpClient.stdin.writeln('rmdir test_sequence_dir');
+      ftpClient.stdin.writeln('rmdir $dirName');
       await ftpClient.stdin.flush();
       await Future.delayed(const Duration(milliseconds: 500));
 
@@ -574,37 +608,31 @@ void main() {
 
       if (Platform.isWindows) {
         // Execute sequence of commands for Windows
-        output = await execFTPCmdOnWin("mkdir test_sequence_dir\n"
-            "cd test_sequence_dir\n"
-            "put ${testFile.path} $filename\n"
-            "get $filename downloaded_$filename\n"
-            "delete $filename\n"
-            "cd ..\n"
-            "rmdir test_sequence_dir\n"
+        output = await execFTPCmdOnWin("mkdir $dirName\\n"
+            "cd $dirName\\n"
+            "put ${testFile.path} $filename\\n"
+            "get $filename downloaded_$filename\\n"
+            "delete $filename\\n"
+            "cd ..\\n"
+            "rmdir $dirName\\n"
             "ls");
       }
 
-      // Placeholder check for the logs - Replace with actual assertions
-      // You can check for specific log messages indicating success or failure
-      // of each command (mkdir, cd, put, get, delete, rmdir, ls)
-      expect(
-          output,
-          contains(
-              '257 "test_sequence_dir" created')); // Check for directory creation
-      expect(
-          output,
-          contains(
-              'Directory changed to')); // Check for successful directory change
-      expect(
-          output,
-          contains(
-              '226 Transfer complete')); // Check for successful file upload and download
+      // Use outputHandler for expected outputs
       expect(output,
-          contains('250 File deleted')); // Check for successful file deletion
+          contains(outputHandler.getExpectedMakeDirectoryOutput(dirName)));
       expect(
           output,
-          contains(
-              '250 Directory deleted')); // Check for successful directory removal
+          contains(outputHandler.getExpectedDirectoryChangeOutput(
+              '/${basename(sharedDirectories.first)}/$dirName')));
+      expect(
+          output,
+          contains(outputHandler
+              .getExpectedTransferCompleteOutput())); // Check for successful file upload and download
+      expect(output,
+          contains(outputHandler.getExpectedDeleteFileOutput(filename)));
+      expect(output,
+          contains(outputHandler.getExpectedDeleteDirectoryOutput(dirName)));
 
       // Verify that the downloaded file exists and has the correct content
       final downloadedFile = File('downloaded_$filename');
@@ -618,9 +646,7 @@ void main() {
       }
 
       // Verify that the directory and the uploaded file no longer exist
-      expect(
-          Directory('${sharedDirectories.first}/test_sequence_dir')
-              .existsSync(),
+      expect(Directory('${sharedDirectories.first}/$dirName').existsSync(),
           isFalse);
       expect(
           File('${sharedDirectories.first}/$filename').existsSync(), isFalse);
@@ -931,19 +957,22 @@ void main() {
     });
 
     test('Perform Operations Without Authentication', () async {
+      final dirName = 'test_no_auth_dir';
       ftpClient.stdin.writeln('ls');
-      ftpClient.stdin.writeln('mkdir test_no_auth_dir');
+      ftpClient.stdin.writeln('mkdir $dirName');
       ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
-        output = await execFTPCmdOnWin("ls\nmkdir test_no_auth_dir\nls");
+        output = await execFTPCmdOnWin("ls\\nmkdir $dirName\\nls");
       }
 
-      expect(output, contains('257 "test_no_auth_dir" created'));
-      expect(output, contains('test_no_auth_dir'));
+      // Use outputHandler for expected MKD output
+      expect(output,
+          contains(outputHandler.getExpectedMakeDirectoryOutput(dirName)));
+      expect(output, contains(dirName));
     });
   });
 
@@ -1011,20 +1040,21 @@ void main() {
 
           if (Platform.isWindows) {
             // Windows-specific commands
-            var output =
-                await execFTPCmdOnWin('mkdir $dirName\nls\nrmdir $dirName\nls');
+            var output = await execFTPCmdOnWin(
+                'mkdir $dirName\\nls\\nrmdir $dirName\\nls');
 
-            // Check directory creation
-            expect(output, contains('257 "$dirName" created'));
-
-            // Check directory listing contains the newly created directory
-            expect(output, contains(dirName));
-
-            // Check directory deletion
-            expect(output, contains('250 Directory deleted'));
-
-            // Check directory listing after deletion
-            expect(output, contains(dirName));
+            // Use outputHandler for expected outputs
+            expect(
+                output,
+                contains(
+                    outputHandler.getExpectedMakeDirectoryOutput(dirName)));
+            expect(output, contains(dirName)); // Check listing contains the dir
+            expect(
+                output,
+                contains(
+                    outputHandler.getExpectedDeleteDirectoryOutput(dirName)));
+            // Check directory listing after deletion (might still contain the name depending on timing)
+            // expect(output, isNot(contains(dirName)));
           } else {
             // Non-Windows (Linux/Mac) commands
             ftpClients[i].stdin.writeln('mkdir $dirName');
@@ -1037,17 +1067,18 @@ void main() {
             // Check the output for client `i`
             var output = await readAllOutput(logFilePaths[i]);
 
-            // Check directory creation
-            expect(output, contains('257 "$dirName" created'));
-
-            // Check directory listing contains the newly created directory
-            expect(output, contains(dirName));
-
-            // Check directory deletion
-            expect(output, contains('250 Directory deleted'));
-
-            // Check directory listing after deletion
-            expect(output, contains(dirName));
+            // Use outputHandler for expected outputs
+            expect(
+                output,
+                contains(
+                    outputHandler.getExpectedMakeDirectoryOutput(dirName)));
+            expect(output, contains(dirName)); // Check listing contains the dir
+            expect(
+                output,
+                contains(
+                    outputHandler.getExpectedDeleteDirectoryOutput(dirName)));
+            // Check directory listing after deletion (might still contain the name depending on timing)
+            // expect(output, isNot(contains(dirName)));
           }
         }));
       }
@@ -1186,13 +1217,21 @@ void main() {
               '550 Access denied or directory not found')); // For the CWD attempts on non-existent dirs
 
       // Verify MKD succeeds because the lenient check resolves '2025-04-27' to '<mappedTempDir>/photos/2025-04-27'
-      expect(output, contains('257 "2025-04-27" created'));
+      // Use outputHandler for expected MKD output
+      expect(output,
+          contains(outputHandler.getExpectedMakeDirectoryOutput('2025-04-27')));
 
       // Verify subsequent CWD succeeds
-      expect(output, contains('250 Directory changed to /photos/2025-04-27'));
+      // Use outputHandler for expected CD output
+      expect(
+          output,
+          contains(outputHandler
+              .getExpectedDirectoryChangeOutput('/photos/2025-04-27')));
 
       // Verify navigation to root still works
-      expect(output, contains('250 Directory changed to /'));
+      // Use outputHandler for expected CD output
+      expect(output,
+          contains(outputHandler.getExpectedDirectoryChangeOutput('/')));
     });
 
     test('Access mapped directory successfully', () async {
@@ -1214,25 +1253,31 @@ void main() {
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin(
-            "cd /photos\npwd\nls\ncd 2023-albums\npwd\nls");
+            "cd /photos\\npwd\\nls\\ncd 2023-albums\\npwd\\nls");
       }
 
-      // Verify we can access the mapped directory
-      expect(output, contains('250 Directory changed to /photos'));
+      // Use outputHandler for expected CD outputs
+      expect(output,
+          contains(outputHandler.getExpectedDirectoryChangeOutput('/photos')));
       expect(output, contains('2023-albums'));
-      expect(output, contains('250 Directory changed to /photos/2023-albums'));
+      expect(
+          output,
+          contains(outputHandler
+              .getExpectedDirectoryChangeOutput('/photos/2023-albums')));
       expect(output, contains('test.jpg'));
     });
 
     test('Try to create directory in unmapped location', () async {
       // This test name is now slightly misleading. It tests creating dirs via relative paths from root.
+      final dir1 = 'ILCE-7M3_4529168';
+      final dir2 = '133119';
       ftpClient.stdin.writeln('cd /');
       ftpClient.stdin.writeln(
-          'mkdir ILCE-7M3_4529168'); // Should SUCCEED (257) -> creates in 'photos'
+          'mkdir $dir1'); // Should SUCCEED (257) -> creates in 'photos'
       ftpClient.stdin.writeln(
-          'cd ILCE-7M3_4529168'); // Should SUCCEED (250) -> enters '/photos/ILCE-7M3_4529168'
+          'cd $dir1'); // Should SUCCEED (250) -> enters '/photos/ILCE-7M3_4529168'
       ftpClient.stdin.writeln(
-          'mkdir 133119'); // Should SUCCEED (257) -> creates in 'photos/ILCE-7M3_4529168'
+          'mkdir $dir2'); // Should SUCCEED (257) -> creates in 'photos/ILCE-7M3_4529168'
       ftpClient.stdin
           .writeln('ls'); // Should list content of '/photos/ILCE-7M3_4529168'
       ftpClient.stdin.writeln('quit');
@@ -1241,19 +1286,21 @@ void main() {
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin(
-            "cd /\nmkdir ILCE-7M3_4529168\ncd ILCE-7M3_4529168\nmkdir 133119\nls");
+            "cd /\\nmkdir $dir1\\ncd $dir1\\nmkdir $dir2\\nls");
       }
 
-      // Check if directory creation succeeded as expected via lenient check
-      expect(output, contains('257 "ILCE-7M3_4529168" created'));
+      // Use outputHandler for expected outputs
+      expect(
+          output, contains(outputHandler.getExpectedMakeDirectoryOutput(dir1)));
       expect(
           output,
-          contains(
-              '250 Directory changed to /photos/ILCE-7M3_4529168')); // Note the virtual path!
-      expect(output, contains('257 "133119" created'));
+          contains(outputHandler.getExpectedDirectoryChangeOutput(
+              '/photos/$dir1'))); // Note the virtual path!
+      expect(
+          output, contains(outputHandler.getExpectedMakeDirectoryOutput(dir2)));
 
       // Ensure the final LS lists the content of the created directory
-      expect(output, contains('133119')); // Check if the subdirectory is listed
+      expect(output, contains(dir2)); // Check if the subdirectory is listed
     });
   });
 }

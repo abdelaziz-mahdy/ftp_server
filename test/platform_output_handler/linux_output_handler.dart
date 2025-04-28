@@ -13,5 +13,18 @@ class LinuxOutputHandler extends PlatformOutputHandler {
 
   @override
   String getExpectedDirectoryListingOutput(String listing) =>
-      '150 Opening data connection\r\n$listing\r\n226 Transfer complete\r\n';
+      '150 Opening data connection\\r\\n$listing\\r\\n226 Transfer complete\\r\\n';
+
+  @override
+  String getExpectedMakeDirectoryOutput(String path) => '257 "$path" created';
+
+  @override
+  String getExpectedDeleteDirectoryOutput(String path) =>
+      '250 Directory deleted';
+
+  @override
+  String getExpectedDeleteFileOutput(String filename) => '250 File deleted';
+
+  @override
+  String getExpectedTransferCompleteOutput() => '226 Transfer complete';
 }
