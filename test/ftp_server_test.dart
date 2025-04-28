@@ -625,6 +625,152 @@ void main() {
       expect(
           File('${sharedDirectories.first}/$filename').existsSync(), isFalse);
     });
+
+    group('Directory Listing Operations', () {
+      test('List Current Directory (Internal)', () async {
+        // First change to a specific directory
+        ftpClient.stdin.writeln('cd ${basename(sharedDirectories.first)}');
+        await ftpClient.stdin.flush();
+
+        // Then list current directory
+        ftpClient.stdin.writeln('ls');
+        if (Platform.isLinux) {
+          ftpClient.stdin.writeln('passive on');
+          ftpClient.stdin.writeln('ls');
+          ftpClient.stdin.writeln('passive off');
+        }
+        ftpClient.stdin.writeln('quit');
+        await ftpClient.stdin.flush();
+
+        var output = await readAllOutput(logFilePath);
+        if (Platform.isWindows) {
+          output = await execFTPCmdOnWin(
+              "cd ${basename(sharedDirectories.first)}\n ls");
+        }
+
+        String listing = await outputHandler.generateDirectoryListing(
+            basename(sharedDirectories.first),
+            VirtualFileOperations(sharedDirectories));
+
+        String normalizedOutput =
+            outputHandler.normalizeDirectoryListing(output);
+        String normalizedExpected =
+            outputHandler.normalizeDirectoryListing(listing);
+
+        expect(normalizedOutput, contains(normalizedExpected));
+      });
+
+      test('List Root Directory', () async {
+        ftpClient.stdin.writeln('cd /');
+        await ftpClient.stdin.flush();
+
+        ftpClient.stdin.writeln('ls');
+        if (Platform.isLinux) {
+          ftpClient.stdin.writeln('passive on');
+          ftpClient.stdin.writeln('ls');
+          ftpClient.stdin.writeln('passive off');
+        }
+        ftpClient.stdin.writeln('quit');
+        await ftpClient.stdin.flush();
+
+        var output = await readAllOutput(logFilePath);
+        if (Platform.isWindows) {
+          output = await execFTPCmdOnWin("cd /\n ls");
+        }
+
+        String listing = await outputHandler.generateDirectoryListing(
+            '/', VirtualFileOperations(sharedDirectories));
+
+        String normalizedOutput =
+            outputHandler.normalizeDirectoryListing(output);
+        String normalizedExpected =
+            outputHandler.normalizeDirectoryListing(listing);
+
+        expect(normalizedOutput, contains(normalizedExpected));
+      });
+
+      test('List Specific Directory with Path', () async {
+        // Create a test directory and file
+        final testDir = Directory('${sharedDirectories.first}/test_dir');
+        await testDir.create();
+        final testFile = File('${testDir.path}/test.txt');
+        await testFile.writeAsString('test content');
+
+        ftpClient.stdin
+            .writeln('ls ${basename(sharedDirectories.first)}/test_dir');
+        if (Platform.isLinux) {
+          ftpClient.stdin.writeln('passive on');
+          ftpClient.stdin
+              .writeln('ls ${basename(sharedDirectories.first)}/test_dir');
+          ftpClient.stdin.writeln('passive off');
+        }
+        ftpClient.stdin.writeln('quit');
+        await ftpClient.stdin.flush();
+
+        var output = await readAllOutput(logFilePath);
+        if (Platform.isWindows) {
+          output = await execFTPCmdOnWin(
+              "ls ${basename(sharedDirectories.first)}/test_dir");
+        }
+
+        String listing = await outputHandler.generateDirectoryListing(
+            '${basename(sharedDirectories.first)}/test_dir',
+            VirtualFileOperations(sharedDirectories));
+
+        String normalizedOutput =
+            outputHandler.normalizeDirectoryListing(output);
+        String normalizedExpected =
+            outputHandler.normalizeDirectoryListing(listing);
+
+        expect(normalizedOutput, contains(normalizedExpected));
+
+        // Cleanup
+        await testFile.delete();
+        await testDir.delete();
+      });
+
+      test('List Directory with Relative Path', () async {
+        // First change to a parent directory
+        ftpClient.stdin.writeln('cd ${basename(sharedDirectories.first)}');
+        await ftpClient.stdin.flush();
+
+        // Create a test directory and file
+        final testDir = Directory('${sharedDirectories.first}/test_dir');
+        await testDir.create();
+        final testFile = File('${testDir.path}/test.txt');
+        await testFile.writeAsString('test content');
+
+        // List using relative path
+        ftpClient.stdin.writeln('ls test_dir');
+        if (Platform.isLinux) {
+          ftpClient.stdin.writeln('passive on');
+          ftpClient.stdin.writeln('ls test_dir');
+          ftpClient.stdin.writeln('passive off');
+        }
+        ftpClient.stdin.writeln('quit');
+        await ftpClient.stdin.flush();
+
+        var output = await readAllOutput(logFilePath);
+        if (Platform.isWindows) {
+          output = await execFTPCmdOnWin(
+              "cd ${basename(sharedDirectories.first)}\n ls test_dir");
+        }
+
+        String listing = await outputHandler.generateDirectoryListing(
+            'test_dir', VirtualFileOperations(sharedDirectories));
+
+        String normalizedOutput =
+            outputHandler.normalizeDirectoryListing(output);
+        String normalizedExpected =
+            outputHandler.normalizeDirectoryListing(listing);
+
+        expect(normalizedOutput, contains(normalizedExpected));
+
+        // Cleanup
+        await testFile.delete();
+        await testDir.delete();
+      });
+    });
   });
 
   group('FTP Server Read-Only Mode', () {
