@@ -402,7 +402,7 @@ void main() {
         var output = await readAllOutput(logFilePath);
         if (Platform.isWindows) {
           output = await execFTPCmdOnWin("size test_file.txt");
-      }
+        }
 
         String expectedSizeOutput = outputHandler.getExpectedSizeOutput(11);
         expect(output, contains(expectedSizeOutput));
