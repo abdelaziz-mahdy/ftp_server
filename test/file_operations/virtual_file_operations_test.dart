@@ -3,6 +3,9 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 
+import '../platform_output_handler/platform_output_handler.dart';
+import '../platform_output_handler/platform_output_handler_factory.dart';
+
 void main() {
   late Directory tempDir;
   late Directory dir1;
@@ -10,7 +13,8 @@ void main() {
   late VirtualFileOperations fileOps;
   late String dir1Name;
   late String dir2Name;
-
+  final PlatformOutputHandler outputHandler =
+      PlatformOutputHandlerFactory.create();
   setUp(() async {
     // Create temporary directories for testing
     tempDir = await Directory.systemTemp.createTemp('virtual_file_ops_test');
@@ -84,7 +88,9 @@ void main() {
       test('ls with parent directory (..)', () async {
         // Change to subdir1 (which was created in setUp)
         fileOps.changeDirectory('/$dir1Name/subdir1');
-        expect(fileOps.currentDirectory, equals('/$dir1Name/subdir1'));
+
+        expect(fileOps.currentDirectory,
+            equals(outputHandler.normalizePath('/$dir1Name/subdir1')));
 
         // List parent directory
         final entities = await fileOps.listDirectory('..');
@@ -150,10 +156,12 @@ void main() {
 
     test('changeDirectory works with virtual paths', () async {
       fileOps.changeDirectory('/$dir1Name');
-      expect(fileOps.currentDirectory, equals('/$dir1Name'));
+      expect(fileOps.currentDirectory,
+          equals(outputHandler.normalizePath('/$dir1Name')));
 
       fileOps.changeDirectory('subdir1');
-      expect(fileOps.currentDirectory, equals('/$dir1Name/subdir1'));
+      expect(fileOps.currentDirectory,
+          equals(outputHandler.normalizePath('/$dir1Name/subdir1')));
     });
 
     test('changeDirectory throws for invalid paths', () {

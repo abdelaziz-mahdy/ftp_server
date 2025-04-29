@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:intl/intl.dart';
 
 abstract class PlatformOutputHandler {
+  String normalizePath(String path);
   String getExpectedPwdOutput(String path);
   String getExpectedSizeOutput(int size);
   String getExpectedDirectoryChangeOutput(String path);

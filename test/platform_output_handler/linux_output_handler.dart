@@ -2,6 +2,11 @@ import 'platform_output_handler.dart';
 
 class LinuxOutputHandler extends PlatformOutputHandler {
   @override
+  String normalizePath(String path) {
+    // Linux uses forward slashes
+    return path.replaceAll('\\', '/');
+  }
+  @override
   String getExpectedPwdOutput(String path) => 'Remote directory: $path';
 
   @override

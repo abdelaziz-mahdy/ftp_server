@@ -2,6 +2,11 @@ import 'platform_output_handler.dart';
 
 class MacOSOutputHandler extends PlatformOutputHandler {
   @override
+  String normalizePath(String path) {
+    // macOS uses forward slashes
+    return path.replaceAll('\\', '/');
+  }
+  @override
   String getExpectedPwdOutput(String path) =>
       '257 "$path" is current directory';
 

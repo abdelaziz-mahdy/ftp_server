@@ -2,6 +2,11 @@ import 'platform_output_handler.dart';
 
 class WindowsOutputHandler extends PlatformOutputHandler {
   @override
+  String normalizePath(String path) {
+    // Windows uses backslashes
+    return path.replaceAll('/', '\\');
+  }
+  @override
   String getExpectedPwdOutput(String path) =>
       '257 "${path.replaceAll("/", "\\")}" is current directory';
 
