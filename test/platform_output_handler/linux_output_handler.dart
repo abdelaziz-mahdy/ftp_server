@@ -6,6 +6,7 @@ class LinuxOutputHandler extends PlatformOutputHandler {
     // Linux uses forward slashes
     return path.replaceAll('\\', '/');
   }
+
   @override
   String getExpectedPwdOutput(String path) => 'Remote directory: $path';
 

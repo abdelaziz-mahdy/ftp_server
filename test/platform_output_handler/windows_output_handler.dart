@@ -6,6 +6,7 @@ class WindowsOutputHandler extends PlatformOutputHandler {
     // Windows uses backslashes
     return path.replaceAll('/', '\\');
   }
+
   @override
   String getExpectedPwdOutput(String path) =>
       '257 "${path.replaceAll("/", "\\")}" is current directory';
