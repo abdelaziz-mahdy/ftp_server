@@ -210,7 +210,7 @@ void main() {
 
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
-        output = await execFTPCmdOnWin("mkdir test_dir\\nls");
+        output = await execFTPCmdOnWin("mkdir test_dir\nls");
       }
 
       // Use outputHandler for expected MKD output
@@ -230,8 +230,7 @@ void main() {
 
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
-        output =
-            await execFTPCmdOnWin("mkdir test_dir\\nrmdir test_dir\\nls\\n");
+        output = await execFTPCmdOnWin("mkdir test_dir\nrmdir test_dir\nls\n");
       }
       // Use outputHandler for expected RMD output
       expect(output,
@@ -608,13 +607,13 @@ void main() {
 
       if (Platform.isWindows) {
         // Execute sequence of commands for Windows
-        output = await execFTPCmdOnWin("mkdir $dirName\\n"
-            "cd $dirName\\n"
-            "put ${testFile.path} $filename\\n"
-            "get $filename downloaded_$filename\\n"
-            "delete $filename\\n"
-            "cd ..\\n"
-            "rmdir $dirName\\n"
+        output = await execFTPCmdOnWin("mkdir $dirName\n"
+            "cd $dirName\n"
+            "put ${testFile.path} $filename\n"
+            "get $filename downloaded_$filename\n"
+            "delete $filename\n"
+            "cd ..\n"
+            "rmdir $dirName\n"
             "ls");
       }
 
@@ -737,7 +736,7 @@ void main() {
         if (Platform.isWindows) {
           // Ensure we are in the correct starting directory before using relative path
           output = await execFTPCmdOnWin(
-              "cd ${basename(sharedDirectories.first)}\\nls test_dir");
+              "cd ${basename(sharedDirectories.first)}\nls test_dir");
         }
 
         // Create VFS instance with the correct starting directory for generating expected output
@@ -966,7 +965,7 @@ void main() {
 
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
-        output = await execFTPCmdOnWin("ls\\nmkdir $dirName\\nls");
+        output = await execFTPCmdOnWin("ls\nmkdir $dirName\nls");
       }
 
       // Use outputHandler for expected MKD output
@@ -1040,8 +1039,8 @@ void main() {
 
           if (Platform.isWindows) {
             // Windows-specific commands
-            var output = await execFTPCmdOnWin(
-                'mkdir $dirName\\nls\\nrmdir $dirName\\nls');
+            var output =
+                await execFTPCmdOnWin('mkdir $dirName\nls\nrmdir $dirName\nls');
 
             // Use outputHandler for expected outputs
             expect(
@@ -1253,7 +1252,7 @@ void main() {
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin(
-            "cd /photos\\npwd\\nls\\ncd 2023-albums\\npwd\\nls");
+            "cd /photos\npwd\nls\ncd 2023-albums\npwd\nls");
       }
 
       // Use outputHandler for expected CD outputs
@@ -1286,7 +1285,7 @@ void main() {
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin(
-            "cd /\\nmkdir $dir1\\ncd $dir1\\nmkdir $dir2\\nls");
+            "cd /\nmkdir $dir1\ncd $dir1\nmkdir $dir2\nls");
       }
 
       // Use outputHandler for expected outputs

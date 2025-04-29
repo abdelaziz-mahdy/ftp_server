@@ -20,7 +20,7 @@ class WindowsOutputHandler extends PlatformOutputHandler {
 
   @override
   String getExpectedDirectoryListingOutput(String listing) =>
-      '125 Data connection already open; Transfer starting\\r\\n$listing\\r\\n226 Transfer complete\\r\\n';
+      '125 Data connection already open; Transfer starting\r\n$listing\r\n226 Transfer complete\r\n';
   @override
   String getExpectedMakeDirectoryOutput(String path) =>
       '257 "${path.replaceAll("/", "\\")}" created';
