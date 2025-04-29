@@ -3,10 +3,15 @@ import 'package:test/test.dart';
 import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 import 'package:path/path.dart' as p;
 
+import '../platform_output_handler/platform_output_handler.dart';
+import '../platform_output_handler/platform_output_handler_factory.dart';
+
 void main() {
   group('VirtualFileOperations.resolvePath', () {
     late Directory tempDir1, tempDir2;
     late VirtualFileOperations fileOps;
+    final PlatformOutputHandler outputHandler =
+        PlatformOutputHandlerFactory.create();
 
     setUp(() {
       tempDir1 =
@@ -339,15 +344,18 @@ void main() {
 
       // Ensure starting at root
       fileOps.changeDirectory('/');
-      expect(fileOps.currentDirectory, equals('/'));
+      expect(
+          fileOps.currentDirectory, equals(outputHandler.normalizePath('/')));
 
       // 1. Attempt CWD into deep path (should SUCCEED via lenient check)
       expect(
           () => fileOps.changeDirectory('2025-04-27/ILCE-7M3_4529168/133119/'),
           returnsNormally);
       // Verify current directory is updated correctly (maps back to virtual path)
-      expect(fileOps.currentDirectory,
-          equals('/$baseName1/2025-04-27/ILCE-7M3_4529168/133119'));
+      expect(
+          fileOps.currentDirectory,
+          equals(outputHandler.normalizePath(
+              '/$baseName1/2025-04-27/ILCE-7M3_4529168/133119')));
 
       // Go back to root for next steps
       fileOps.changeDirectory('/');
@@ -370,18 +378,22 @@ void main() {
 
       expect(
           Directory(mdkPath).existsSync(), isTrue); // Verify physical creation
-      expect(fileOps.currentDirectory,
-          equals('/')); // MKD shouldn't change current dir
+      expect(
+          fileOps.currentDirectory,
+          equals(outputHandler
+              .normalizePath('/'))); // MKD shouldn't change current dir
 
       // 4. Attempt CWD into the newly created dir (should SUCCEED)
       expect(
           () => fileOps.changeDirectory('new_dir_from_root'), returnsNormally);
-      expect(fileOps.currentDirectory, equals('/$baseName1/new_dir_from_root'));
+      expect(fileOps.currentDirectory,
+          equals(outputHandler.normalizePath('/$baseName1/new_dir_from_root')));
 
       // 5. Verify that CWD into the *explicit* mapped directory still works
       fileOps.changeDirectory('/');
       expect(() => fileOps.changeDirectory('/$baseName1'), returnsNormally);
-      expect(fileOps.currentDirectory, equals('/$baseName1'));
+      expect(fileOps.currentDirectory,
+          equals(outputHandler.normalizePath('/$baseName1')));
     });
 
     test('writeFile behavior from root directory', () async {
@@ -396,7 +408,8 @@ void main() {
 
       // Ensure starting at root
       fileOps.changeDirectory('/');
-      expect(fileOps.currentDirectory, equals('/'));
+      expect(
+          fileOps.currentDirectory, equals(outputHandler.normalizePath('/')));
 
       // 1. Attempt writeFile with a relative path (should succeed via lenient check into the first mapping)
       await expectLater(fileOps.writeFile(fileName, data), completes);
