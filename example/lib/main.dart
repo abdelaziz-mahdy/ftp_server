@@ -8,8 +8,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
+import 'package:ftp_server/file_operations/physical_file_operations.dart';
+import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+// Example usage:
+//
+// This app demonstrates using the FTP server, which can use either VirtualFileOperations (default) or PhysicalFileOperations.
+// For advanced use cases or to learn more about the internal file operation backends, see the README.
 
 void main() {
   runApp(const MyApp());
@@ -31,6 +38,11 @@ class MyAppState extends State<MyApp> {
   Isolate? isolate;
   ReceivePort? receivePort;
   int? port;
+  bool usePhysical = false;
+  String get backendWarning => usePhysical
+      ? 'PhysicalFileOperations: Only one root, / refers to the provided root, and you can write/delete at root.'
+      : 'VirtualFileOperations: Multiple mapped roots, but cannot write to the virtual root (/).';
+
   @override
   void initState() {
     super.initState();
@@ -93,11 +105,18 @@ class MyAppState extends State<MyApp> {
         }
       }
 
+      final fileOps = usePhysical
+          ? PhysicalFileOperations(directoryPath)
+          : VirtualFileOperations([directoryPath]);
+
       var server = FtpServer(
         port ?? Random().nextInt(65535),
-        sharedDirectories: [serverDirectory],
+        fileOperations: fileOps,
         serverType: ServerType.readAndWrite,
         logFunction: (p0) => print(p0),
+        startingDirectory: usePhysical ? '/' : null,
+        username: null,
+        password: null,
       );
 
       Future serverFuture = server.start();
@@ -146,6 +165,29 @@ class MyAppState extends State<MyApp> {
               Text(connectionInfo),
               const SizedBox(height: 20),
               Text('Directory: $directoryPath'),
+              const SizedBox(height: 20),
+              Text(
+                backendWarning,
+                style: const TextStyle(
+                    color: Colors.orange, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('Virtual'),
+                  Switch(
+                    value: usePhysical,
+                    onChanged: (val) {
+                      setState(() {
+                        usePhysical = val;
+                      });
+                    },
+                  ),
+                  const Text('Physical'),
+                ],
+              ),
               const SizedBox(height: 20),
               isLoading
                   ? const CircularProgressIndicator()

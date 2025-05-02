@@ -112,7 +112,7 @@ void main() {
         port,
         username: 'test',
         password: 'password',
-        sharedDirectories: sharedDirectories,
+        fileOperations: VirtualFileOperations(sharedDirectories),
         startingDirectory: basename(sharedDirectories.first),
         serverType: ServerType.readAndWrite,
         logFunction: (String message) => print(message),
@@ -816,7 +816,7 @@ void main() {
         port,
         username: 'test',
         password: 'password',
-        sharedDirectories: sharedDirectories,
+        fileOperations: VirtualFileOperations(sharedDirectories),
         startingDirectory: sharedDirectories.first,
         serverType: ServerType.readOnly,
         logFunction: (String message) => print(message),
@@ -908,7 +908,7 @@ void main() {
 
       server = FtpServer(
         port,
-        sharedDirectories: sharedDirectories,
+        fileOperations: VirtualFileOperations(sharedDirectories),
         startingDirectory: basename(sharedDirectories.first),
         serverType: ServerType.readAndWrite,
         logFunction: (String message) => print(message),
@@ -991,7 +991,7 @@ void main() {
 
       server = FtpServer(
         port,
-        sharedDirectories: sharedDirectories,
+        fileOperations: VirtualFileOperations(sharedDirectories),
         startingDirectory: basename(sharedDirectories.first),
         serverType: ServerType.readAndWrite,
         logFunction: (String message) => print(message),
@@ -1095,7 +1095,7 @@ void main() {
         port,
         username: 'test',
         password: 'password',
-        sharedDirectories: sharedDirectories,
+        fileOperations: VirtualFileOperations(sharedDirectories),
         startingDirectory: basename(sharedDirectories.first),
         serverType: ServerType.readAndWrite,
         logFunction: (String message) => print(message),
@@ -1148,7 +1148,7 @@ void main() {
         port,
         username: 'yxz',
         password: '123456',
-        sharedDirectories: directoryMappings,
+        fileOperations: VirtualFileOperations(directoryMappings),
         serverType: ServerType.readAndWrite,
         logFunction: (String message) => print(message),
       );
