@@ -18,19 +18,24 @@ This package has been tested on macOS. For Linux and Windows, CI/CD test cases h
 
 ### Starting the Server
 
-Here's an example of how to start the FTP server (now always uses VirtualFileOperations):
+Here's an example of how to start the FTP server with a custom file operations backend (required):
 
 ```dart
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
+import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 
 void main() async {
+  final fileOps = VirtualFileOperations([
+    '/home/user/ftp',
+    '/home/user/other',
+  ]);
+
   final server = FtpServer(
-    port: 21,
+    21, // port
     username: 'user',
     password: 'pass',
-    sharedDirectories: ['/home/user/ftp', '/home/user/other'],
-    startingDirectory: 'ftp',
+    fileOperations: fileOps,
     serverType: ServerType.readAndWrite, // or ServerType.readOnly
   );
 
@@ -38,10 +43,36 @@ void main() async {
 }
 ```
 
-> **Note:**
+> **BREAKING CHANGE:**
 >
-> - BREAKING CHANGE: You can no longer inject a custom FileOperations backend. The server always uses VirtualFileOperations.
-> - **VirtualFileOperations**: Allows you to map multiple directories as top-level folders, but you cannot write directly to the virtual root (`/`).
+> - The `sharedDirectories` have been **removed** from `FtpServer`.
+> - You must now create and pass a `FileOperations` instance (such as `VirtualFileOperations` or `PhysicalFileOperations`) directly to the `fileOperations` parameter.
+> - All directory logic (e.g., shared directories) is now handled by the provided `FileOperations` instance.
+> - See the migration guide below for details.
+
+#### Using PhysicalFileOperations
+
+If you want to use a single physical directory as the FTP root (with no virtual mapping):
+
+```dart
+import 'package:ftp_server/ftp_server.dart';
+import 'package:ftp_server/server_type.dart';
+import 'package:ftp_server/file_operations/physical_file_operations.dart';
+
+void main() async {
+  final fileOps = PhysicalFileOperations('/home/user/ftp_root');
+
+  final server = FtpServer(
+    21, // port
+    username: 'user',
+    password: 'pass',
+    fileOperations: fileOps,
+    serverType: ServerType.readAndWrite, // or ServerType.readOnly
+  );
+
+  await server.start();
+}
+```
 
 For more information and advanced usage, see the [File Operations section](#ftp-server-file-operations) below.
 
@@ -102,12 +133,12 @@ This project provides two file operations backends for FTP and file management:
 import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 
 final fileOps = VirtualFileOperations([
-  '/path/to/first/dir',
-  '/path/to/second/dir',
+  '/path/to/dir/first',
+  '/path/to/dir/second',
 ]);
 
 // Change to a mapped directory
-fileOps.changeDirectory('/first/dir');
+fileOps.changeDirectory('/first');
 // Write a file
 await fileOps.writeFile('example.txt', [1, 2, 3]);
 // List files
@@ -164,6 +195,31 @@ await fileOps.deleteDirectory('subdir');
 
 ## Using with the FTP Server
 
-The FTP server uses VirtualFileOperations by default to provide a virtualized view of multiple shared directories. If you want to use PhysicalFileOperations for custom use cases, you can use it directly in your own code as shown above.
+The FTP server **requires** you to provide a `FileOperations` backend (such as `VirtualFileOperations` or `PhysicalFileOperations`) via the `fileOperations` parameter. This gives you full control over which directories are exposed and how file operations are handled.
+
+- To expose multiple directories as top-level folders, use `VirtualFileOperations` and pass your shared directories to it.
+- To expose a single directory tree (with `/` as the root), use `PhysicalFileOperations`.
+
+**Migration Guide:**
+
+- Replace any usage of `sharedDirectories` in your `FtpServer` constructor with a `fileOperations` parameter.
+- Example migration:
+
+  ```dart
+  // Old:
+  // final server = FtpServer(
+  //   port: 21,
+  //   sharedDirectories: ['/dir1', '/dir2'],
+  //   ...
+  // );
+
+  // New:
+  final fileOps = VirtualFileOperations(['/dir1', '/dir2']);
+  final server = FtpServer(
+    21,
+    fileOperations: fileOps,
+    ...
+  );
+  ```
 
 See the code and tests for detailed usage examples and edge case handling.
