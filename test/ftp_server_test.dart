@@ -112,8 +112,8 @@ void main() {
         port,
         username: 'test',
         password: 'password',
-        fileOperations: VirtualFileOperations(sharedDirectories),
-        startingDirectory: basename(sharedDirectories.first),
+        fileOperations: VirtualFileOperations(sharedDirectories,
+            startingDirectory: basename(sharedDirectories.first)),
         serverType: ServerType.readAndWrite,
         logFunction: (String message) => print(message),
       );
@@ -816,8 +816,8 @@ void main() {
         port,
         username: 'test',
         password: 'password',
-        fileOperations: VirtualFileOperations(sharedDirectories),
-        startingDirectory: sharedDirectories.first,
+        fileOperations: VirtualFileOperations(sharedDirectories,
+            startingDirectory: basename(sharedDirectories.first)),
         serverType: ServerType.readOnly,
         logFunction: (String message) => print(message),
       );
@@ -908,8 +908,8 @@ void main() {
 
       server = FtpServer(
         port,
-        fileOperations: VirtualFileOperations(sharedDirectories),
-        startingDirectory: basename(sharedDirectories.first),
+        fileOperations: VirtualFileOperations(sharedDirectories,
+            startingDirectory: basename(sharedDirectories.first)),
         serverType: ServerType.readAndWrite,
         logFunction: (String message) => print(message),
       );
@@ -991,8 +991,8 @@ void main() {
 
       server = FtpServer(
         port,
-        fileOperations: VirtualFileOperations(sharedDirectories),
-        startingDirectory: basename(sharedDirectories.first),
+        fileOperations: VirtualFileOperations(sharedDirectories,
+            startingDirectory: basename(sharedDirectories.first)),
         serverType: ServerType.readAndWrite,
         logFunction: (String message) => print(message),
       );
@@ -1095,8 +1095,8 @@ void main() {
         port,
         username: 'test',
         password: 'password',
-        fileOperations: VirtualFileOperations(sharedDirectories),
-        startingDirectory: basename(sharedDirectories.first),
+        fileOperations: VirtualFileOperations(sharedDirectories,
+            startingDirectory: basename(sharedDirectories.first)),
         serverType: ServerType.readAndWrite,
         logFunction: (String message) => print(message),
       );

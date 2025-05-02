@@ -114,7 +114,6 @@ class MyAppState extends State<MyApp> {
         fileOperations: fileOps,
         serverType: ServerType.readAndWrite,
         logFunction: (p0) => print(p0),
-        startingDirectory: usePhysical ? '/' : null,
         username: null,
         password: null,
       );

@@ -36,9 +36,6 @@ class FtpServer {
   /// The file operations backend to use (VirtualFileOperations, PhysicalFileOperations, or custom).
   final FileOperations fileOperations;
 
-  /// The starting directory for the FTP session (optional, may be handled by fileOperations).
-  final String? startingDirectory;
-
   ///Create a List to collect new sessions.
   ///When you call _server?.stop() it should disconnect all active connections.
   final List<FtpSession> _sessionList = [];
@@ -51,16 +48,15 @@ class FtpServer {
   /// The [port] is required to specify where the server will listen for connections.
   /// The [fileOperations] must be provided and handles all file/directory logic.
   /// The [serverType] determines the mode (read-only or read and write) of the server.
-  /// Optional parameters include [username], [password], [logFunction], and [startingDirectory].
+  /// Optional parameters include [username], [password], and [logFunction].
   ///
-  /// BREAKING CHANGE: `sharedDirectories` is removed. All directory logic is now handled by the provided [fileOperations].
+  /// BREAKING CHANGE: `sharedDirectories` and `startingDirectory` are removed. All directory logic is now handled by the provided [fileOperations].
   FtpServer(this.port,
       {this.username,
       this.password,
       required this.fileOperations,
       required this.serverType,
-      Function(String)? logFunction,
-      this.startingDirectory})
+      Function(String)? logFunction})
       : logger = LoggerHandler(logFunction);
 
   Future<void> start() async {
@@ -75,7 +71,6 @@ class FtpServer {
         password: password,
         fileOperations: fileOperations,
         serverType: serverType,
-        startingDirectory: startingDirectory,
         logger: logger,
       );
       //Fill sessionList with new sessions.
@@ -95,7 +90,6 @@ class FtpServer {
         password: password,
         fileOperations: fileOperations,
         serverType: serverType,
-        startingDirectory: startingDirectory,
         logger: logger,
       );
       //Fill sessionList with new sessions.

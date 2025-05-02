@@ -47,7 +47,7 @@ void main() async {
 >
 > - The `sharedDirectories` have been **removed** from `FtpServer`.
 > - You must now create and pass a `FileOperations` instance (such as `VirtualFileOperations` or `PhysicalFileOperations`) directly to the `fileOperations` parameter.
-> - All directory logic (e.g., shared directories) is now handled by the provided `FileOperations` instance.
+> - All directory logic (e.g., shared directories and starting directory) is now handled by the provided `FileOperations` instance.
 > - See the migration guide below for details.
 
 #### Using PhysicalFileOperations
@@ -203,6 +203,7 @@ The FTP server **requires** you to provide a `FileOperations` backend (such as `
 **Migration Guide:**
 
 - Replace any usage of `sharedDirectories` in your `FtpServer` constructor with a `fileOperations` parameter.
+- If you previously used `startingDirectory`, set the initial directory via your `FileOperations` instance instead (e.g., pass the starting directory to the `VirtualFileOperations` or `PhysicalFileOperations` constructor).
 - Example migration:
 
   ```dart

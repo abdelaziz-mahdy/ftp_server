@@ -28,20 +28,18 @@ class FtpSession {
   ///
   /// [fileOperations] handles all file/directory logic (virtual, physical, or custom).
   /// [serverType] determines the mode (read-only or read and write).
-  /// Optional parameters include [username], [password], [logger], and [startingDirectory].
+  /// Optional parameters include [username], [password], and [logger].
   ///
-  /// BREAKING CHANGE: `sharedDirectories` is removed. All directory logic is now handled by the provided [fileOperations].
+  /// BREAKING CHANGE: `sharedDirectories` and `startingDirectory` are removed. All directory logic is now handled by the provided [fileOperations].
   FtpSession(this.controlSocket,
       {this.username,
       this.password,
       required this.fileOperations,
       required this.serverType,
-      required this.logger,
-      String? startingDirectory})
+      required this.logger})
       : commandHandler = FTPCommandHandler(controlSocket, logger) {
     sendResponse('220 Welcome to the FTP server');
-    logger.generalLog(
-        'FtpSession created. Attempting to set starting directory.');
+    logger.generalLog('FtpSession created. Ready to process commands.');
     controlSocket.listen(processCommand, onDone: closeConnection);
   }
 

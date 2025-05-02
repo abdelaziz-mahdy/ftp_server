@@ -94,3 +94,4 @@
 - Users can now choose between virtual mapping (multiple mapped roots) and direct physical access (single root) depending on their use case.
 
 - BREAKING: The `sharedDirectories` parameter is removed from FtpServer. To use shared directories, users must now create a `VirtualFileOperations` instance with their desired directories and pass it to the `fileOperations` parameter. See the README for updated usage and migration instructions.
+- BREAKING: The `startingDirectory` parameter is removed from FtpServer. The starting directory is now handled by the `FileOperations` instance (either `VirtualFileOperations` or `PhysicalFileOperations`). Both backends now accept a `startingDirectory` parameter in their constructors to control the initial directory.
