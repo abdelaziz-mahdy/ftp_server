@@ -168,4 +168,10 @@ class PhysicalFileOperations extends FileOperations {
       return false;
     }
   }
+
+  @override
+  String getCurrentDirectory() {
+    if (p.equals(currentDirectory, rootDirectory)) return '/';
+    return p.relative(currentDirectory, from: rootDirectory);
+  }
 }
