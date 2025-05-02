@@ -312,7 +312,7 @@ class VirtualFileOperations extends FileOperations {
   bool _isDirectChildOfRoot(String path) {
     final virtualPath =
         p.normalize(p.isAbsolute(path) ? path : p.join(currentDirectory, path));
-    ;
+
     final cleanPath = p.normalize(virtualPath);
     final parts = p.split(cleanPath).where((part) => part.isNotEmpty).toList();
     return parts.length == 1;

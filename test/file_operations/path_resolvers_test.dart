@@ -441,8 +441,11 @@ void main() {
       // 4. Attempt writeFile directly to root (should fail in writeFile's check)
       await expectLater(
           fileOps.writeFile('/', data),
-          throwsA(isA<FileSystemException>().having((e) => e.message, 'message',
-              contains("Cannot write to root directory"))));
+          throwsA(isA<FileSystemException>().having(
+              (e) => e.message,
+              'message',
+              contains(
+                  "Cannot create or write file directly in the virtual root"))));
     });
   });
 }
