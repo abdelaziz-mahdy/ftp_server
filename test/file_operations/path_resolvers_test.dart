@@ -359,7 +359,8 @@ void main() {
 
       // Go back to root for next steps
       fileOps.changeDirectory('/');
-      expect(fileOps.currentDirectory, equals('/'));
+      expect(
+          fileOps.currentDirectory, equals(outputHandler.normalizePath('/')));
 
       // 2. Attempt CWD into first part of path (should SUCCEED)
       expect(() => fileOps.changeDirectory('2025-04-27'), returnsNormally);
