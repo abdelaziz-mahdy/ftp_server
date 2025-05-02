@@ -203,6 +203,7 @@ void main() {
     });
 
     test('Make Directory', () async {
+      ftpClient.stdin.writeln('cd /${basename(sharedDirectories.first)}');
       ftpClient.stdin.writeln('mkdir test_dir');
       ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
@@ -210,7 +211,8 @@ void main() {
 
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
-        output = await execFTPCmdOnWin("mkdir test_dir\nls");
+        output = await execFTPCmdOnWin(
+            "cd /${basename(sharedDirectories.first)}\nmkdir test_dir\nls");
       }
 
       // Use outputHandler for expected MKD output
@@ -245,7 +247,6 @@ void main() {
       var filename = 'test_file.txt';
       final testFile = File('${clientTempDir.path}/$filename')
         ..writeAsStringSync('Hello, FTP!');
-
       ftpClient.stdin.writeln('put ${testFile.path} $filename');
       ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
@@ -438,13 +439,15 @@ void main() {
     }
 
     test('Print Working Directory Command', () async {
+      ftpClient.stdin.writeln('cd /${basename(sharedDirectories.first)}');
       ftpClient.stdin.writeln('pwd');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
 
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
-        output = await execFTPCmdOnWin('pwd');
+        output = await execFTPCmdOnWin(
+            'cd /${basename(sharedDirectories.first)}\npwd');
       }
 
       final expectText = outputHandler
@@ -556,6 +559,7 @@ void main() {
       expect(output, contains(filename));
     });
     test('All commands sequence in one test', () async {
+      ftpClient.stdin.writeln('cd /${basename(sharedDirectories.first)}');
       // Create a directory
       final dirName = 'test_sequence_dir';
       ftpClient.stdin.writeln('mkdir $dirName');
@@ -607,14 +611,16 @@ void main() {
 
       if (Platform.isWindows) {
         // Execute sequence of commands for Windows
-        output = await execFTPCmdOnWin("mkdir $dirName\n"
-            "cd $dirName\n"
-            "put ${testFile.path} $filename\n"
-            "get $filename downloaded_$filename\n"
-            "delete $filename\n"
-            "cd ..\n"
-            "rmdir $dirName\n"
-            "ls");
+        output =
+            await execFTPCmdOnWin("cd /${basename(sharedDirectories.first)}\n"
+                "mkdir $dirName\n"
+                "cd $dirName\n"
+                "put ${testFile.path} $filename\n"
+                "get $filename downloaded_$filename\n"
+                "delete $filename\n"
+                "cd ..\n"
+                "rmdir $dirName\n"
+                "ls");
       }
 
       // Use outputHandler for expected outputs

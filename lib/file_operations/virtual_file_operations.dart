@@ -308,8 +308,22 @@ class VirtualFileOperations extends FileOperations {
     return File(fullPath);
   }
 
+  // Helper: Checks if a path is a direct child of the virtual root (e.g., '/foo')
+  bool _isDirectChildOfRoot(String path) {
+    final virtualPath =
+        p.normalize(p.isAbsolute(path) ? path : p.join(currentDirectory, path));
+    ;
+    final cleanPath = p.normalize(virtualPath);
+    final parts = p.split(cleanPath).where((part) => part.isNotEmpty).toList();
+    return parts.length == 1;
+  }
+
   @override
   Future<void> writeFile(String path, List<int> data) async {
+    if (_isDirectChildOfRoot(path)) {
+      throw FileSystemException(
+          "Cannot create or write file directly in the virtual root", path);
+    }
     final fullPath = resolvePath(path);
     if (fullPath == rootDirectory) {
       throw FileSystemException("Cannot write to root directory", path);
@@ -333,11 +347,16 @@ class VirtualFileOperations extends FileOperations {
 
   @override
   Future<void> createDirectory(String path) async {
+    if (_isDirectChildOfRoot(path)) {
+      throw FileSystemException(
+          "Cannot create directory directly in the virtual root", path);
+    }
     try {
       final fullPath = resolvePath(path);
       if (fullPath == rootDirectory) {
         throw FileSystemException("Cannot create root directory", path);
       }
+
       final dir = Directory(fullPath);
       if (!await dir.exists()) {
         await dir.create(recursive: true);
@@ -356,6 +375,10 @@ class VirtualFileOperations extends FileOperations {
 
   @override
   Future<void> deleteFile(String path) async {
+    if (_isDirectChildOfRoot(path)) {
+      throw FileSystemException(
+          "Cannot delete file directly in the virtual root", path);
+    }
     final file =
         await getFile(path); // getFile already resolves and handles root
     if (await file.exists()) {
@@ -368,6 +391,10 @@ class VirtualFileOperations extends FileOperations {
 
   @override
   Future<void> deleteDirectory(String path) async {
+    if (_isDirectChildOfRoot(path)) {
+      throw FileSystemException(
+          "Cannot delete directory directly in the virtual root", path);
+    }
     final fullPath = resolvePath(path);
     if (fullPath == rootDirectory) {
       throw FileSystemException("Cannot delete root directory", path);
