@@ -177,18 +177,6 @@ This project provides two ways to share files and folders over FTP:
 - Use **VirtualFileOperations** if you want to expose multiple directories as top-level folders or need to restrict access to specific directories.
 - Use **PhysicalFileOperations** for direct, simple access to a single directory tree, with no virtual mapping, and if you need to allow operations at the root directory.
 
-## Limitations & Comparison
-
-| Feature / Limitation                 | VirtualFileOperations                   | PhysicalFileOperations                    |
-| ------------------------------------ | --------------------------------------- | ----------------------------------------- |
-| **Allowed Roots**                    | Only mapped directories (virtual roots) | Only the provided root directory          |
-| **Operation Outside Root**           | Not allowed (throws error)              | Not allowed (throws error)                |
-| **Writing to Root Directory**        | Not allowed (throws error for `/`)      | Allowed (can write files in `/`)          |
-| **Creating/Deleting Root Directory** | Not allowed (throws error for `/`)      | Not allowed (throws error for `/`)        |
-| **Path `/` Meaning**                 | Virtual root (not system root)          | Provided root directory (not system root) |
-| **Security Checks**                  | Enforced for all mapped directories     | Enforced for the provided root            |
-| **Current Directory**                | Virtual, session-specific               | Physical, session-specific                |
-
 **Key Points:**
 
 - Both implementations **enforce boundaries**: you cannot access or modify files outside the allowed root(s).
