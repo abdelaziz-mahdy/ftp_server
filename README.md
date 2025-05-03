@@ -10,6 +10,7 @@ A simple, extensible FTP server implementation in Dart. Supports both read-only 
 - [Compatibility](#compatibility)
 - [Usage](#usage)
   - [Starting the Server](#starting-the-server)
+  - [Running in the Background](#running-in-the-background)
   - [Supported Operations](#supported-operations)
   - [Authentication](#authentication)
   - [Read-Only Mode](#read-only-mode)
@@ -96,6 +97,16 @@ void main() async {
 ```
 
 For more information and advanced usage, see the [File Operations section](#ftp-server-file-operations) below.
+
+### Running in the Background
+
+You can run the FTP server in the background using the provided method:
+
+```dart
+await server.startInBackground();
+```
+
+This allows your Dart application to continue running other code while the FTP server handles connections in the background.
 
 ### Supported Operations
 
