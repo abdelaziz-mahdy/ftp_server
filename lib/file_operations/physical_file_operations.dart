@@ -174,4 +174,10 @@ class PhysicalFileOperations extends FileOperations {
     if (p.equals(currentDirectory, rootDirectory)) return '/';
     return p.relative(currentDirectory, from: rootDirectory);
   }
+
+  @override
+  PhysicalFileOperations copy() {
+    return PhysicalFileOperations(rootDirectory,
+        startingDirectory: currentDirectory);
+  }
 }

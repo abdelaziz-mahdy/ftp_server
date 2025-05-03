@@ -22,7 +22,6 @@ class FtpSession {
   final LoggerHandler logger;
   bool transferInProgress = false;
   Future? _gettingDataSocket;
-  String get currentDirectory => fileOperations.getCurrentDirectory();
 
   /// Creates an FTP session with the provided file operations backend.
   ///
@@ -34,10 +33,11 @@ class FtpSession {
   FtpSession(this.controlSocket,
       {this.username,
       this.password,
-      required this.fileOperations,
+      required FileOperations fileOperations,
       required this.serverType,
       required this.logger})
-      : commandHandler = FTPCommandHandler(controlSocket, logger) {
+      : fileOperations = fileOperations.copy(),
+        commandHandler = FTPCommandHandler(controlSocket, logger) {
     sendResponse('220 Welcome to the FTP server');
     logger.generalLog('FtpSession created. Ready to process commands.');
     controlSocket.listen(processCommand, onDone: closeConnection);
@@ -412,7 +412,8 @@ class FtpSession {
   void changeDirectory(String dirname) {
     try {
       fileOperations.changeDirectory(dirname);
-      sendResponse('250 Directory changed to $currentDirectory');
+      sendResponse(
+          '250 Directory changed to ${fileOperations.currentDirectory}');
     } catch (e) {
       sendResponse('550 Access denied or directory not found $e');
       logger.generalLog('Error changing directory: $e');
@@ -422,7 +423,8 @@ class FtpSession {
   void changeToParentDirectory() {
     try {
       fileOperations.changeToParentDirectory();
-      sendResponse('250 Directory changed to $currentDirectory');
+      sendResponse(
+          '250 Directory changed to ${fileOperations.currentDirectory}');
     } catch (e) {
       sendResponse('550 Access denied or directory not found $e');
       logger.generalLog('Error changing to parent directory: $e');

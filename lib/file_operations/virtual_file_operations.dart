@@ -432,4 +432,13 @@ class VirtualFileOperations extends FileOperations {
       return false;
     }
   }
+
+  @override
+  VirtualFileOperations copy() {
+    final copy = VirtualFileOperations(
+      directoryMappings.values.toList(),
+      startingDirectory: currentDirectory,
+    );
+    return copy;
+  }
 }

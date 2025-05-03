@@ -6,7 +6,9 @@ abstract class FileOperations {
   String rootDirectory;
   late String currentDirectory;
 
-  FileOperations(this.rootDirectory);
+  FileOperations(this.rootDirectory) {
+    currentDirectory = rootDirectory;
+  }
 
   /// Lists the contents of the directory at the given path.
   Future<List<FileSystemEntity>> listDirectory(String path);
@@ -54,4 +56,6 @@ abstract class FileOperations {
   /// Implementations must handle path resolution and update the internal state correctly,
   /// including checks for navigating above the root.
   void changeToParentDirectory();
+
+  FileOperations copy();
 }
