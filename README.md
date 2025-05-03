@@ -1,6 +1,27 @@
 # Dart FTP Server
 
-This package provides a simple FTP server implementation in Dart. It supports both read-only and read-and-write modes, making it suitable for various use cases. The server allows clients to connect and perform standard FTP operations such as listing directories, retrieving files, storing files, and more.
+A simple, extensible FTP server implementation in Dart. Supports both read-only and read-and-write modes, with pluggable file system backends for flexible directory exposure and security.
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Compatibility](#compatibility)
+- [Usage](#usage)
+  - [Starting the Server](#starting-the-server)
+  - [Supported Operations](#supported-operations)
+  - [Authentication](#authentication)
+  - [Read-Only Mode](#read-only-mode)
+- [FTP Server File Operations](#ftp-server-file-operations)
+  - [VirtualFileOperations](#1-virtualfileoperations)
+  - [PhysicalFileOperations](#2-physicalfileoperations)
+  - [Choosing an Implementation](#choosing-an-implementation)
+  - [Limitations & Comparison](#limitations--comparison)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
 
 ## Features
 
@@ -12,7 +33,7 @@ This package provides a simple FTP server implementation in Dart. It supports bo
 
 ## Compatibility
 
-This package has been tested on macOS. For Linux and Windows, CI/CD test cases have been implemented to ensure the code runs and functions without any problems.
+Tested on macOS. CI/CD test cases ensure compatibility with Linux and Windows.
 
 ## Usage
 
@@ -108,13 +129,7 @@ To enable authentication, provide the `username` and `password` parameters when 
 
 To run the server in read-only mode, set the `serverType` parameter to `ServerType.readOnly`. In this mode, commands that modify the filesystem (e.g., `STOR`, `DELE`, `MKD`, `RMD`) will be disabled.
 
-## Contributing
-
-Contributions are welcome! Please fork the repository and submit a pull request with your changes. Make sure to follow the existing code style and include tests for new features.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+---
 
 # FTP Server File Operations
 
@@ -187,40 +202,30 @@ await fileOps.deleteDirectory('subdir');
 - Use **VirtualFileOperations** if you want to expose multiple directories as top-level folders or need to restrict access to specific directories.
 - Use **PhysicalFileOperations** for direct, simple access to a single directory tree, with no virtual mapping, and if you need to allow operations at the root directory.
 
-## Limitations
+## Limitations & Comparison
 
-- Both implementations prevent operations outside their allowed root(s).
-- Only VirtualFileOperations prevents writing to the root directory itself for safety and consistency. PhysicalFileOperations allows it.
-- In PhysicalFileOperations, `/` always refers to the root you provided, not the system root.
+| Feature / Limitation                 | VirtualFileOperations                   | PhysicalFileOperations                         |
+| ------------------------------------ | --------------------------------------- | ---------------------------------------------- |
+| **Allowed Roots**                    | Only mapped directories (virtual roots) | Only the provided root directory               |
+| **Operation Outside Root**           | Not allowed (throws error)              | Not allowed (throws error)                     |
+| **Writing to Root Directory**        | Not allowed (throws error for `/`)      | Allowed (can write files in `/`)               |
+| **Creating/Deleting Root Directory** | Not allowed (throws error for `/`)      | Allowed (no-op for create, allowed for delete) |
+| **Path `/` Meaning**                 | Virtual root (not system root)          | Provided root directory (not system root)      |
+| **Security Checks**                  | Enforced for all mapped directories     | Enforced for the provided root                 |
+| **Current Directory**                | Virtual, session-specific               | Physical, session-specific                     |
 
-## Using with the FTP Server
+**Key Points:**
 
-The FTP server **requires** you to provide a `FileOperations` backend (such as `VirtualFileOperations` or `PhysicalFileOperations`) via the `fileOperations` parameter. This gives you full control over which directories are exposed and how file operations are handled.
+- Both implementations **enforce boundaries**: you cannot access or modify files outside the allowed root(s).
+- **VirtualFileOperations** is stricter: it prevents any file or directory creation, deletion, or writing directly at the virtual root (`/`).
+- **PhysicalFileOperations** is more permissive at its root: you can create, write, and delete files or directories at `/` (which is the root you provided, not the system root).
 
-- To expose multiple directories as top-level folders, use `VirtualFileOperations` and pass your shared directories to it.
-- To expose a single directory tree (with `/` as the root), use `PhysicalFileOperations`.
+---
 
-**Migration Guide:**
+## Contributing
 
-- Replace any usage of `sharedDirectories` in your `FtpServer` constructor with a `fileOperations` parameter.
-- If you previously used `startingDirectory`, set the initial directory via your `FileOperations` instance instead (e.g., pass the starting directory to the `VirtualFileOperations` or `PhysicalFileOperations` constructor).
-- Example migration:
+Contributions are welcome! Please fork the repository and submit a pull request with your changes. Make sure to follow the existing code style and include tests for new features.
 
-  ```dart
-  // Old:
-  // final server = FtpServer(
-  //   port: 21,
-  //   sharedDirectories: ['/dir1', '/dir2'],
-  //   ...
-  // );
+## License
 
-  // New:
-  final fileOps = VirtualFileOperations(['/dir1', '/dir2']);
-  final server = FtpServer(
-    21,
-    fileOperations: fileOps,
-    ...
-  );
-  ```
-
-See the code and tests for detailed usage examples and edge case handling.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
