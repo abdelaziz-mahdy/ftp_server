@@ -144,22 +144,33 @@ To run the server in read-only mode, set the `serverType` parameter to `ServerTy
 
 # FTP Server File Operations
 
-This project provides two file operations backends for FTP and file management:
+This project provides two ways to share files and folders over FTP:
 
-## 1. VirtualFileOperations
+- **Virtual (Multiple Directories):** Share several folders as top-level directories. Good for when you want to give access to multiple, separate folders.
+- **Physical (Single Directory):** Share one folder as the FTP root. Good for when you want to give access to everything inside a single folder.
 
-- Maps one or more physical directories to virtual root directories.
-- Allows users to interact with a virtual file system, where each mapped directory appears as a top-level folder.
-- Prevents access outside the mapped directories.
-- **Limitation:** You cannot write to the virtual root directory (`/`). All file and directory operations must be within a mapped directory.
+## 1. VirtualFileOperations (Multiple Directories)
 
-## 2. PhysicalFileOperations
+- Lets you share several folders, and each appears as a separate top-level folder when users connect.
+- Users cannot add, edit, or delete files directly at the root ("/"). They can only work inside the folders you shared.
+- Example: If you share `/photos` and `/docs`, users will see two folders: `photos` and `docs` at the top level.
+- **Use this if:** You want to share multiple folders and keep them separate.
 
-- Provides direct access to a single physical root directory.
-- All operations are performed relative to this root.
-- No virtual mapping or aliasing; paths are resolved directly.
-- **Main difference:** You **can** write, create, and delete files/directories at the root directory in PhysicalFileOperations. This is not allowed in VirtualFileOperations.
-- **Note:** In PhysicalFileOperations, `/` always refers to the root directory you provided.
+## 2. PhysicalFileOperations (Single Directory)
+
+- Lets you share one folder as the root of the FTP server.
+- Users can add, edit, or delete files and folders directly inside this root folder.
+- Example: If you share `/home/user/ftp_root`, users will see all files and folders inside `ftp_root` and can manage them freely.
+- **Use this if:** You want to share everything inside a single folder and allow full access within it.
+
+## Quick Comparison
+
+| Feature                      | Virtual (Multiple Directories)   | Physical (Single Directory)        |
+| ---------------------------- | -------------------------------- | ---------------------------------- |
+| Number of shared folders     | Multiple                         | One                                |
+| Can add/edit/delete at root? | No                               | Yes                                |
+| Root meaning                 | Virtual root (not a real folder) | The folder you chose as the root   |
+| Best for                     | Sharing several separate folders | Sharing one folder and its content |
 
 ## Choosing an Implementation
 

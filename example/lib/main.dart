@@ -52,8 +52,8 @@ class _FtpServerHomeState extends State<FtpServerHome> {
   int? port;
   bool usePhysical = false;
   String get backendWarning => usePhysical
-      ? 'PhysicalFileOperations: Only one root, / refers to the provided root, and you can write/delete at root.'
-      : 'VirtualFileOperations: Multiple mapped roots, but cannot write to the virtual root (/).';
+      ? 'Physical (Single Directory): You are sharing one folder as the FTP root. You can add, edit, or delete files and folders directly inside this root.'
+      : 'Virtual (Multiple Directories): You are sharing several folders as top-level directories. You cannot add, edit, or delete files directly at the root, only inside the shared folders.';
 
   @override
   void initState() {
