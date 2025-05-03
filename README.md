@@ -153,28 +153,6 @@ This project provides two file operations backends for FTP and file management:
 - Prevents access outside the mapped directories.
 - **Limitation:** You cannot write to the virtual root directory (`/`). All file and directory operations must be within a mapped directory.
 
-**Example:**
-
-```dart
-import 'package:ftp_server/file_operations/virtual_file_operations.dart';
-
-final fileOps = VirtualFileOperations([
-  '/path/to/dir/first',
-  '/path/to/dir/second',
-]);
-
-// Change to a mapped directory
-fileOps.changeDirectory('/first');
-// Write a file
-await fileOps.writeFile('example.txt', [1, 2, 3]);
-// List files
-final files = await fileOps.listDirectory('.');
-// Read a file
-final data = await fileOps.readFile('example.txt');
-// Delete a file
-await fileOps.deleteFile('example.txt');
-```
-
 ## 2. PhysicalFileOperations
 
 - Provides direct access to a single physical root directory.
@@ -182,31 +160,6 @@ await fileOps.deleteFile('example.txt');
 - No virtual mapping or aliasing; paths are resolved directly.
 - **Main difference:** You **can** write, create, and delete files/directories at the root directory in PhysicalFileOperations. This is not allowed in VirtualFileOperations.
 - **Note:** In PhysicalFileOperations, `/` always refers to the root directory you provided.
-
-**Example:**
-
-```dart
-import 'package:ftp_server/file_operations/physical_file_operations.dart';
-
-final fileOps = PhysicalFileOperations('/path/to/root');
-
-// Change to root ("/" always means the root you provided)
-fileOps.changeDirectory('/');
-// Write a file at the root
-await fileOps.writeFile('root_file.txt', [4, 5, 6]);
-// List files at the root
-final files = await fileOps.listDirectory('/');
-// Create a subdirectory
-await fileOps.createDirectory('subdir');
-// Write a file in a subdirectory
-await fileOps.writeFile('subdir/hello.txt', [7, 8, 9]);
-// Read a file
-final data = await fileOps.readFile('subdir/hello.txt');
-// Delete a file
-await fileOps.deleteFile('subdir/hello.txt');
-// Delete a directory
-await fileOps.deleteDirectory('subdir');
-```
 
 ## Choosing an Implementation
 
