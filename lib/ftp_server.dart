@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:ftp_server/ftp_session.dart';
 import 'package:ftp_server/server_type.dart';
 import 'logger_handler.dart';
+import 'package:ftp_server/file_operations/file_operations.dart';
 
 class FtpServer {
   ServerSocket? _server;
@@ -32,18 +33,8 @@ class FtpServer {
   /// The `LoggerHandler` provides methods to log commands, responses, and general messages.
   final LoggerHandler logger;
 
-  /// A list of directories that the FTP server will expose to clients.
-  ///
-  /// These directories are accessible by clients connected to the FTP server.
-  /// The list must not be empty, otherwise an [ArgumentError] will be thrown.
-  final List<String> sharedDirectories;
-
-  /// The starting directory for the FTP session.
-  ///
-  /// This is optional and specifies the initial directory for the FTP session. It must be
-  /// within the [sharedDirectories]. If null, the session starts in the first directory of
-  /// [sharedDirectories].
-  final String? startingDirectory;
+  /// The file operations backend to use (VirtualFileOperations, PhysicalFileOperations, or custom).
+  final FileOperations fileOperations;
 
   ///Create a List to collect new sessions.
   ///When you call _server?.stop() it should disconnect all active connections.
@@ -55,21 +46,18 @@ class FtpServer {
   /// Creates an FTP server with the provided configurations.
   ///
   /// The [port] is required to specify where the server will listen for connections.
-  /// The [sharedDirectories] specifies which directories are accessible through the FTP server and must be provided.
+  /// The [fileOperations] must be provided and handles all file/directory logic.
   /// The [serverType] determines the mode (read-only or read and write) of the server.
-  /// Optional parameters include [username] and [password] for authentication and a [logFunction] for custom logging.
+  /// Optional parameters include [username], [password], and [logFunction].
+  ///
+  /// BREAKING CHANGE: `sharedDirectories` and `startingDirectory` are removed. All directory logic is now handled by the provided [fileOperations].
   FtpServer(this.port,
       {this.username,
       this.password,
-      required this.sharedDirectories,
+      required this.fileOperations,
       required this.serverType,
-      Function(String)? logFunction,
-      this.startingDirectory})
-      : logger = LoggerHandler(logFunction) {
-    if (sharedDirectories.isEmpty) {
-      throw ArgumentError("Shared directories cannot be empty");
-    }
-  }
+      Function(String)? logFunction})
+      : logger = LoggerHandler(logFunction);
 
   Future<void> start() async {
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
@@ -81,9 +69,8 @@ class FtpServer {
         socket,
         username: username,
         password: password,
-        sharedDirectories: sharedDirectories,
+        fileOperations: fileOperations,
         serverType: serverType,
-        startingDirectory: startingDirectory,
         logger: logger,
       );
       //Fill sessionList with new sessions.
@@ -101,9 +88,8 @@ class FtpServer {
         socket,
         username: username,
         password: password,
-        sharedDirectories: sharedDirectories,
+        fileOperations: fileOperations,
         serverType: serverType,
-        startingDirectory: startingDirectory,
         logger: logger,
       );
       //Fill sessionList with new sessions.

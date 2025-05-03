@@ -4,10 +4,16 @@ import 'package:path/path.dart' as p;
 import 'package:intl/intl.dart';
 
 abstract class PlatformOutputHandler {
+  String normalizePath(String path);
   String getExpectedPwdOutput(String path);
   String getExpectedSizeOutput(int size);
   String getExpectedDirectoryChangeOutput(String path);
   String getExpectedDirectoryListingOutput(String listing);
+  String getExpectedMakeDirectoryOutput(String path);
+  String getExpectedDeleteDirectoryOutput(String path);
+  String getExpectedDeleteFileOutput(String filename);
+  String getExpectedTransferCompleteOutput();
+
   Future<String> generateDirectoryListing(
       String path, FileOperations fileOperations) async {
     StringBuffer listing = StringBuffer();
