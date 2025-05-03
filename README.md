@@ -215,21 +215,22 @@ await fileOps.deleteDirectory('subdir');
 
 ## Limitations & Comparison
 
-| Feature / Limitation                 | VirtualFileOperations                   | PhysicalFileOperations                         |
-| ------------------------------------ | --------------------------------------- | ---------------------------------------------- |
-| **Allowed Roots**                    | Only mapped directories (virtual roots) | Only the provided root directory               |
-| **Operation Outside Root**           | Not allowed (throws error)              | Not allowed (throws error)                     |
-| **Writing to Root Directory**        | Not allowed (throws error for `/`)      | Allowed (can write files in `/`)               |
-| **Creating/Deleting Root Directory** | Not allowed (throws error for `/`)      | Allowed (no-op for create, allowed for delete) |
-| **Path `/` Meaning**                 | Virtual root (not system root)          | Provided root directory (not system root)      |
-| **Security Checks**                  | Enforced for all mapped directories     | Enforced for the provided root                 |
-| **Current Directory**                | Virtual, session-specific               | Physical, session-specific                     |
+| Feature / Limitation                 | VirtualFileOperations                   | PhysicalFileOperations                    |
+| ------------------------------------ | --------------------------------------- | ----------------------------------------- |
+| **Allowed Roots**                    | Only mapped directories (virtual roots) | Only the provided root directory          |
+| **Operation Outside Root**           | Not allowed (throws error)              | Not allowed (throws error)                |
+| **Writing to Root Directory**        | Not allowed (throws error for `/`)      | Allowed (can write files in `/`)          |
+| **Creating/Deleting Root Directory** | Not allowed (throws error for `/`)      | Not allowed (throws error for `/`)        |
+| **Path `/` Meaning**                 | Virtual root (not system root)          | Provided root directory (not system root) |
+| **Security Checks**                  | Enforced for all mapped directories     | Enforced for the provided root            |
+| **Current Directory**                | Virtual, session-specific               | Physical, session-specific                |
 
 **Key Points:**
 
 - Both implementations **enforce boundaries**: you cannot access or modify files outside the allowed root(s).
+- **Neither implementation allows deleting the root directory** (`/`). Attempting to do so will throw an error.
 - **VirtualFileOperations** is stricter: it prevents any file or directory creation, deletion, or writing directly at the virtual root (`/`).
-- **PhysicalFileOperations** is more permissive at its root: you can create, write, and delete files or directories at `/` (which is the root you provided, not the system root).
+- **PhysicalFileOperations** allows creating and writing files at its root, but not deleting it (the root is the directory you provided, not the system root).
 
 ---
 

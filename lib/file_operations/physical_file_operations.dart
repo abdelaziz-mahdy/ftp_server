@@ -139,6 +139,9 @@ class PhysicalFileOperations extends FileOperations {
   @override
   Future<void> deleteDirectory(String path) async {
     final dirPath = resolvePath(path);
+    if (dirPath == rootDirectory) {
+      throw FileSystemException("Cannot delete root directory", path);
+    }
     final dir = Directory(dirPath);
     if (await dir.exists()) {
       await dir.delete(recursive: true);

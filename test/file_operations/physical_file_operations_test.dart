@@ -183,10 +183,12 @@ void main() {
       expect(await Directory(tempDir.path).exists(), isTrue);
     });
 
-    test('deleteDirectory allows deleting root', () async {
-      // Should delete the root directory and all its contents
-      await fileOps.deleteDirectory('/');
-      expect(await Directory(tempDir.path).exists(), isFalse);
+    test('deleteDirectory does not allow deleting root', () async {
+      await expectLater(
+        fileOps.deleteDirectory('/'),
+        throwsA(isA<FileSystemException>().having((e) => e.message, 'message',
+            contains('Cannot delete root directory'))),
+      );
     });
   });
 }
