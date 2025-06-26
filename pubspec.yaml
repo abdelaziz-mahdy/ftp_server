@@ -1,6 +1,6 @@
 name: ftp_server
 description: "Dart FTP server: Read-only/read-write. Clients can list directories, get/put files, and perform standard FTP operations."
-version: 2.0.0
+version: 2.1.0
 homepage: https://github.com/abdelaziz-mahdy/ftp_server
 
 environment:

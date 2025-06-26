@@ -1,6 +1,11 @@
 
 # Changelog
 
+## 2.1.0
+
+- Added RNFR/RNTO and RENAME commands for file and directory renaming
+- Support for both PhysicalFileOperations and VirtualFileOperations
+
 ## 2.0.0
 
 - Added `PhysicalFileOperations` for direct access to a single physical root directory, with no virtual mapping.
