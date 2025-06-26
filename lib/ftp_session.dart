@@ -16,6 +16,7 @@ class FtpSession {
   final String? username;
   final String? password;
   String? cachedUsername;
+  String? pendingRenameFrom;
 
   final FileOperations fileOperations;
   final ServerType serverType;
@@ -569,5 +570,17 @@ class FtpSession {
 
   String _formatMdtmTimestamp(DateTime dateTime) {
     return DateFormat('yyyyMMddHHmmss').format(dateTime.toUtc()); // Use UTC
+  }
+
+  Future<void> renameFileOrDirectory(String oldPath, String newPath) async {
+    try {
+      await fileOperations.renameFileOrDirectory(oldPath, newPath);
+      pendingRenameFrom = null; // Clear the pending state on success
+      sendResponse('250 Requested file action completed successfully');
+    } catch (e) {
+      pendingRenameFrom = null; // Clear the pending state on error
+      sendResponse('550 Failed to rename: $e');
+      logger.generalLog('Error renaming $oldPath to $newPath: $e');
+    }
   }
 }

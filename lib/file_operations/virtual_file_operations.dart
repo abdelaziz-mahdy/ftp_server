@@ -434,6 +434,81 @@ class VirtualFileOperations extends FileOperations {
   }
 
   @override
+  Future<void> renameFileOrDirectory(String oldPath, String newPath) async {
+    // Prevent renaming directly in the virtual root
+    if (_isDirectChildOfRoot(oldPath)) {
+      throw FileSystemException(
+          "Cannot rename file or directory directly in the virtual root",
+          oldPath);
+    }
+    if (_isDirectChildOfRoot(newPath)) {
+      throw FileSystemException(
+          "Cannot rename to a path directly in the virtual root", newPath);
+    }
+
+    final oldFullPath = resolvePath(oldPath);
+    final newFullPath = resolvePath(newPath);
+
+    // Prevent renaming the root directory
+    if (oldFullPath == rootDirectory) {
+      throw FileSystemException("Cannot rename root directory", oldPath);
+    }
+    if (newFullPath == rootDirectory) {
+      throw FileSystemException("Cannot rename to root directory", newPath);
+    }
+
+    // Check if source exists
+    final sourceEntity = FileSystemEntity.typeSync(oldFullPath);
+    if (sourceEntity == FileSystemEntityType.notFound) {
+      throw FileSystemException(
+          "Source not found for rename: $oldPath (resolved to $oldFullPath)");
+    }
+
+    // Check if destination already exists
+    if (FileSystemEntity.typeSync(newFullPath) !=
+        FileSystemEntityType.notFound) {
+      throw FileSystemException(
+          "Destination already exists: $newPath (resolved to $newFullPath)");
+    }
+
+    // Ensure both paths are within the same mapped directory for security
+    // This prevents moving files between different virtual directories
+    final oldVirtualPath = _getVirtualPath(oldFullPath);
+    final newVirtualPath = _getVirtualPath(newFullPath);
+
+    final oldParts = p
+        .split(oldVirtualPath)
+        .where((part) => part.isNotEmpty && part != rootDirectory)
+        .toList();
+    final newParts = p
+        .split(newVirtualPath)
+        .where((part) => part.isNotEmpty && part != rootDirectory)
+        .toList();
+
+    if (oldParts.isNotEmpty &&
+        newParts.isNotEmpty &&
+        oldParts.first != newParts.first) {
+      throw FileSystemException(
+          "Cannot rename across different virtual directories: $oldPath to $newPath");
+    }
+
+    try {
+      if (sourceEntity == FileSystemEntityType.file) {
+        final file = File(oldFullPath);
+        await file.rename(newFullPath);
+      } else if (sourceEntity == FileSystemEntityType.directory) {
+        final directory = Directory(oldFullPath);
+        await directory.rename(newFullPath);
+      } else {
+        throw FileSystemException(
+            "Unsupported file system entity type for rename", oldPath);
+      }
+    } catch (e) {
+      throw FileSystemException("Failed to rename $oldPath to $newPath: $e");
+    }
+  }
+
+  @override
   VirtualFileOperations copy() {
     final copy = VirtualFileOperations(
       directoryMappings.values.toList(),

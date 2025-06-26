@@ -93,6 +93,15 @@ class FTPCommandHandler {
       case 'MDTM':
         handleMdtm(argument, session);
         break;
+      case 'RNFR':
+        handleRnfr(argument, session);
+        break;
+      case 'RNTO':
+        handleRnto(argument, session);
+        break;
+      case 'RENAME':
+        handleRename(argument, session);
+        break;
       default:
         session.sendResponse('502 Command not implemented $command $argument');
         break;
@@ -241,5 +250,90 @@ class FTPCommandHandler {
 
   void handleAbort(FtpSession session) {
     session.abortTransfer();
+  }
+
+  void handleRnfr(String argument, FtpSession session) {
+    if (session.serverType == ServerType.readOnly) {
+      session.sendResponse('550 Command not allowed in read-only mode');
+      return;
+    }
+
+    if (argument.isEmpty) {
+      session.sendResponse('501 Syntax error in parameters or arguments');
+      return;
+    }
+
+    // Check if the file/directory exists
+    if (!session.fileOperations.exists(argument)) {
+      session.sendResponse('550 File not found');
+      return;
+    }
+
+    // Store the source path for the rename operation
+    session.pendingRenameFrom = argument;
+    session
+        .sendResponse('350 Requested file action pending further information');
+  }
+
+  void handleRnto(String argument, FtpSession session) {
+    if (session.serverType == ServerType.readOnly) {
+      session.sendResponse('550 Command not allowed in read-only mode');
+      return;
+    }
+
+    if (argument.isEmpty) {
+      session.sendResponse('501 Syntax error in parameters or arguments');
+      return;
+    }
+
+    // Check if RNFR was called first
+    if (session.pendingRenameFrom == null) {
+      session.sendResponse('503 Bad sequence of commands');
+      return;
+    }
+
+    try {
+      // Perform the rename operation
+      session.renameFileOrDirectory(session.pendingRenameFrom!, argument);
+    } catch (e) {
+      // Clear the pending rename state on error
+      session.pendingRenameFrom = null;
+      rethrow;
+    }
+  }
+
+  void handleRename(String argument, FtpSession session) {
+    if (session.serverType == ServerType.readOnly) {
+      session.sendResponse('550 Command not allowed in read-only mode');
+      return;
+    }
+
+    if (argument.isEmpty) {
+      session.sendResponse('501 Syntax error in parameters or arguments');
+      return;
+    }
+
+    // Parse the rename command arguments (oldname newname)
+    final parts = argument.split(' ');
+    if (parts.length != 2) {
+      session.sendResponse('501 Syntax error in parameters or arguments');
+      return;
+    }
+
+    final oldName = parts[0];
+    final newName = parts[1];
+
+    // Check if the file/directory exists
+    if (!session.fileOperations.exists(oldName)) {
+      session.sendResponse('550 File not found');
+      return;
+    }
+
+    try {
+      // Perform the rename operation directly
+      session.renameFileOrDirectory(oldName, newName);
+    } catch (e) {
+      // Error handling is done in the session method
+    }
   }
 }

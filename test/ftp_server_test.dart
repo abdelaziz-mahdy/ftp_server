@@ -297,6 +297,133 @@ void main() {
       }
     });
 
+    test('Rename File (RNFR/RNTO)', () async {
+      const testFileName = 'test_rename_file.txt';
+      const newFileName = 'renamed_file.txt';
+
+      // Create test file
+      File('${sharedDirectories.first}/$testFileName')
+          .writeAsStringSync('Test content for rename');
+
+      ftpClient.stdin.writeln('cd /${basename(sharedDirectories.first)}');
+      ftpClient.stdin.writeln('rename $testFileName $newFileName');
+      ftpClient.stdin.writeln('ls');
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin(
+            "cd /${basename(sharedDirectories.first)}\nrename $testFileName $newFileName\nls");
+        expect(output, contains('250 Requested file action completed successfully'));
+        output = await execFTPCmdOnWin("ls");
+      } else {
+        expect(output, contains('250 Requested file action completed successfully'));
+      }
+
+      expect(output, contains(newFileName));
+      expect(
+          File('${sharedDirectories.first}/$newFileName').existsSync(), isTrue);
+      expect(File('${sharedDirectories.first}/$testFileName').existsSync(),
+          isFalse);
+
+      // Cleanup
+      if (File('${sharedDirectories.first}/$newFileName').existsSync()) {
+        File('${sharedDirectories.first}/$newFileName').deleteSync();
+      }
+    });
+
+    test('Rename Directory (RNFR/RNTO)', () async {
+      const testDirName = 'test_rename_dir';
+      const newDirName = 'renamed_dir';
+
+      // Create test directory
+      final testDir = Directory('${sharedDirectories.first}/$testDirName');
+      await testDir.create();
+
+      ftpClient.stdin.writeln('cd /${basename(sharedDirectories.first)}');
+      ftpClient.stdin.writeln('rename $testDirName $newDirName');
+      ftpClient.stdin.writeln('ls');
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin(
+            "cd /${basename(sharedDirectories.first)}\nrename $testDirName $newDirName\nls");
+        expect(output, contains('250 Requested file action completed successfully'));
+        output = await execFTPCmdOnWin("ls");
+      } else {
+        expect(output, contains('250 Requested file action completed successfully'));
+      }
+
+      expect(output, contains(newDirName));
+      expect(Directory('${sharedDirectories.first}/$newDirName').existsSync(),
+          isTrue);
+      expect(Directory('${sharedDirectories.first}/$testDirName').existsSync(),
+          isFalse);
+
+      // Cleanup
+      if (Directory('${sharedDirectories.first}/$newDirName').existsSync()) {
+        Directory('${sharedDirectories.first}/$newDirName').deleteSync();
+      }
+    });
+
+    test('Rename with non-existent file should fail', () async {
+      ftpClient.stdin.writeln('cd /${basename(sharedDirectories.first)}');
+      ftpClient.stdin.writeln('rename non_existent_file.txt new_name.txt');
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin(
+            "cd /${basename(sharedDirectories.first)}\nrename non_existent_file.txt new_name.txt");
+        expect(output, contains('550 File not found'));
+      } else {
+        expect(output, contains('550 File not found'));
+      }
+    });
+
+    test('Rename to existing file should fail', () async {
+      const testFileName1 = 'test_file1.txt';
+      const testFileName2 = 'test_file2.txt';
+
+      // Create two test files
+      File('${sharedDirectories.first}/$testFileName1')
+          .writeAsStringSync('Content 1');
+      File('${sharedDirectories.first}/$testFileName2')
+          .writeAsStringSync('Content 2');
+
+      ftpClient.stdin.writeln('cd /${basename(sharedDirectories.first)}');
+      ftpClient.stdin.writeln('rename $testFileName1 $testFileName2');
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin(
+            "cd /${basename(sharedDirectories.first)}\nrename $testFileName1 $testFileName2");
+        expect(output, contains('550 Failed to rename'));
+      } else {
+        expect(output, contains('550 Failed to rename'));
+      }
+
+      // Both files should still exist
+      expect(File('${sharedDirectories.first}/$testFileName1').existsSync(),
+          isTrue);
+      expect(File('${sharedDirectories.first}/$testFileName2').existsSync(),
+          isTrue);
+
+      // Cleanup
+      if (File('${sharedDirectories.first}/$testFileName1').existsSync()) {
+        File('${sharedDirectories.first}/$testFileName1').deleteSync();
+      }
+      if (File('${sharedDirectories.first}/$testFileName2').existsSync()) {
+        File('${sharedDirectories.first}/$testFileName2').deleteSync();
+      }
+    });
+
     test('Delete File', () async {
       final testFile = File('${sharedDirectories.first}/test_file.txt')
         ..writeAsStringSync('Hello, FTP!');
@@ -895,6 +1022,20 @@ void main() {
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin("mkdir test_dir");
+        expect(output, contains('550 Command not allowed in read-only mode'));
+      } else {
+        expect(output, contains('550 Command not allowed in read-only mode'));
+      }
+    });
+
+    test('Prevent Rename Operations', () async {
+      ftpClient.stdin.writeln('rename some_file.txt new_name.txt');
+      ftpClient.stdin.writeln('quit');
+      await ftpClient.stdin.flush();
+
+      var output = await readAllOutput(logFilePath);
+      if (Platform.isWindows) {
+        output = await execFTPCmdOnWin("rename some_file.txt new_name.txt");
         expect(output, contains('550 Command not allowed in read-only mode'));
       } else {
         expect(output, contains('550 Command not allowed in read-only mode'));

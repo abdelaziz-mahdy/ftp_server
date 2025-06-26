@@ -179,6 +179,46 @@ class PhysicalFileOperations extends FileOperations {
   }
 
   @override
+  Future<void> renameFileOrDirectory(String oldPath, String newPath) async {
+    final oldFullPath = resolvePath(oldPath);
+    final newFullPath = resolvePath(newPath);
+
+    // Prevent renaming the root directory
+    if (oldFullPath == rootDirectory) {
+      throw FileSystemException("Cannot rename root directory", oldPath);
+    }
+
+    // Check if source exists
+    final sourceEntity = FileSystemEntity.typeSync(oldFullPath);
+    if (sourceEntity == FileSystemEntityType.notFound) {
+      throw FileSystemException(
+          "Source not found for rename: $oldPath (resolved to $oldFullPath)");
+    }
+
+    // Check if destination already exists
+    if (FileSystemEntity.typeSync(newFullPath) !=
+        FileSystemEntityType.notFound) {
+      throw FileSystemException(
+          "Destination already exists: $newPath (resolved to $newFullPath)");
+    }
+
+    try {
+      if (sourceEntity == FileSystemEntityType.file) {
+        final file = File(oldFullPath);
+        await file.rename(newFullPath);
+      } else if (sourceEntity == FileSystemEntityType.directory) {
+        final directory = Directory(oldFullPath);
+        await directory.rename(newFullPath);
+      } else {
+        throw FileSystemException(
+            "Unsupported file system entity type for rename", oldPath);
+      }
+    } catch (e) {
+      throw FileSystemException("Failed to rename $oldPath to $newPath: $e");
+    }
+  }
+
+  @override
   PhysicalFileOperations copy() {
     return PhysicalFileOperations(rootDirectory,
         startingDirectory: currentDirectory);
