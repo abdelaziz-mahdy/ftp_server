@@ -315,10 +315,12 @@ void main() {
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin(
             "cd /${basename(sharedDirectories.first)}\nrename $testFileName $newFileName\nls");
-        expect(output, contains('250 Requested file action completed successfully'));
+        expect(output,
+            contains('250 Requested file action completed successfully'));
         output = await execFTPCmdOnWin("ls");
       } else {
-        expect(output, contains('250 Requested file action completed successfully'));
+        expect(output,
+            contains('250 Requested file action completed successfully'));
       }
 
       expect(output, contains(newFileName));
@@ -351,10 +353,12 @@ void main() {
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin(
             "cd /${basename(sharedDirectories.first)}\nrename $testDirName $newDirName\nls");
-        expect(output, contains('250 Requested file action completed successfully'));
+        expect(output,
+            contains('250 Requested file action completed successfully'));
         output = await execFTPCmdOnWin("ls");
       } else {
-        expect(output, contains('250 Requested file action completed successfully'));
+        expect(output,
+            contains('250 Requested file action completed successfully'));
       }
 
       expect(output, contains(newDirName));
