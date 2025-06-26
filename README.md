@@ -133,6 +133,9 @@ This allows your Dart application to continue running other code while the FTP s
 | `SYST`               | Return system type.                                         |
 | `NOOP`               | No operation (used to keep the connection alive).           |
 | `SIZE <filename>`    | Return the size of the specified file.                      |
+| `RNFR <filename>`    | Rename from (specify source file/directory for rename).     |
+| `RNTO <filename>`    | Rename to (specify destination file/directory for rename).  |
+| `RENAME <old> <new>` | Rename a file or directory (high-level command).            |
 
 ### 4.4 Authentication
 

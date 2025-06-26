@@ -1,10 +1,14 @@
 
 # Changelog
 
+## 2.1.1
+- Updated README documentation to include new rename commands
+
 ## 2.1.0
 
 - Added RNFR/RNTO and RENAME commands for file and directory renaming
 - Support for both PhysicalFileOperations and VirtualFileOperations
+
 
 ## 2.0.0
 
