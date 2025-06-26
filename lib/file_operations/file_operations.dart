@@ -57,5 +57,10 @@ abstract class FileOperations {
   /// including checks for navigating above the root.
   void changeToParentDirectory();
 
+  /// Renames a file or directory from the old path to the new path.
+  /// Both paths are relative to the current working directory.
+  /// Implementations must handle path resolution and ensure the operation stays within allowed boundaries.
+  Future<void> renameFileOrDirectory(String oldPath, String newPath);
+
   FileOperations copy();
 }
