@@ -51,6 +51,7 @@ class _FtpServerHomeState extends State<FtpServerHome> {
   ReceivePort? receivePort;
   int? port;
   bool usePhysical = false;
+  bool enableFtps = false;
   String get backendWarning => usePhysical
       ? 'Physical (Single Directory): You are sharing one folder as the FTP root. You can add, edit, or delete files and folders directly inside this root.'
       : 'Virtual (Multiple Directories): You are sharing several folders as top-level directories. You cannot add, edit, or delete files directly at the root, only inside the shared folders.';
@@ -128,6 +129,9 @@ class _FtpServerHomeState extends State<FtpServerHome> {
         logFunction: (p0) => print(p0),
         username: null,
         password: null,
+        enforceSecureConnections: false,
+        secureConnectionAllowed: enableFtps,
+        secureDataConnection: enableFtps,
       );
 
       Future serverFuture = server.start();
@@ -136,8 +140,9 @@ class _FtpServerHomeState extends State<FtpServerHome> {
 
       setState(() {
         serverStatus = 'Server is running';
+        final scheme = (server.enforceSecureConnections || server.secureConnectionAllowed) ? "ftps" : "ftp";
         connectionInfo =
-            'Connect using FTP client:\nftp://$address:${server.port}';
+            'Connect using FTP client:\n$scheme://$address:${server.port}';
         isLoading = false;
       });
 
@@ -335,6 +340,23 @@ class _FtpServerHomeState extends State<FtpServerHome> {
                               const Text('Physical'),
                             ],
                           ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Text('FTPS (AUTH TLS):'),
+                        const SizedBox(width: 12),
+                        Switch(
+                          value: enableFtps,
+                          onChanged: isServerRunning
+                              ? null
+                              : (val) {
+                                  setState(() {
+                                    enableFtps = val;
+                                  });
+                                },
                         ),
                       ],
                     ),

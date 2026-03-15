@@ -1,18 +1,18 @@
-import 'dart:io';
 import 'package:ftp_server/ftp_session.dart';
 import 'package:ftp_server/server_type.dart';
+import 'package:ftp_server/socket_wrapper/plain_socket_wrapper.dart';
 import 'logger_handler.dart';
 
 class FTPCommandHandler {
-  final Socket controlSocket;
   final LoggerHandler logger;
 
-  FTPCommandHandler(this.controlSocket, this.logger);
+  FTPCommandHandler(this.logger);
 
-  void handleCommand(String commandLine, FtpSession session) {
+  Future<void> handleCommand(String commandLine, FtpSession session) async {
     List<String> parts = commandLine.split(' ');
     String command = parts[0].toUpperCase();
-    String argument = parts.length > 1 ? parts.sublist(1).join(' ').trim() : '';
+    String argument =
+        parts.length > 1 ? parts.sublist(1).join(' ').trim() : '';
 
     logger.logCommand(command, argument);
 
@@ -92,6 +92,15 @@ class FTPCommandHandler {
         break;
       case 'MDTM':
         handleMdtm(argument, session);
+        break;
+      case 'AUTH':
+        await handleAuth(argument, session);
+        break;
+      case 'PBSZ':
+        handlePbsz(argument, session);
+        break;
+      case 'PROT':
+        handleProt(argument, session);
         break;
       case 'RNFR':
         handleRnfr(argument, session);
@@ -236,6 +245,11 @@ class FTPCommandHandler {
   void handleFeat(FtpSession session) {
     session.sendResponse('211-Features:');
 
+    if (session.secureConnectionAllowed || session.enforceSecureConnections) {
+      session.sendResponse(' AUTH TLS');
+      session.sendResponse(' PBSZ');
+      session.sendResponse(' PROT');
+    }
     session.sendResponse(' SIZE');
     session.sendResponse(' MDTM');
     session.sendResponse(' EPSV');
@@ -252,6 +266,75 @@ class FTPCommandHandler {
     session.abortTransfer();
   }
 
+  void handlePbsz(String argument, FtpSession session) {
+    if (session.secure) {
+      if (argument == '0') {
+        session.sendResponse('200 PBSZ command successful.');
+      } else {
+        session.sendResponse('501 Invalid PBSZ argument.');
+      }
+    } else {
+      session.sendResponse('503 Security data exchange not complete.');
+    }
+  }
+
+  void handleProt(String argument, FtpSession session) {
+    if (!session.secure) {
+      session.sendResponse('503 Security data exchange not complete.');
+      return;
+    }
+
+    switch (argument.toUpperCase()) {
+      case 'P':
+        session.secureDataConnection = true;
+        session.sendResponse('200 PROT command successful. Using Private.');
+        break;
+      case 'C':
+        session.secureDataConnection = false;
+        session.sendResponse('200 PROT command successful. Using Clear.');
+        break;
+      default:
+        session.sendResponse('504 PROT level not supported.');
+    }
+  }
+
+  /// Handles AUTH TLS - upgrades the control connection to TLS.
+  ///
+  /// This is the explicit FTPS flow per RFC 4217:
+  /// 1. Send 234 response
+  /// 2. Flush the response to ensure client receives it
+  /// 3. Cancel old plain socket listener (prevents onDone → closeConnection)
+  /// 4. Perform TLS handshake on the underlying socket
+  /// 5. Re-subscribe to the new secure socket
+  Future<void> handleAuth(String argument, FtpSession session) async {
+    if (argument.toUpperCase() != 'TLS') {
+      session.sendResponse('504 AUTH type not supported');
+      return;
+    }
+
+    if (!session.secureConnectionAllowed) {
+      session.sendResponse('502 AUTH TLS not enabled on this server');
+      return;
+    }
+
+    if (session.controlSocket is! PlainSocketWrapper) {
+      session.sendResponse('503 Already secured');
+      return;
+    }
+
+    try {
+      // Send 234 BEFORE the upgrade. The upgrade method handles flushing
+      // and re-subscribing.
+      session.sendResponse('234 AUTH TLS successful');
+      await session.upgradeToTls();
+    } catch (e) {
+      session.logger.generalLog('AUTH TLS failed: $e');
+      // Connection is likely broken at this point - can't send a response
+      // because the socket state is unknown after a failed TLS handshake.
+      session.closeConnection();
+    }
+  }
+
   void handleRnfr(String argument, FtpSession session) {
     if (session.serverType == ServerType.readOnly) {
       session.sendResponse('550 Command not allowed in read-only mode');
@@ -263,13 +346,11 @@ class FTPCommandHandler {
       return;
     }
 
-    // Check if the file/directory exists
     if (!session.fileOperations.exists(argument)) {
       session.sendResponse('550 File not found');
       return;
     }
 
-    // Store the source path for the rename operation
     session.pendingRenameFrom = argument;
     session
         .sendResponse('350 Requested file action pending further information');
@@ -286,17 +367,14 @@ class FTPCommandHandler {
       return;
     }
 
-    // Check if RNFR was called first
     if (session.pendingRenameFrom == null) {
       session.sendResponse('503 Bad sequence of commands');
       return;
     }
 
     try {
-      // Perform the rename operation
       session.renameFileOrDirectory(session.pendingRenameFrom!, argument);
     } catch (e) {
-      // Clear the pending rename state on error
       session.pendingRenameFrom = null;
       rethrow;
     }
@@ -313,7 +391,6 @@ class FTPCommandHandler {
       return;
     }
 
-    // Parse the rename command arguments (oldname newname)
     final parts = argument.split(' ');
     if (parts.length != 2) {
       session.sendResponse('501 Syntax error in parameters or arguments');
@@ -323,14 +400,12 @@ class FTPCommandHandler {
     final oldName = parts[0];
     final newName = parts[1];
 
-    // Check if the file/directory exists
     if (!session.fileOperations.exists(oldName)) {
       session.sendResponse('550 File not found');
       return;
     }
 
     try {
-      // Perform the rename operation directly
       session.renameFileOrDirectory(oldName, newName);
     } catch (e) {
       // Error handling is done in the session method
