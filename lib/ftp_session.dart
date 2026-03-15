@@ -541,6 +541,8 @@ class FtpSession {
 
   Future<void> _closeDataSocket() async {
     if (dataSocket != null) {
+      logger.generalLog(
+          'Closing data socket (${dataSocket.runtimeType})');
       try {
         await dataSocket!.flush();
         await dataSocket!.close();
