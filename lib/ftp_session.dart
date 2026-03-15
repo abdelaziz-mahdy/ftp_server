@@ -532,12 +532,6 @@ class FtpSession {
     if (dataSocket != null) {
       try {
         await dataSocket!.flush();
-        // Allow the OS to transmit the flushed data before sending
-        // TLS close_notify. Without this, close_notify can arrive at the
-        // peer interleaved with or ahead of the last data records over
-        // high-latency connections (e.g., WiFi), causing GnuTLS-based
-        // clients like FileZilla to report error -110.
-        await Future.delayed(const Duration(milliseconds: 200));
         await dataSocket!.close();
       } catch (e) {
         logger.generalLog('Error closing data socket: $e');
