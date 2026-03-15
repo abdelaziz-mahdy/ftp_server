@@ -52,8 +52,8 @@ class FtpTestClient {
       if (DateTime.now().isAfter(end)) {
         throw TimeoutException('Timeout. Buffer: ${_buffer.toString()}');
       }
-      await _dataReady.stream.first
-          .timeout(end.difference(DateTime.now()), onTimeout: () {
+      await _dataReady.stream.first.timeout(end.difference(DateTime.now()),
+          onTimeout: () {
         throw TimeoutException('Timeout. Buffer: ${_buffer.toString()}');
       });
     }
@@ -81,8 +81,8 @@ class FtpTestClient {
       if (DateTime.now().isAfter(end)) {
         throw TimeoutException('Timeout. Buffer: ${_buffer.toString()}');
       }
-      await _dataReady.stream.first
-          .timeout(end.difference(DateTime.now()), onTimeout: () {
+      await _dataReady.stream.first.timeout(end.difference(DateTime.now()),
+          onTimeout: () {
         throw TimeoutException('Timeout. Buffer: ${_buffer.toString()}');
       });
     }
@@ -122,8 +122,7 @@ void main() {
     File('${tempDir.path}/data.bin')
         .writeAsBytesSync(List.generate(100, (i) => i));
     Directory('${tempDir.path}/subdir').createSync();
-    File('${tempDir.path}/subdir/nested.txt')
-        .writeAsStringSync('Nested file');
+    File('${tempDir.path}/subdir/nested.txt').writeAsStringSync('Nested file');
 
     server = FtpServer(
       port,

@@ -9,14 +9,19 @@ class FTPCommandHandler {
 
   /// Commands that are allowed before authentication
   static const _preAuthCommands = {
-    'USER', 'PASS', 'QUIT', 'FEAT', 'SYST', 'NOOP', 'OPTS',
+    'USER',
+    'PASS',
+    'QUIT',
+    'FEAT',
+    'SYST',
+    'NOOP',
+    'OPTS',
   };
 
   Future<void> handleCommand(String commandLine, FtpSession session) async {
     List<String> parts = commandLine.split(' ');
     String command = parts[0].toUpperCase();
-    String argument =
-        parts.length > 1 ? parts.sublist(1).join(' ').trim() : '';
+    String argument = parts.length > 1 ? parts.sublist(1).join(' ').trim() : '';
 
     logger.logCommand(command, argument);
 
@@ -200,9 +205,12 @@ class FTPCommandHandler {
   String _stripListFlags(String argument) {
     if (argument.isEmpty) return argument;
     final parts = argument.split(' ');
-    final filtered = parts.where((p) {
-      return !(p.startsWith('-') && !p.contains('/') && !p.contains('\\'));
-    }).join(' ').trim();
+    final filtered = parts
+        .where((p) {
+          return !(p.startsWith('-') && !p.contains('/') && !p.contains('\\'));
+        })
+        .join(' ')
+        .trim();
     return filtered;
   }
 
@@ -349,12 +357,9 @@ class FTPCommandHandler {
 
   void handleHelp(FtpSession session) {
     session.sendResponse('214-The following commands are supported:');
-    session.sendResponse(
-        ' USER PASS QUIT PASV PORT EPSV LIST NLST RETR STOR');
-    session.sendResponse(
-        ' CWD CDUP MKD RMD DELE PWD TYPE SIZE FEAT OPTS SYST');
-    session.sendResponse(
-        ' NOOP ABOR MLSD MDTM RNFR RNTO STRU MODE ALLO HELP');
+    session.sendResponse(' USER PASS QUIT PASV PORT EPSV LIST NLST RETR STOR');
+    session.sendResponse(' CWD CDUP MKD RMD DELE PWD TYPE SIZE FEAT OPTS SYST');
+    session.sendResponse(' NOOP ABOR MLSD MDTM RNFR RNTO STRU MODE ALLO HELP');
     session.sendResponse('214 End');
   }
 }
