@@ -3,10 +3,10 @@
 
 ## 2.2.0
 
-### Breaking Changes
-- `FTPCommandHandler` constructor no longer takes `controlSocket` parameter
-- `handleCommand` is now `async` (`Future<void>` instead of `void`)
-- `handleMlsd` and `handleMdtm` signatures simplified (removed extra `session` parameter)
+### Internal API Changes
+- `FTPCommandHandler` constructor no longer takes `controlSocket` (it was unused — all communication goes through the session)
+- `FTPCommandHandler.handleCommand` is now `async` to properly await all operations
+- `FtpSession.handleMlsd` and `handleMdtm` no longer take an extra `session` parameter
 - Error responses no longer include server filesystem paths or exception details
 
 ### Bug Fixes
