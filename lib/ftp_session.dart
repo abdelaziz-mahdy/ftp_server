@@ -24,21 +24,19 @@ class FtpSession {
   bool transferInProgress = false;
   Future? _gettingDataSocket;
 
-  /// Creates an FTP session with the provided file operations backend.
-  ///
-  /// [fileOperations] handles all file/directory logic (virtual, physical, or custom).
-  /// [serverType] determines the mode (read-only or read and write).
-  /// Optional parameters include [username], [password], and [logger].
-  ///
-  /// BREAKING CHANGE: `sharedDirectories` and `startingDirectory` are removed. All directory logic is now handled by the provided [fileOperations].
+  /// Callback invoked when this session's connection is closed.
+  /// Used by FtpServer to remove the session from its active list.
+  void Function()? onDisconnect;
+
   FtpSession(this.controlSocket,
       {this.username,
       this.password,
       required FileOperations fileOperations,
       required this.serverType,
-      required this.logger})
+      required this.logger,
+      this.onDisconnect})
       : fileOperations = fileOperations.copy(),
-        commandHandler = FTPCommandHandler(controlSocket, logger) {
+        commandHandler = FTPCommandHandler(logger) {
     sendResponse('220 Welcome to the FTP server');
     logger.generalLog('FtpSession created. Ready to process commands.');
     controlSocket.listen(
@@ -100,6 +98,7 @@ class FtpSession {
     dataSocket = null;
     dataListener = null;
     logger.generalLog('Connection closed');
+    onDisconnect?.call();
   }
 
   Future<bool> openDataConnection() async {
@@ -142,8 +141,6 @@ class FtpSession {
       var address = (await _getIpAddress()).replaceAll('.', ',');
       sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
 
-      /// assigning the future to make sure it finishes before running any other operation
-      /// check [openDataConnection]
       _gettingDataSocket =
           waitForClientDataSocket(timeout: Duration(seconds: 30));
     } catch (e) {
@@ -155,6 +152,10 @@ class FtpSession {
   Future<void> enterActiveMode(String parameters) async {
     try {
       List<String> parts = parameters.split(',');
+      if (parts.length < 6) {
+        sendResponse('501 Syntax error in PORT parameters');
+        return;
+      }
       String ip = parts.take(4).join('.');
       int port = int.parse(parts[4]) * 256 + int.parse(parts[5]);
       dataSocket = await Socket.connect(ip, port);
@@ -166,21 +167,39 @@ class FtpSession {
   }
 
   Future<String> _getIpAddress() async {
+    // Use the control socket's local address if available
+    try {
+      final addr = controlSocket.address;
+      if (addr.type == InternetAddressType.IPv4 &&
+          !addr.isLoopback &&
+          addr.address != '0.0.0.0') {
+        return addr.address;
+      }
+    } catch (_) {}
+
+    // Fallback: scan network interfaces for a private IPv4 address
     try {
       final networkInterfaces = await NetworkInterface.list();
       final ipList = networkInterfaces
           .map((interface) => interface.addresses)
           .expand((ip) => ip)
-          .where((ip) => ip.type == InternetAddressType.IPv4)
+          .where((ip) =>
+              ip.type == InternetAddressType.IPv4 &&
+              !ip.isLoopback &&
+              !ip.isLinkLocal)
           .toList();
 
-      // Filter IPs that start with '192'
-      final wifiIp = ipList.firstWhere(
-        (address) => address.address.startsWith('192'),
-        orElse: () => ipList.first,
-      );
-
-      return wifiIp.address;
+      if (ipList.isNotEmpty) {
+        // Prefer private network addresses
+        final privateIp = ipList.firstWhere(
+          (address) =>
+              address.address.startsWith('192.') ||
+              address.address.startsWith('10.') ||
+              address.address.startsWith('172.'),
+          orElse: () => ipList.first,
+        );
+        return privateIp.address;
+      }
     } catch (e) {
       logger.generalLog('Error getting IP address: $e');
     }
@@ -200,7 +219,7 @@ class FtpSession {
           'Listing directory: $path, for ${fileOperations.resolvePath(path)} dir contents: $dirContents');
 
       for (FileSystemEntity entity in dirContents) {
-        if (!transferInProgress) break; // Abort if transfer is cancelled
+        if (!transferInProgress) break;
 
         try {
           var stat = await entity.stat();
@@ -224,7 +243,6 @@ class FtpSession {
         } catch (entityError) {
           logger.generalLog(
               'Error processing entity during directory listing: $entityError');
-          // Continue with next entity
           continue;
         }
       }
@@ -303,7 +321,6 @@ class FtpSession {
     return DateFormat('MMM dd HH:mm').format(dateTime);
   }
 
-// Method to retrieve a file from the server
   Future<void> retrieveFile(String filename) async {
     if (!await openDataConnection()) {
       return;
@@ -313,7 +330,7 @@ class FtpSession {
       transferInProgress = true;
 
       if (!fileOperations.exists(filename)) {
-        sendResponse('550 File not found $filename');
+        sendResponse('550 File not found');
         transferInProgress = false;
         await _closeDataSocket();
         return;
@@ -324,7 +341,6 @@ class FtpSession {
       if (await file.exists()) {
         Stream<List<int>> fileStream = file.openRead();
 
-        // Handle potential socket errors during file transfer
         StreamSubscription<List<int>>? subscription;
         subscription = fileStream.listen(
           (data) {
@@ -369,7 +385,6 @@ class FtpSession {
     }
   }
 
-// Method to store a file on the server
   Future<void> storeFile(String filename) async {
     if (!await openDataConnection()) {
       return;
@@ -382,7 +397,6 @@ class FtpSession {
       String fullPath = fileOperations.resolvePath(filename);
       transferInProgress = true;
 
-      // Create the directory if it doesn't exist
       final directory = Directory(fullPath).parent;
       if (!await directory.exists()) {
         await directory.create(recursive: true);
@@ -391,7 +405,6 @@ class FtpSession {
       file = File(fullPath);
       fileSink = file.openWrite();
 
-      // Handle socket errors during file upload
       dataSocket!.listen(
         (data) {
           if (transferInProgress) {
@@ -436,7 +449,6 @@ class FtpSession {
     }
   }
 
-  // Helper method to handle transfer errors
   void _handleTransferError(IOSink? fileSink) async {
     sendResponse('426 Connection closed; transfer aborted');
     if (fileSink != null) {
@@ -504,7 +516,7 @@ class FtpSession {
       sendResponse(
           '250 Directory changed to ${fileOperations.currentDirectory}');
     } catch (e) {
-      sendResponse('550 Access denied or directory not found $e');
+      sendResponse('550 Access denied or directory not found');
       logger.generalLog('Error changing directory: $e');
     }
   }
@@ -515,37 +527,37 @@ class FtpSession {
       sendResponse(
           '250 Directory changed to ${fileOperations.currentDirectory}');
     } catch (e) {
-      sendResponse('550 Access denied or directory not found $e');
+      sendResponse('550 Access denied or directory not found');
       logger.generalLog('Error changing to parent directory: $e');
     }
   }
 
-  void makeDirectory(String dirname) async {
+  Future<void> makeDirectory(String dirname) async {
     try {
       await fileOperations.createDirectory(dirname);
       sendResponse('257 "$dirname" created');
     } catch (e) {
-      sendResponse('550 Failed to create directory, error: $e');
+      sendResponse('550 Failed to create directory');
       logger.generalLog('Error creating directory: $e');
     }
   }
 
-  void removeDirectory(String dirname) async {
+  Future<void> removeDirectory(String dirname) async {
     try {
       await fileOperations.deleteDirectory(dirname);
       sendResponse('250 Directory deleted');
     } catch (e) {
-      sendResponse('550 Failed to delete directory $e');
+      sendResponse('550 Failed to delete directory');
       logger.generalLog('Error deleting directory: $e');
     }
   }
 
-  void deleteFile(String filePath) async {
+  Future<void> deleteFile(String filePath) async {
     try {
       await fileOperations.deleteFile(filePath);
       sendResponse('250 File deleted');
     } catch (e) {
-      sendResponse('550 Failed to delete file $e');
+      sendResponse('550 Failed to delete file');
       logger.generalLog('Error deleting file: $e');
     }
   }
@@ -572,7 +584,6 @@ class FtpSession {
       int port = dataListener!.port;
       sendResponse('229 Entering Extended Passive Mode (|||$port|)');
 
-      // Properly wait for the client to connect and handle errors
       _gettingDataSocket =
           waitForClientDataSocket(timeout: Duration(seconds: 30));
     } catch (e) {
@@ -581,7 +592,7 @@ class FtpSession {
     }
   }
 
-  Future<void> handleMlsd(String argument, FtpSession session) async {
+  Future<void> handleMlsd(String argument) async {
     if (!await openDataConnection()) {
       return;
     }
@@ -608,7 +619,6 @@ class FtpSession {
         } catch (entityError) {
           logger
               .generalLog('Error processing entity during MLSD: $entityError');
-          // Continue with next entity
           continue;
         }
       }
@@ -623,13 +633,12 @@ class FtpSession {
       }
     } catch (e) {
       logger.generalLog('Error listing directory with MLSD: $e');
-      sendResponse('550 Failed to list directory: $e');
+      sendResponse('550 Failed to list directory');
       transferInProgress = false;
       await _closeDataSocket();
     }
   }
 
-// Method to abort a file transfer
   String _formatMlsdFacts(FileSystemEntity entity, FileStat stat) {
     String type = stat.type == FileSystemEntityType.directory ? "dir" : "file";
     String modify = DateFormat("yyyyMMddHHmmss")
@@ -640,7 +649,7 @@ class FtpSession {
     return "type=$type;modify=$modify;size=$size; $name\r\n";
   }
 
-  void handleMdtm(String argument, FtpSession session) {
+  void handleMdtm(String argument) {
     try {
       if (!fileOperations.exists(argument)) {
         sendResponse('550 File not found');
@@ -657,7 +666,7 @@ class FtpSession {
         sendResponse('550 File not found');
       }
     } catch (e) {
-      sendResponse('550 Could not get modification time: $e');
+      sendResponse('550 Could not get modification time');
       logger.generalLog('Error getting modification time: $e');
     }
   }
@@ -669,11 +678,11 @@ class FtpSession {
   Future<void> renameFileOrDirectory(String oldPath, String newPath) async {
     try {
       await fileOperations.renameFileOrDirectory(oldPath, newPath);
-      pendingRenameFrom = null; // Clear the pending state on success
+      pendingRenameFrom = null;
       sendResponse('250 Requested file action completed successfully');
     } catch (e) {
-      pendingRenameFrom = null; // Clear the pending state on error
-      sendResponse('550 Failed to rename: $e');
+      pendingRenameFrom = null;
+      sendResponse('550 Failed to rename');
       logger.generalLog('Error renaming $oldPath to $newPath: $e');
     }
   }
