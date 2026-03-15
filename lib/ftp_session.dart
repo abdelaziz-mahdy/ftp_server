@@ -531,19 +531,7 @@ class FtpSession {
   Future<void> _closeDataSocket() async {
     if (dataSocket != null) {
       try {
-        await dataSocket!.flush().timeout(
-          const Duration(seconds: 5),
-          onTimeout: () {
-            logger
-                .generalLog('Socket flush timeout, closing socket forcefully');
-            return;
-          },
-        );
-      } catch (e) {
-        logger.generalLog('Error flushing data socket: $e');
-      }
-
-      try {
+        await dataSocket!.flush();
         await dataSocket!.close();
       } catch (e) {
         logger.generalLog('Error closing data socket: $e');
