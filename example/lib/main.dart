@@ -140,8 +140,9 @@ class _FtpServerHomeState extends State<FtpServerHome> {
 
       setState(() {
         serverStatus = 'Server is running';
+        final scheme = (server.enforceSecureConnections || server.secureConnectionAllowed) ? "ftps" : "ftp";
         connectionInfo =
-            'Connect using FTP client:\n${server.enforceSecureConnections ? "ftps" : "ftp"}://$address:${server.port}';
+            'Connect using FTP client:\n$scheme://$address:${server.port}';
         isLoading = false;
       });
 
