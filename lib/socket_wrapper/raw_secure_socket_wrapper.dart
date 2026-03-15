@@ -35,12 +35,14 @@ class RawSecureSocketWrapper implements SocketWrapper {
           }
           break;
         case RawSocketEvent.readClosed:
+          print('[TLS EVENT] readClosed (peer sent close_notify)');
           if (!_dataController.isClosed) _dataController.close();
           if (_peerCloseCompleter != null && !_peerCloseCompleter!.isCompleted) {
             _peerCloseCompleter!.complete();
           }
           break;
         case RawSocketEvent.closed:
+          print('[TLS EVENT] closed');
           if (!_dataController.isClosed) _dataController.close();
           if (_peerCloseCompleter != null && !_peerCloseCompleter!.isCompleted) {
             _peerCloseCompleter!.complete();
@@ -109,25 +111,25 @@ class RawSecureSocketWrapper implements SocketWrapper {
     //
     // 3. Fully close the socket. Since the receive buffer is empty,
     //    the OS sends a clean TCP FIN instead of RST.
-    //
-    // Without this, SecureSocket.close() shuts both sides at once,
-    // leaving the peer's close_notify unread in the receive buffer,
-    // which causes the OS to send RST — discarding our close_notify
-    // before it reaches the client (FileZilla GnuTLS error -110).
 
+    print('[TLS CLOSE] Starting shutdown(send) - sending close_notify');
     _shutdownSend = true;
     _socket.shutdown(SocketDirection.send);
+    print('[TLS CLOSE] shutdown(send) returned');
 
     _peerCloseCompleter ??= Completer<void>();
     try {
       await _peerCloseCompleter!.future.timeout(const Duration(seconds: 2));
+      print('[TLS CLOSE] Peer closed cleanly');
     } catch (_) {
-      // Timeout: peer didn't close in time — force close
+      print('[TLS CLOSE] Timeout waiting for peer close (2s)');
     }
 
+    print('[TLS CLOSE] Cancelling subscription and closing socket');
     _rawSub.cancel();
     if (!_dataController.isClosed) _dataController.close();
     await _socket.close();
+    print('[TLS CLOSE] Done');
   }
 
   @override
