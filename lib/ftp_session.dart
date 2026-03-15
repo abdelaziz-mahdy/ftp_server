@@ -51,10 +51,21 @@ class FtpSession {
     );
   }
 
+  final StringBuffer _commandBuffer = StringBuffer();
+
   void processCommand(List<int> data) {
     try {
-      String commandLine = utf8.decode(data).trim();
-      commandHandler.handleCommand(commandLine, this);
+      _commandBuffer.write(utf8.decode(data));
+      final raw = _commandBuffer.toString();
+      final lines = raw.split('\r\n');
+      // Keep the last (potentially incomplete) fragment in the buffer
+      _commandBuffer.clear();
+      _commandBuffer.write(lines.last);
+      for (final line in lines.sublist(0, lines.length - 1)) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty) continue;
+        commandHandler.handleCommand(trimmed, this);
+      }
     } catch (e, s) {
       logger.generalLog("error: $e stack: $s ,input bytes $data");
       sendResponse('500 Internal server error');
@@ -118,6 +129,12 @@ class FtpSession {
 
   Future<void> enterPassiveMode() async {
     try {
+      // Close any previous passive listener to avoid leaking sockets
+      dataListener?.close();
+      dataListener = null;
+      dataSocket?.close();
+      dataSocket = null;
+
       dataListener = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
       int port = dataListener!.port;
       int p1 = port >> 8;
@@ -473,9 +490,11 @@ class FtpSession {
         logger.generalLog('Error closing data listener during abort: $e');
       }
       dataListener = null;
+      // RFC 959: ABOR during transfer requires 426 followed by 226
       sendResponse('426 Transfer aborted');
+      sendResponse('226 ABOR command successful');
     } else {
-      sendResponse('226 No transfer in progress');
+      sendResponse('226 ABOR command successful');
     }
   }
 
@@ -543,6 +562,12 @@ class FtpSession {
 
   Future<void> enterExtendedPassiveMode() async {
     try {
+      // Close any previous passive listener to avoid leaking sockets
+      dataListener?.close();
+      dataListener = null;
+      dataSocket?.close();
+      dataSocket = null;
+
       dataListener = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
       int port = dataListener!.port;
       sendResponse('229 Entering Extended Passive Mode (|||$port|)');

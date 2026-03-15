@@ -11,7 +11,7 @@ class FTPCommandHandler {
 
   /// Commands that are allowed before authentication
   static const _preAuthCommands = {
-    'USER', 'PASS', 'QUIT', 'FEAT', 'SYST', 'NOOP',
+    'USER', 'PASS', 'QUIT', 'FEAT', 'SYST', 'NOOP', 'OPTS',
   };
 
   void handleCommand(String commandLine, FtpSession session) {
@@ -164,11 +164,14 @@ class FTPCommandHandler {
   }
 
   /// Strips LIST flags (e.g., -la, -a) that clients like FileZilla send.
-  /// Returns the path portion of the argument.
+  /// Only strips tokens that look like flags (start with '-' and contain
+  /// no path separators), preserving valid paths like "-backups".
   String _stripListFlags(String argument) {
     if (argument.isEmpty) return argument;
     final parts = argument.split(' ');
-    final filtered = parts.where((p) => !p.startsWith('-')).join(' ').trim();
+    final filtered = parts.where((p) {
+      return !(p.startsWith('-') && !p.contains('/') && !p.contains('\\'));
+    }).join(' ').trim();
     return filtered;
   }
 
@@ -342,14 +345,8 @@ class FTPCommandHandler {
       return;
     }
 
-    try {
-      // Perform the rename operation
-      session.renameFileOrDirectory(session.pendingRenameFrom!, argument);
-    } catch (e) {
-      // Clear the pending rename state on error
-      session.pendingRenameFrom = null;
-      rethrow;
-    }
+    // renameFileOrDirectory handles errors and responses internally
+    session.renameFileOrDirectory(session.pendingRenameFrom!, argument);
   }
 
   void handleRename(String argument, FtpSession session) {
