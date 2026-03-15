@@ -1,18 +1,15 @@
-// lib/ftp_dart
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
+import 'package:ftp_server/server_type.dart';
 import 'package:ftp_server/socket_handler/plain_socket_handler.dart';
 import 'package:ftp_server/socket_handler/abstract_socket_handler.dart';
 import 'package:ftp_server/socket_wrapper/plain_socket_wrapper.dart';
 import 'package:ftp_server/socket_wrapper/socket_wrapper.dart';
-
-import 'file_operations/virtual_file_operations.dart';
-import 'server_type.dart';
+import 'package:intl/intl.dart';
 import 'ftp_command_handler.dart';
 import 'logger_handler.dart';
 import 'file_operations/file_operations.dart';
-import 'package:intl/intl.dart';
 
 class FtpSession {
   SocketWrapper controlSocket;
@@ -23,72 +20,97 @@ class FtpSession {
   final String? username;
   final String? password;
   String? cachedUsername;
+  String? pendingRenameFrom;
 
   final FileOperations fileOperations;
-  final List<String> sharedDirectories;
   final ServerType serverType;
   final LoggerHandler logger;
   bool transferInProgress = false;
   Future? _gettingDataSocket;
-  String get currentDirectory => fileOperations.getCurrentDirectory();
 
+  /// Whether the control connection is currently secured with TLS.
   bool secure;
+
+  /// The security context used for TLS connections.
   final SecurityContext? securityContext;
 
-  /// Whether the server will only accept secure connections using TLS or not.
-  ///
-  /// If `true`, the server will only accept connections that are secured using TLS.
-  /// If `false`, the server will accept normal FTP connections and can optionally be upgraded to TLS using the command `AUTH TLS` if [secureConnectionAllowed] is `true`.
-  ///
-  /// Even if this is set to `false`, the server will still accept TLS upgrades, but it will not be the default.
-  /// If a client wants to upgrade to TLS, it can still send the `AUTH TLS` command.
-  ///
-  /// A [securityContext] can be provided or it will be created automatically.
+  /// Whether the server enforces TLS on all connections (implicit FTPS).
   final bool enforceSecureConnections;
 
-  /// Whether the server will only accept secure connections using TLS or not in data connections.
-  ///
-  /// If `true`, the server will only accept connections that are secured using TLS.
-  /// If `false`, the server will accept normal FTP data connections.
-  final bool secureDataConnection;
+  /// Whether data connections should be secured with TLS.
+  /// Can be changed per-session via the PROT command.
+  bool secureDataConnection;
 
-  /// Whether the server will be able to upgrade to TLS using the `AUTH TLS` command.
+  /// Whether the server allows upgrading to TLS via AUTH TLS (explicit FTPS).
   final bool secureConnectionAllowed;
 
-  // this is not currently used
-  // String? dataChannelProtectionLevel;
+  /// The active subscription on the control socket.
+  /// Tracked so it can be cancelled during TLS upgrade.
+  StreamSubscription<List<int>>? _controlSubscription;
+
+  /// Creates an FTP session with the provided file operations backend.
+  ///
+  /// [fileOperations] handles all file/directory logic (virtual, physical, or custom).
+  /// [serverType] determines the mode (read-only or read and write).
+  /// Optional parameters include [username], [password], and [logger].
   FtpSession(
     this.controlSocket, {
     this.username,
     this.password,
-    required this.sharedDirectories,
+    required FileOperations fileOperations,
     required this.serverType,
     required this.logger,
-    String? startingDirectory,
-    this.secure = true,
+    this.secure = false,
     this.securityContext,
     this.enforceSecureConnections = false,
     this.secureDataConnection = false,
     this.secureConnectionAllowed = false,
-  })  : commandHandler = FTPCommandHandler(controlSocket, logger),
-        fileOperations = VirtualFileOperations(sharedDirectories) {
+  })  : fileOperations = fileOperations.copy(),
+        commandHandler = FTPCommandHandler(logger) {
     sendResponse('220 Welcome to the FTP server');
-
-    // Set the starting directory if provided
-    if (startingDirectory != null && fileOperations.exists(startingDirectory)) {
-      try {
-        fileOperations.changeDirectory(startingDirectory);
-      } catch (e) {
-        logger.generalLog('Failed to set starting directory: $e');
-        sendResponse('550 Failed to set starting directory');
-      }
-    }
-
-    listenToControlMessages();
+    logger.generalLog('FtpSession created. Ready to process commands.');
+    _listenToControlSocket();
   }
 
-  void listenToControlMessages() {
-    controlSocket.listen(processCommand, onDone: closeConnection);
+  /// Subscribe to the control socket for incoming commands.
+  /// Cancels any existing subscription first.
+  void _listenToControlSocket() {
+    _controlSubscription?.cancel();
+    _controlSubscription =
+        controlSocket.listen(processCommand, onDone: closeConnection);
+  }
+
+  /// Upgrades the control connection to TLS (called by AUTH TLS handler).
+  /// Returns a Future that completes when the TLS handshake is done.
+  Future<void> upgradeToTls() async {
+    if (controlSocket is! PlainSocketWrapper) {
+      throw StateError('Control socket is already secure');
+    }
+
+    // PAUSE (don't cancel) the old listener. SecureSocket.secureServer()
+    // internally calls _detachRaw() which takes ownership of the existing
+    // subscription. If we cancel it, the detach mechanism breaks and the
+    // TLS handshake fails. Pausing prevents the old onData handler from
+    // receiving TLS ClientHello bytes and misinterpreting them as FTP commands.
+    _controlSubscription?.pause();
+
+    // Flush the 234 response before starting the TLS handshake.
+    // The client must receive the 234 before it initiates TLS.
+    await controlSocket.flush();
+
+    // Perform the TLS handshake. SecureSocket.secureServer internally
+    // detaches the raw socket and takes over the paused subscription.
+    controlSocket = await (controlSocket as PlainSocketWrapper)
+        .upgradeToSecure(securityContext: securityContext!);
+
+    // Ownership of old subscription transferred to SecureSocket internals
+    _controlSubscription = null;
+    secure = true;
+
+    // Listen on the new secure socket
+    _listenToControlSocket();
+
+    logger.generalLog('TLS negotiation completed on control connection');
   }
 
   void processCommand(List<int> data) {
@@ -104,10 +126,16 @@ class FtpSession {
 
   void sendResponse(String message) {
     logger.logResponse(message);
-    controlSocket.write("$message\r\n");
+    try {
+      controlSocket.write('$message\r\n');
+    } catch (e) {
+      logger.generalLog('Error sending response: $e');
+    }
   }
 
   void closeConnection() {
+    _controlSubscription?.cancel();
+    _controlSubscription = null;
     controlSocket.close();
     dataSocket?.close();
     dataSocketHandler?.close();
@@ -115,20 +143,31 @@ class FtpSession {
   }
 
   Future<bool> openDataConnection() async {
-    await _gettingDataSocket;
+    try {
+      await _gettingDataSocket;
+    } catch (e) {
+      logger.generalLog('Error while waiting for data socket: $e');
+    }
     if (dataSocket == null) {
       sendResponse('425 Can\'t open data connection');
       return false;
     }
     sendResponse('150 Opening data connection');
 
-    // Following https://datatracker.ietf.org/doc/html/rfc4217 - TLS upgrade
+    // Per RFC 4217: upgrade data connection to TLS if protection level is Private
     if (secure &&
         securityContext != null &&
         secureDataConnection &&
         dataSocket is PlainSocketWrapper) {
-      dataSocket = await (dataSocket as PlainSocketWrapper)
-          .upgradeToSecure(securityContext: securityContext!);
+      try {
+        dataSocket = await (dataSocket as PlainSocketWrapper)
+            .upgradeToSecure(securityContext: securityContext!);
+      } catch (e) {
+        logger.generalLog('Error upgrading data connection to TLS: $e');
+        sendResponse('425 Can\'t establish secure data connection');
+        await _closeDataSocket();
+        return false;
+      }
     }
 
     return true;
@@ -150,7 +189,6 @@ class FtpSession {
 
     try {
       var socket = await connectionFuture;
-
       dataSocket = socket;
     } catch (e) {
       sendResponse('425 Can\'t open data connection: $e');
@@ -223,31 +261,49 @@ class FtpSession {
       transferInProgress = true;
 
       var dirContents = await fileOperations.listDirectory(path);
-      logger
-          .generalLog('Listing directory: ${fileOperations.resolvePath(path)}');
+      logger.generalLog(
+          'Listing directory: $path, for ${fileOperations.resolvePath(path)} dir contents: $dirContents');
 
       for (FileSystemEntity entity in dirContents) {
         if (!transferInProgress) break; // Abort if transfer is cancelled
 
-        var stat = await entity.stat();
-        String permissions = _formatPermissions(stat);
-        String fileSize = stat.size.toString();
-        String modificationTime = _formatModificationTime(stat.modified);
-        String fileName = entity.path.split(Platform.pathSeparator).last;
-        String entry =
-            '$permissions 1 ftp ftp $fileSize $modificationTime $fileName\r\n';
+        try {
+          var stat = await entity.stat();
+          String permissions = _formatPermissions(stat);
+          String fileSize = stat.size.toString();
+          String modificationTime = _formatModificationTime(stat.modified);
+          String fileName = entity.path.split(Platform.pathSeparator).last;
+          String entry =
+              '$permissions 1 ftp ftp $fileSize $modificationTime $fileName\r\n';
 
-        dataSocket!.write(entry);
+          if (dataSocket == null || !transferInProgress) break;
+
+          try {
+            dataSocket!.write(entry);
+          } catch (socketError) {
+            logger.generalLog(
+                'Socket write error during directory listing: $socketError');
+            transferInProgress = false;
+            break;
+          }
+        } catch (entityError) {
+          logger.generalLog(
+              'Error processing entity during directory listing: $entityError');
+          continue;
+        }
       }
 
       if (transferInProgress) {
         transferInProgress = false;
         await _closeDataSocket();
         sendResponse('226 Transfer complete');
+      } else {
+        await _closeDataSocket();
+        sendResponse('426 Transfer aborted');
       }
     } catch (e) {
-      sendResponse('550 Failed to list directory');
       logger.generalLog('Error listing directory: $e');
+      sendResponse('550 Failed to list directory');
       transferInProgress = false;
       await _closeDataSocket();
     }
@@ -283,6 +339,7 @@ class FtpSession {
       if (!fileOperations.exists(filename)) {
         sendResponse('550 File not found $filename');
         transferInProgress = false;
+        await _closeDataSocket();
         return;
       }
 
@@ -291,10 +348,19 @@ class FtpSession {
 
       if (await file.exists()) {
         Stream<List<int>> fileStream = file.openRead();
-        fileStream.listen(
+
+        StreamSubscription<List<int>>? subscription;
+        subscription = fileStream.listen(
           (data) {
-            if (transferInProgress) {
-              dataSocket?.add(data);
+            if (transferInProgress && dataSocket != null) {
+              try {
+                dataSocket!.add(data);
+              } catch (e) {
+                logger.generalLog('Error writing to data socket: $e');
+                transferInProgress = false;
+                subscription?.cancel();
+                _closeDataSocket();
+              }
             }
           },
           onDone: () async {
@@ -305,6 +371,7 @@ class FtpSession {
             }
           },
           onError: (error) async {
+            logger.generalLog('Error reading from file: $error');
             if (transferInProgress) {
               sendResponse('426 Connection closed; transfer aborted');
               transferInProgress = false;
@@ -316,8 +383,10 @@ class FtpSession {
       } else {
         sendResponse('550 File not found $fullPath');
         transferInProgress = false;
+        await _closeDataSocket();
       }
     } catch (e) {
+      logger.generalLog('Exception in retrieveFile: $e');
       sendResponse('550 File transfer failed');
       transferInProgress = false;
       await _closeDataSocket();
@@ -329,9 +398,11 @@ class FtpSession {
       return;
     }
 
+    File? file;
+    IOSink? fileSink;
+
     try {
       String fullPath = fileOperations.resolvePath(filename);
-
       transferInProgress = true;
 
       // Create the directory if it doesn't exist
@@ -340,38 +411,64 @@ class FtpSession {
         await directory.create(recursive: true);
       }
 
-      File file = File(fullPath);
-      IOSink fileSink = file.openWrite();
+      file = File(fullPath);
+      fileSink = file.openWrite();
 
       dataSocket!.listen(
         (data) {
           if (transferInProgress) {
-            fileSink.add(data);
+            try {
+              fileSink?.add(data);
+            } catch (e) {
+              logger.generalLog('Error writing to file: $e');
+              _handleTransferError(fileSink);
+            }
           }
         },
         onDone: () async {
           if (transferInProgress) {
-            await fileSink.close();
-            transferInProgress = false;
-            await _closeDataSocket();
-            sendResponse('226 Transfer complete');
+            try {
+              await fileSink?.flush();
+              await fileSink?.close();
+              transferInProgress = false;
+              await _closeDataSocket();
+              sendResponse('226 Transfer complete');
+              logger
+                  .generalLog('File transfer complete: $filename to $fullPath');
+            } catch (e) {
+              logger.generalLog('Error closing file after transfer: $e');
+              _handleTransferError(fileSink);
+            }
           }
         },
         onError: (error) async {
-          if (transferInProgress) {
-            sendResponse('426 Connection closed; transfer aborted');
-            await fileSink.close();
-            transferInProgress = false;
-            await _closeDataSocket();
-          }
+          logger.generalLog('Socket error during file upload: $error');
+          _handleTransferError(fileSink);
         },
         cancelOnError: true,
       );
     } catch (e) {
+      logger.generalLog('Exception in storeFile: $e');
       sendResponse('550 Error creating file or directory: $e');
       transferInProgress = false;
+      fileSink
+          ?.close()
+          .catchError((e) => logger.generalLog('Error closing file sink: $e'));
       await _closeDataSocket();
     }
+  }
+
+  void _handleTransferError(IOSink? fileSink) async {
+    sendResponse('426 Connection closed; transfer aborted');
+    if (fileSink != null) {
+      try {
+        await fileSink.close();
+      } catch (e) {
+        logger.generalLog('Error closing file sink during error handling: $e');
+      }
+    }
+    transferInProgress = false;
+    await _closeDataSocket();
   }
 
   Future<void> handleMlsd(String argument, FtpSession session) async {
@@ -385,20 +482,37 @@ class FtpSession {
       logger.generalLog('Listing directory with MLSD: $argument');
 
       for (FileSystemEntity entity in dirContents) {
-        if (!transferInProgress) break;
-        var stat = await entity.stat();
-        String facts = _formatMlsdFacts(entity, stat);
-        dataSocket!.write(facts);
+        if (!transferInProgress || dataSocket == null) break;
+
+        try {
+          var stat = await entity.stat();
+          String facts = _formatMlsdFacts(entity, stat);
+
+          try {
+            dataSocket!.write(facts);
+          } catch (socketError) {
+            logger.generalLog('Socket write error during MLSD: $socketError');
+            transferInProgress = false;
+            break;
+          }
+        } catch (entityError) {
+          logger
+              .generalLog('Error processing entity during MLSD: $entityError');
+          continue;
+        }
       }
 
       if (transferInProgress) {
         transferInProgress = false;
         await _closeDataSocket();
         sendResponse('226 Transfer complete.');
+      } else {
+        await _closeDataSocket();
+        sendResponse('426 Transfer aborted');
       }
     } catch (e) {
-      sendResponse('550 Failed to list directory: $e');
       logger.generalLog('Error listing directory with MLSD: $e');
+      sendResponse('550 Failed to list directory: $e');
       transferInProgress = false;
       await _closeDataSocket();
     }
@@ -414,13 +528,29 @@ class FtpSession {
     return "type=$type;modify=$modify;size=$size; $name\r\n";
   }
 
-  /// Close the data socket and associated handler.
-  ///
-  /// This function is intended to be private.
   Future<void> _closeDataSocket() async {
-    await dataSocket?.flush();
-    await dataSocket?.close();
-    dataSocket = null;
+    if (dataSocket != null) {
+      try {
+        await dataSocket!.flush().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            logger
+                .generalLog('Socket flush timeout, closing socket forcefully');
+            return;
+          },
+        );
+      } catch (e) {
+        logger.generalLog('Error flushing data socket: $e');
+      }
+
+      try {
+        await dataSocket!.close();
+      } catch (e) {
+        logger.generalLog('Error closing data socket: $e');
+      } finally {
+        dataSocket = null;
+      }
+    }
     dataSocketHandler?.close();
     dataSocketHandler = null;
   }
@@ -428,11 +558,9 @@ class FtpSession {
   void abortTransfer() async {
     if (transferInProgress) {
       transferInProgress = false;
-
-      await dataSocket?.close();
-
+      dataSocket?.destroy();
       sendResponse('426 Transfer aborted');
-      await _closeDataSocket();
+      dataSocket = null;
     } else {
       sendResponse('226 No transfer in progress');
     }
@@ -441,7 +569,8 @@ class FtpSession {
   void changeDirectory(String dirname) {
     try {
       fileOperations.changeDirectory(dirname);
-      sendResponse('250 Directory changed to $currentDirectory');
+      sendResponse(
+          '250 Directory changed to ${fileOperations.currentDirectory}');
     } catch (e) {
       sendResponse('550 Access denied or directory not found $e');
       logger.generalLog('Error changing directory: $e');
@@ -451,7 +580,8 @@ class FtpSession {
   void changeToParentDirectory() {
     try {
       fileOperations.changeToParentDirectory();
-      sendResponse('250 Directory changed to $currentDirectory');
+      sendResponse(
+          '250 Directory changed to ${fileOperations.currentDirectory}');
     } catch (e) {
       sendResponse('550 Access denied or directory not found $e');
       logger.generalLog('Error changing to parent directory: $e');
@@ -538,6 +668,18 @@ class FtpSession {
   }
 
   String _formatMdtmTimestamp(DateTime dateTime) {
-    return DateFormat('yyyyMMddHHmmss').format(dateTime.toUtc()); // Use UTC
+    return DateFormat('yyyyMMddHHmmss').format(dateTime.toUtc());
+  }
+
+  Future<void> renameFileOrDirectory(String oldPath, String newPath) async {
+    try {
+      await fileOperations.renameFileOrDirectory(oldPath, newPath);
+      pendingRenameFrom = null;
+      sendResponse('250 Requested file action completed successfully');
+    } catch (e) {
+      pendingRenameFrom = null;
+      sendResponse('550 Failed to rename: $e');
+      logger.generalLog('Error renaming $oldPath to $newPath: $e');
+    }
   }
 }
