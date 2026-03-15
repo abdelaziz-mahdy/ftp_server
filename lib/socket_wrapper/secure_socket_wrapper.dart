@@ -8,32 +8,7 @@ class SecureSocketWrapper implements SocketWrapper {
   SecureSocketWrapper(this._socket);
 
   @override
-  Future<void> close() async {
-    // Proper TLS shutdown to avoid "improper termination" errors in
-    // strict TLS clients like FileZilla (GnuTLS error -110).
-    //
-    // Socket.close() closes both read and write at once. This can cause
-    // the OS to send TCP RST (discarding our close_notify) if there's
-    // unread data in the receive buffer from the peer.
-    //
-    // Instead: flush all data, close normally, then give the OS time
-    // to transmit the close_notify before the Dart object is cleaned up.
-
-    try {
-      await _socket.flush();
-    } catch (_) {}
-
-    try {
-      // close() sends TLS close_notify and TCP FIN
-      await _socket.close();
-    } catch (_) {}
-
-    // Keep the socket object alive briefly so the OS can transmit the
-    // TLS close_notify before garbage collection could trigger cleanup.
-    // Without this delay, the socket may be GC'd and the OS may send
-    // RST before close_notify reaches the peer.
-    await Future.delayed(const Duration(milliseconds: 200));
-  }
+  Future<void> close() => _socket.close();
 
   @override
   void add(List<int> data) => _socket.add(data);

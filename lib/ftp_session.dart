@@ -3,8 +3,10 @@ import 'dart:io';
 import 'dart:async';
 import 'package:ftp_server/server_type.dart';
 import 'package:ftp_server/socket_handler/plain_socket_handler.dart';
+import 'package:ftp_server/socket_handler/raw_plain_socket_handler.dart';
 import 'package:ftp_server/socket_handler/abstract_socket_handler.dart';
 import 'package:ftp_server/socket_wrapper/plain_socket_wrapper.dart';
+import 'package:ftp_server/socket_wrapper/raw_socket_wrapper.dart';
 import 'package:ftp_server/socket_wrapper/socket_wrapper.dart';
 import 'package:intl/intl.dart';
 import 'ftp_command_handler.dart';
@@ -154,14 +156,19 @@ class FtpSession {
     }
     sendResponse('150 Opening data connection');
 
-    // Per RFC 4217: upgrade data connection to TLS if protection level is Private
-    if (secure &&
-        securityContext != null &&
-        secureDataConnection &&
-        dataSocket is PlainSocketWrapper) {
+    // Per RFC 4217: upgrade data connection to TLS if protection level is Private.
+    // RawSocketWrapper → RawSecureSocketWrapper gives proper TLS shutdown
+    // (sends close_notify via RawSecureSocket.shutdown(SocketDirection.send)).
+    // PlainSocketWrapper → SecureSocketWrapper is the fallback for active mode.
+    if (secure && securityContext != null && secureDataConnection) {
       try {
-        dataSocket = await (dataSocket as PlainSocketWrapper)
-            .upgradeToSecure(securityContext: securityContext!);
+        if (dataSocket is RawSocketWrapper) {
+          dataSocket = await (dataSocket as RawSocketWrapper)
+              .upgradeToSecure(securityContext: securityContext!);
+        } else if (dataSocket is PlainSocketWrapper) {
+          dataSocket = await (dataSocket as PlainSocketWrapper)
+              .upgradeToSecure(securityContext: securityContext!);
+        }
       } catch (e) {
         logger.generalLog('Error upgrading data connection to TLS: $e');
         sendResponse('425 Can\'t establish secure data connection');
@@ -198,7 +205,11 @@ class FtpSession {
 
   Future<void> enterPassiveMode() async {
     try {
-      dataSocketHandler = PlainSocketHandler();
+      // Use RawPlainSocketHandler for TLS data connections to get proper
+      // TLS shutdown via RawSecureSocket.shutdown(SocketDirection.send).
+      dataSocketHandler = (secure && secureDataConnection)
+          ? RawPlainSocketHandler()
+          : PlainSocketHandler();
 
       await dataSocketHandler!.bind(InternetAddress.anyIPv4, 0);
       int port = dataSocketHandler!.port!;
@@ -618,7 +629,9 @@ class FtpSession {
 
   Future<void> enterExtendedPassiveMode() async {
     try {
-      dataSocketHandler = PlainSocketHandler();
+      dataSocketHandler = (secure && secureDataConnection)
+          ? RawPlainSocketHandler()
+          : PlainSocketHandler();
 
       await dataSocketHandler!.bind(InternetAddress.anyIPv4, 0);
       int port = dataSocketHandler!.port!;
