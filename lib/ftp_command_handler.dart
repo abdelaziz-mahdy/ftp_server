@@ -9,12 +9,26 @@ class FTPCommandHandler {
 
   FTPCommandHandler(this.controlSocket, this.logger);
 
+  /// Commands that are allowed before authentication
+  static const _preAuthCommands = {
+    'USER', 'PASS', 'QUIT', 'FEAT', 'SYST', 'NOOP',
+  };
+
   void handleCommand(String commandLine, FtpSession session) {
     List<String> parts = commandLine.split(' ');
     String command = parts[0].toUpperCase();
-    String argument = parts.length > 1 ? parts.sublist(1).join(' ').trim() : '';
+    String argument =
+        parts.length > 1 ? parts.sublist(1).join(' ').trim() : '';
 
     logger.logCommand(command, argument);
+
+    // Enforce authentication when credentials are configured
+    if (!session.isAuthenticated &&
+        !_preAuthCommands.contains(command) &&
+        (session.username != null || session.password != null)) {
+      session.sendResponse('530 Not logged in');
+      return;
+    }
 
     switch (command) {
       case 'USER':
@@ -33,8 +47,10 @@ class FTPCommandHandler {
         handlePort(argument, session);
         break;
       case 'LIST':
-      case 'NLST':
         handleList(argument, session);
+        break;
+      case 'NLST':
+        handleNlst(argument, session);
         break;
       case 'RETR':
         handleRetr(argument, session);
@@ -82,7 +98,7 @@ class FTPCommandHandler {
         handleFeat(session);
         break;
       case 'EPSV':
-        handleEpsv(session);
+        handleEpsv(argument, session);
         break;
       case 'ABOR':
         handleAbort(session);
@@ -102,8 +118,17 @@ class FTPCommandHandler {
       case 'RENAME':
         handleRename(argument, session);
         break;
+      case 'STRU':
+        handleStru(argument, session);
+        break;
+      case 'MODE':
+        handleMode(argument, session);
+        break;
+      case 'ALLO':
+        session.sendResponse('202 ALLO command not needed');
+        break;
       default:
-        session.sendResponse('502 Command not implemented $command $argument');
+        session.sendResponse('502 Command not implemented');
         break;
     }
   }
@@ -138,8 +163,21 @@ class FTPCommandHandler {
     session.enterActiveMode(argument);
   }
 
+  /// Strips LIST flags (e.g., -la, -a) that clients like FileZilla send.
+  /// Returns the path portion of the argument.
+  String _stripListFlags(String argument) {
+    if (argument.isEmpty) return argument;
+    final parts = argument.split(' ');
+    final filtered = parts.where((p) => !p.startsWith('-')).join(' ').trim();
+    return filtered;
+  }
+
   void handleList(String argument, FtpSession session) {
-    session.listDirectory(argument);
+    session.listDirectory(_stripListFlags(argument));
+  }
+
+  void handleNlst(String argument, FtpSession session) {
+    session.listDirectoryNames(_stripListFlags(argument));
   }
 
   void handleRetr(String argument, FtpSession session) {
@@ -203,10 +241,12 @@ class FTPCommandHandler {
   }
 
   void handleType(String argument, FtpSession session) {
-    if (argument == 'A' || argument == 'I') {
-      session.sendResponse('200 Type set to $argument');
+    // Handle TYPE A, TYPE I, and TYPE A N (ASCII Non-print) forms
+    final type = argument.split(' ').first.toUpperCase();
+    if (type == 'A' || type == 'I') {
+      session.sendResponse('200 Type set to $type');
     } else {
-      session.sendResponse('500 Syntax error, command unrecognized');
+      session.sendResponse('504 Type not supported');
     }
   }
 
@@ -224,11 +264,15 @@ class FTPCommandHandler {
     var option = args[0].toUpperCase();
     switch (option) {
       case "UTF8":
+        if (args.length < 2) {
+          session.sendResponse('501 Syntax error in parameters');
+          return;
+        }
         var mode = args[1].toUpperCase() == "ON";
         session.sendResponse("200 UTF8 mode ${mode ? 'enable' : 'disable'}");
         break;
       default:
-        session.sendResponse('502 Command not implemented handleOptions');
+        session.sendResponse('502 Command not implemented');
         break;
     }
   }
@@ -238,14 +282,20 @@ class FTPCommandHandler {
 
     session.sendResponse(' SIZE');
     session.sendResponse(' MDTM');
+    session.sendResponse(' MLSD');
     session.sendResponse(' EPSV');
     session.sendResponse(' PASV');
     session.sendResponse(' UTF8');
     session.sendResponse('211 End');
   }
 
-  void handleEpsv(FtpSession session) {
-    session.enterExtendedPassiveMode();
+  void handleEpsv(String argument, FtpSession session) {
+    if (argument.toUpperCase() == 'ALL') {
+      // EPSV ALL tells the server the client will only use EPSV from now on
+      session.sendResponse('200 EPSV ALL command successful');
+    } else {
+      session.enterExtendedPassiveMode();
+    }
   }
 
   void handleAbort(FtpSession session) {
@@ -334,6 +384,22 @@ class FTPCommandHandler {
       session.renameFileOrDirectory(oldName, newName);
     } catch (e) {
       // Error handling is done in the session method
+    }
+  }
+
+  void handleStru(String argument, FtpSession session) {
+    if (argument.toUpperCase() == 'F') {
+      session.sendResponse('200 Structure set to File');
+    } else {
+      session.sendResponse('504 Structure not supported');
+    }
+  }
+
+  void handleMode(String argument, FtpSession session) {
+    if (argument.toUpperCase() == 'S') {
+      session.sendResponse('200 Mode set to Stream');
+    } else {
+      session.sendResponse('504 Mode not supported');
     }
   }
 }

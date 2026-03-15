@@ -41,7 +41,14 @@ class FtpSession {
         commandHandler = FTPCommandHandler(controlSocket, logger) {
     sendResponse('220 Welcome to the FTP server');
     logger.generalLog('FtpSession created. Ready to process commands.');
-    controlSocket.listen(processCommand, onDone: closeConnection);
+    controlSocket.listen(
+      processCommand,
+      onDone: closeConnection,
+      onError: (error) {
+        logger.generalLog('Control socket error: $error');
+        closeConnection();
+      },
+    );
   }
 
   void processCommand(List<int> data) {
@@ -64,9 +71,23 @@ class FtpSession {
   }
 
   void closeConnection() {
-    controlSocket.close();
-    dataSocket?.close();
-    dataListener?.close();
+    try {
+      controlSocket.close();
+    } catch (e) {
+      logger.generalLog('Error closing control socket: $e');
+    }
+    try {
+      dataSocket?.close();
+    } catch (e) {
+      logger.generalLog('Error closing data socket: $e');
+    }
+    try {
+      dataListener?.close();
+    } catch (e) {
+      logger.generalLog('Error closing data listener: $e');
+    }
+    dataSocket = null;
+    dataListener = null;
     logger.generalLog('Connection closed');
   }
 
@@ -207,6 +228,45 @@ class FtpSession {
     }
   }
 
+  /// NLST: list only filenames, one per line (RFC 959).
+  Future<void> listDirectoryNames(String path) async {
+    if (!await openDataConnection()) {
+      return;
+    }
+
+    try {
+      transferInProgress = true;
+      var dirContents = await fileOperations.listDirectory(path);
+
+      for (FileSystemEntity entity in dirContents) {
+        if (!transferInProgress || dataSocket == null) break;
+
+        try {
+          String fileName = entity.path.split(Platform.pathSeparator).last;
+          dataSocket!.write('$fileName\r\n');
+        } catch (e) {
+          logger.generalLog('Socket write error during NLST: $e');
+          transferInProgress = false;
+          break;
+        }
+      }
+
+      if (transferInProgress) {
+        transferInProgress = false;
+        await _closeDataSocket();
+        sendResponse('226 Transfer complete');
+      } else {
+        await _closeDataSocket();
+        sendResponse('426 Transfer aborted');
+      }
+    } catch (e) {
+      logger.generalLog('Error listing directory names: $e');
+      sendResponse('550 Failed to list directory');
+      transferInProgress = false;
+      await _closeDataSocket();
+    }
+  }
+
   String _formatPermissions(FileStat stat) {
     String type = stat.type == FileSystemEntityType.directory ? 'd' : '-';
     String owner = _permissionToString(stat.mode >> 6);
@@ -280,7 +340,7 @@ class FtpSession {
           cancelOnError: true,
         );
       } else {
-        sendResponse('550 File not found $fullPath');
+        sendResponse('550 File not found');
         transferInProgress = false;
         await _closeDataSocket();
       }
@@ -350,7 +410,7 @@ class FtpSession {
       );
     } catch (e) {
       logger.generalLog('Exception in storeFile: $e');
-      sendResponse('550 Error creating file or directory: $e');
+      sendResponse('550 Error creating file or directory');
       transferInProgress = false;
       fileSink
           ?.close()
@@ -398,13 +458,22 @@ class FtpSession {
     }
   }
 
-// Method to abort a file transfer
   void abortTransfer() async {
     if (transferInProgress) {
       transferInProgress = false;
-      dataSocket?.destroy(); // Forcefully close the data socket
-      sendResponse('426 Transfer aborted');
+      try {
+        dataSocket?.destroy();
+      } catch (e) {
+        logger.generalLog('Error destroying data socket during abort: $e');
+      }
       dataSocket = null;
+      try {
+        dataListener?.close();
+      } catch (e) {
+        logger.generalLog('Error closing data listener during abort: $e');
+      }
+      dataListener = null;
+      sendResponse('426 Transfer aborted');
     } else {
       sendResponse('226 No transfer in progress');
     }
