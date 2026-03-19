@@ -50,7 +50,8 @@ class FtpSession {
   }
 
   final StringBuffer _commandBuffer = StringBuffer();
-  Future<void> _commandQueue = Future.value();
+  final List<String> _pendingCommands = [];
+  bool _processing = false;
 
   void processCommand(List<int> data) {
     try {
@@ -63,29 +64,31 @@ class FtpSession {
       for (final line in lines.sublist(0, lines.length - 1)) {
         final trimmed = line.trim();
         if (trimmed.isEmpty) continue;
-        // Chain commands sequentially so async handlers complete before the next runs
-        _commandQueue = _commandQueue.then((_) async {
-          try {
-            await commandHandler.handleCommand(trimmed, this);
-            // Flush after each command so the response is sent before the
-            // next command runs. Without this, microtask-chained responses
-            // can pile up in the socket buffer and confuse some FTP clients.
-            try {
-              await controlSocket.flush();
-            } catch (_) {
-              // Socket may already be closed (e.g. after QUIT)
-            }
-          } catch (e, s) {
-            logger.generalLog("error: $e stack: $s");
-            try {
-              sendResponse('500 Internal server error');
-            } catch (_) {}
-          }
-        });
+        _pendingCommands.add(trimmed);
       }
+      _processQueue();
     } catch (e, s) {
       logger.generalLog("error: $e stack: $s ,input bytes $data");
       sendResponse('500 Internal server error');
+    }
+  }
+
+  /// Processes queued commands one at a time.
+  Future<void> _processQueue() async {
+    if (_processing) return;
+    _processing = true;
+    try {
+      while (_pendingCommands.isNotEmpty) {
+        final command = _pendingCommands.removeAt(0);
+        try {
+          await commandHandler.handleCommand(command, this);
+        } catch (e, s) {
+          logger.generalLog("error: $e stack: $s");
+          sendResponse('500 Internal server error');
+        }
+      }
+    } finally {
+      _processing = false;
     }
   }
 
