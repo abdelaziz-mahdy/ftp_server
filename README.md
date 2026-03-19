@@ -59,10 +59,11 @@ void main() async {
 ## 2. Features
 
 - **Passive and Active Modes**: Supports both passive and active data connections.
-- **File Operations**: Retrieve, store, delete, and list files.
-- **Directory Operations**: Change, make, and remove directories.
+- **File Operations**: Retrieve, store, delete, rename, and list files.
+- **Directory Operations**: Change, make, remove, and list directories.
 - **Read-Only Mode**: Disable write operations for enhanced security.
-- **Authentication**: Basic username and password authentication.
+- **Authentication**: Optional username/password authentication with pre-auth command enforcement.
+- **RFC 959 Compliance**: Proper command sequencing, pipelined command support, and standard response codes.
 
 ---
 
@@ -120,8 +121,11 @@ This allows your Dart application to continue running other code while the FTP s
 | `PASS <password>`    | Set the password for authentication.                        |
 | `QUIT`               | Close the control connection.                               |
 | `PASV`               | Enter passive mode.                                         |
+| `EPSV`               | Enter extended passive mode.                                |
 | `PORT <host-port>`   | Enter active mode.                                          |
-| `LIST [<directory>]` | List files in the specified directory or current directory. |
+| `LIST [<directory>]` | List files with details (permissions, size, date).          |
+| `NLST [<directory>]` | List filenames only.                                        |
+| `MLSD [<directory>]` | List directory in machine-readable format.                  |
 | `RETR <filename>`    | Retrieve the specified file.                                |
 | `STOR <filename>`    | Store a file.                                               |
 | `CWD <directory>`    | Change the current directory.                               |
@@ -131,11 +135,24 @@ This allows your Dart application to continue running other code while the FTP s
 | `DELE <filename>`    | Delete a file.                                              |
 | `PWD`                | Print the current directory.                                |
 | `SYST`               | Return system type.                                         |
-| `NOOP`               | No operation (used to keep the connection alive).           |
+| `NOOP`               | No operation (keep connection alive).                       |
+| `TYPE <type>`        | Set transfer type (A for ASCII, I for binary).              |
 | `SIZE <filename>`    | Return the size of the specified file.                      |
+| `MDTM <filename>`    | Return the last modification time of a file.                |
+| `FEAT`               | List supported features.                                    |
+| `OPTS <option>`      | Set options (e.g., `OPTS UTF8 ON`).                         |
 | `RNFR <filename>`    | Rename from (specify source file/directory for rename).     |
 | `RNTO <filename>`    | Rename to (specify destination file/directory for rename).  |
 | `RENAME <old> <new>` | Rename a file or directory (high-level command).            |
+| `STRU <code>`        | Set file structure (only F/File supported).                 |
+| `MODE <code>`        | Set transfer mode (only S/Stream supported).                |
+| `STAT`               | Return server status.                                       |
+| `HELP`               | List supported commands.                                    |
+| `ABOR`               | Abort current transfer.                                     |
+| `REIN`               | Reset session (logout without disconnecting).               |
+| `ALLO`               | Allocate storage (accepted, not required).                  |
+| `ACCT`               | Account info (accepted, not required).                      |
+| `SITE`               | Site-specific commands (not implemented).                   |
 
 ### 4.4 Authentication
 
