@@ -157,7 +157,7 @@ class FTPCommandHandler {
         handleAllo(argument, session);
         break;
       case 'STAT':
-        session.sendResponse('211 Server is running');
+        await handleStat(argument, session);
         break;
       case 'HELP':
         handleHelp(session);
@@ -443,6 +443,17 @@ class FTPCommandHandler {
     }
     // No site-specific commands are implemented
     session.sendResponse('502 SITE command not implemented');
+  }
+
+  /// STAT: Return server status or file/directory info (RFC 959 §4.1.3).
+  /// Without arguments: returns general server status (211).
+  /// With a pathname: returns a directory listing over the control connection.
+  Future<void> handleStat(String argument, FtpSession session) async {
+    if (argument.isEmpty) {
+      session.sendResponse('211 Server is running');
+      return;
+    }
+    await session.statPath(argument);
   }
 
   void handleHelp(FtpSession session) {

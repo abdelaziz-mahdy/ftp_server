@@ -530,6 +530,7 @@ class FtpSession {
   }
 
   void _handleTransferError(IOSink? fileSink) async {
+    if (!transferInProgress) return; // Already aborted (e.g. by ABOR)
     sendResponse('426 Connection closed; transfer aborted');
     if (fileSink != null) {
       try {
@@ -622,6 +623,10 @@ class FtpSession {
   }
 
   Future<void> makeDirectory(String dirname) async {
+    if (dirname.isEmpty) {
+      sendResponse('501 Syntax error in parameters');
+      return;
+    }
     try {
       await fileOperations.createDirectory(dirname);
       // RFC 959: 257 response must contain the absolute FTP pathname.
@@ -785,6 +790,50 @@ class FtpSession {
     } catch (e) {
       sendResponse('550 Could not get modification time');
       logger.generalLog('Error getting modification time: $e');
+    }
+  }
+
+  /// STAT with pathname: list file/directory info over the control connection
+  /// (RFC 959 §4.1.3). Uses 213 for status replies sent over control.
+  Future<void> statPath(String path) async {
+    try {
+      final dirContents = await fileOperations.listDirectory(path);
+      sendResponse('213-Status of $path:');
+      for (FileSystemEntity entity in dirContents) {
+        try {
+          var stat = await entity.stat();
+          String permissions = _formatPermissions(stat);
+          String fileSize = stat.size.toString();
+          String modificationTime = _formatModificationTime(stat.modified);
+          String fileName = entity.path.split(Platform.pathSeparator).last;
+          sendResponse(
+              ' $permissions 1 ftp ftp $fileSize $modificationTime $fileName');
+        } catch (_) {
+          continue;
+        }
+      }
+      sendResponse('213 End of status');
+    } catch (e) {
+      // If path is a file, try to stat it directly
+      try {
+        String fullPath = fileOperations.resolvePath(path);
+        File file = File(fullPath);
+        if (await file.exists()) {
+          var stat = await file.stat();
+          String permissions = _formatPermissions(stat);
+          String fileSize = stat.size.toString();
+          String modificationTime = _formatModificationTime(stat.modified);
+          String fileName = file.path.split(Platform.pathSeparator).last;
+          sendResponse('213-Status of $path:');
+          sendResponse(
+              ' $permissions 1 ftp ftp $fileSize $modificationTime $fileName');
+          sendResponse('213 End of status');
+        } else {
+          sendResponse('450 No such file or directory');
+        }
+      } catch (_) {
+        sendResponse('450 No such file or directory');
+      }
     }
   }
 
