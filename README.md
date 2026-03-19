@@ -63,7 +63,11 @@ void main() async {
 - **Directory Operations**: Change, make, remove, and list directories.
 - **Read-Only Mode**: Disable write operations for enhanced security.
 - **Authentication**: Optional username/password authentication with pre-auth command enforcement.
-- **RFC 959 Compliance**: Proper command sequencing, pipelined command support, and standard response codes.
+- **Standards Compliant**: Implements the following IETF standards:
+  - [RFC 959](https://www.rfc-editor.org/rfc/rfc959) — File Transfer Protocol (core)
+  - [RFC 2389](https://www.rfc-editor.org/rfc/rfc2389) — Feature negotiation (FEAT/OPTS)
+  - [RFC 2428](https://www.rfc-editor.org/rfc/rfc2428) — Extended passive mode (EPSV)
+  - [RFC 3659](https://www.rfc-editor.org/rfc/rfc3659) — Extensions (MLSD, MDTM, SIZE)
 
 ---
 

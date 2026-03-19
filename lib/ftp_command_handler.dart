@@ -46,10 +46,18 @@ class FTPCommandHandler {
         await handleQuit(session);
         break;
       case 'PASV':
-        await session.enterPassiveMode();
+        if (session.epsvAllMode) {
+          session.sendResponse('503 PASV not allowed after EPSV ALL');
+        } else {
+          await session.enterPassiveMode();
+        }
         break;
       case 'PORT':
-        await session.enterActiveMode(argument);
+        if (session.epsvAllMode) {
+          session.sendResponse('503 PORT not allowed after EPSV ALL');
+        } else {
+          await session.enterActiveMode(argument);
+        }
         break;
       case 'LIST':
         await session.listDirectory(_stripListFlags(argument));
@@ -149,7 +157,7 @@ class FTPCommandHandler {
         handleAllo(argument, session);
         break;
       case 'STAT':
-        session.sendResponse('211 Server is running');
+        await handleStat(argument, session);
         break;
       case 'HELP':
         handleHelp(session);
@@ -176,7 +184,13 @@ class FTPCommandHandler {
     }
     session.cachedUsername = argument;
     session.isAuthenticated = false;
-    session.sendResponse('331 Password required for $argument');
+    // No credentials configured — log in directly (RFC 959: 230 on USER)
+    if (session.username == null && session.password == null) {
+      session.isAuthenticated = true;
+      session.sendResponse('230 User logged in, proceed');
+    } else {
+      session.sendResponse('331 Password required for $argument');
+    }
   }
 
   void handlePass(String argument, FtpSession session) {
@@ -184,9 +198,17 @@ class FTPCommandHandler {
       session.sendResponse('503 Bad sequence of commands');
       return;
     }
-    if ((session.username == null && session.password == null) ||
-        (session.cachedUsername == session.username &&
-            argument == session.password)) {
+    // No credentials configured — accept anyone
+    if (session.username == null && session.password == null) {
+      session.isAuthenticated = true;
+      session.sendResponse('230 User logged in, proceed');
+      return;
+    }
+    // Validate only the non-null credentials
+    final userOk =
+        session.username == null || session.cachedUsername == session.username;
+    final passOk = session.password == null || argument == session.password;
+    if (userOk && passOk) {
       session.isAuthenticated = true;
       session.sendResponse('230 User logged in, proceed');
     } else {
@@ -256,21 +278,30 @@ class FTPCommandHandler {
   }
 
   void handleFeat(FtpSession session) {
+    // RFC 2389: FEAT only lists extensions not in RFC 959
+    // PASV is a base command and must not appear here
     session.sendResponse('211-Features:');
     session.sendResponse(' SIZE');
     session.sendResponse(' MDTM');
     session.sendResponse(' MLSD');
     session.sendResponse(' EPSV');
-    session.sendResponse(' PASV');
     session.sendResponse(' UTF8');
     session.sendResponse('211 End');
   }
 
   Future<void> handleEpsv(String argument, FtpSession session) async {
     if (argument.toUpperCase() == 'ALL') {
+      // RFC 2428 §4: after EPSV ALL, server must refuse PORT/PASV/LPRT
+      session.epsvAllMode = true;
       session.sendResponse('200 EPSV ALL command successful');
-    } else {
+    } else if (argument.isEmpty || argument == '1') {
+      // Empty = server chooses; '1' = IPv4
       await session.enterExtendedPassiveMode();
+    } else if (argument == '2') {
+      // IPv6 not supported
+      session.sendResponse('522 Network protocol not supported, use (1)');
+    } else {
+      session.sendResponse('501 Syntax error in parameters');
     }
   }
 
@@ -400,7 +431,7 @@ class FTPCommandHandler {
   /// The control connection remains open for a new USER command.
   void handleRein(FtpSession session) {
     session.reinitialize();
-    session.sendResponse('220 Service ready for new user');
+    session.sendResponse('200 REIN command successful');
   }
 
   /// SITE: Execute site-specific commands (RFC 959).
@@ -412,6 +443,17 @@ class FTPCommandHandler {
     }
     // No site-specific commands are implemented
     session.sendResponse('502 SITE command not implemented');
+  }
+
+  /// STAT: Return server status or file/directory info (RFC 959 §4.1.3).
+  /// Without arguments: returns general server status (211).
+  /// With a pathname: returns a directory listing over the control connection.
+  Future<void> handleStat(String argument, FtpSession session) async {
+    if (argument.isEmpty) {
+      session.sendResponse('211 Server is running');
+      return;
+    }
+    await session.statPath(argument);
   }
 
   void handleHelp(FtpSession session) {

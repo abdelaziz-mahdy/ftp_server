@@ -24,6 +24,9 @@ class FtpSession {
   bool transferInProgress = false;
   Future? _gettingDataSocket;
 
+  /// RFC 2428: after EPSV ALL, PORT/PASV/LPRT must be refused.
+  bool epsvAllMode = false;
+
   /// Callback invoked when this session's connection is closed.
   /// Used by FtpServer to remove the session from its active list.
   void Function()? onDisconnect;
@@ -100,6 +103,7 @@ class FtpSession {
     isAuthenticated = false;
     cachedUsername = null;
     pendingRenameFrom = null;
+    epsvAllMode = false;
 
     // Reset working directory to root
     fileOperations.currentDirectory = fileOperations.rootDirectory;
@@ -174,7 +178,12 @@ class FtpSession {
             'Timeout reached while waiting for client data socket');
       });
     }
-    return result.then((value) => dataSocket = value);
+    return result.then((value) {
+      dataSocket = value;
+    }).catchError((Object e) {
+      // dataListener was closed before a client connected (e.g. session ended)
+      logger.generalLog('Data connection wait cancelled: $e');
+    });
   }
 
   Future<void> enterPassiveMode() async {
@@ -207,8 +216,18 @@ class FtpSession {
         sendResponse('501 Syntax error in PORT parameters');
         return;
       }
-      String ip = parts.take(4).join('.');
-      int port = int.parse(parts[4]) * 256 + int.parse(parts[5]);
+      // Validate all 6 parts are valid byte values (0-255)
+      final values = <int>[];
+      for (final part in parts.take(6)) {
+        final v = int.tryParse(part.trim());
+        if (v == null || v < 0 || v > 255) {
+          sendResponse('501 Syntax error in PORT parameters');
+          return;
+        }
+        values.add(v);
+      }
+      String ip = values.take(4).join('.');
+      int port = values[4] * 256 + values[5];
       dataSocket = await Socket.connect(ip, port);
       sendResponse('200 Active mode connection established');
     } catch (e) {
@@ -373,6 +392,24 @@ class FtpSession {
   }
 
   Future<void> retrieveFile(String filename) async {
+    if (filename.isEmpty) {
+      sendResponse('501 Syntax error in parameters');
+      return;
+    }
+
+    // Check file existence before opening data connection to avoid
+    // sending 550 after 150 (RFC 959: validate before preliminary reply)
+    if (!fileOperations.exists(filename)) {
+      sendResponse('550 File not found');
+      return;
+    }
+    String fullPath = fileOperations.resolvePath(filename);
+    File file = File(fullPath);
+    if (!await file.exists()) {
+      sendResponse('550 File not found');
+      return;
+    }
+
     if (!await openDataConnection()) {
       return;
     }
@@ -380,15 +417,6 @@ class FtpSession {
     try {
       transferInProgress = true;
 
-      if (!fileOperations.exists(filename)) {
-        sendResponse('550 File not found');
-        transferInProgress = false;
-        await _closeDataSocket();
-        return;
-      }
-      String fullPath = fileOperations.resolvePath(filename);
-
-      File file = File(fullPath);
       if (await file.exists()) {
         Stream<List<int>> fileStream = file.openRead();
 
@@ -423,10 +451,6 @@ class FtpSession {
           },
           cancelOnError: true,
         );
-      } else {
-        sendResponse('550 File not found');
-        transferInProgress = false;
-        await _closeDataSocket();
       }
     } catch (e) {
       logger.generalLog('Exception in retrieveFile: $e');
@@ -437,6 +461,11 @@ class FtpSession {
   }
 
   Future<void> storeFile(String filename) async {
+    if (filename.isEmpty) {
+      sendResponse('501 Syntax error in parameters');
+      return;
+    }
+
     if (!await openDataConnection()) {
       return;
     }
@@ -501,6 +530,7 @@ class FtpSession {
   }
 
   void _handleTransferError(IOSink? fileSink) async {
+    if (!transferInProgress) return; // Already aborted (e.g. by ABOR)
     sendResponse('426 Connection closed; transfer aborted');
     if (fileSink != null) {
       try {
@@ -557,15 +587,24 @@ class FtpSession {
       sendResponse('426 Transfer aborted');
       sendResponse('226 ABOR command successful');
     } else {
-      sendResponse('226 ABOR command successful');
+      // RFC 959: 225 if data connection open but no transfer; 226 otherwise
+      if (dataSocket != null || dataListener != null) {
+        sendResponse('225 Data connection open; no transfer in progress');
+      } else {
+        sendResponse('226 ABOR command successful');
+      }
     }
   }
 
   void changeDirectory(String dirname) {
+    if (dirname.isEmpty) {
+      sendResponse('501 Syntax error in parameters');
+      return;
+    }
     try {
       fileOperations.changeDirectory(dirname);
       sendResponse(
-          '250 Directory changed to ${fileOperations.currentDirectory}');
+          '250 Directory changed to ${fileOperations.getCurrentDirectory()}');
     } catch (e) {
       sendResponse('550 Access denied or directory not found');
       logger.generalLog('Error changing directory: $e');
@@ -576,7 +615,7 @@ class FtpSession {
     try {
       fileOperations.changeToParentDirectory();
       sendResponse(
-          '250 Directory changed to ${fileOperations.currentDirectory}');
+          '250 Directory changed to ${fileOperations.getCurrentDirectory()}');
     } catch (e) {
       sendResponse('550 Access denied or directory not found');
       logger.generalLog('Error changing to parent directory: $e');
@@ -584,9 +623,23 @@ class FtpSession {
   }
 
   Future<void> makeDirectory(String dirname) async {
+    if (dirname.isEmpty) {
+      sendResponse('501 Syntax error in parameters');
+      return;
+    }
     try {
       await fileOperations.createDirectory(dirname);
-      sendResponse('257 "$dirname" created');
+      // RFC 959: 257 response must contain the absolute FTP pathname.
+      // Temporarily change into the new dir to get its resolved virtual path,
+      // then change back to the original directory.
+      final savedDir = fileOperations.getCurrentDirectory();
+      try {
+        fileOperations.changeDirectory(dirname);
+        final absPath = fileOperations.getCurrentDirectory();
+        sendResponse('257 "$absPath" created');
+      } finally {
+        fileOperations.changeDirectory(savedDir);
+      }
     } catch (e) {
       sendResponse('550 Failed to create directory');
       logger.generalLog('Error creating directory: $e');
@@ -594,6 +647,10 @@ class FtpSession {
   }
 
   Future<void> removeDirectory(String dirname) async {
+    if (dirname.isEmpty) {
+      sendResponse('501 Syntax error in parameters');
+      return;
+    }
     try {
       await fileOperations.deleteDirectory(dirname);
       sendResponse('250 Directory deleted');
@@ -604,6 +661,10 @@ class FtpSession {
   }
 
   Future<void> deleteFile(String filePath) async {
+    if (filePath.isEmpty) {
+      sendResponse('501 Syntax error in parameters');
+      return;
+    }
     try {
       await fileOperations.deleteFile(filePath);
       sendResponse('250 File deleted');
@@ -614,6 +675,10 @@ class FtpSession {
   }
 
   Future<void> fileSize(String filePath) async {
+    if (filePath.isEmpty) {
+      sendResponse('501 Syntax error in parameters');
+      return;
+    }
     try {
       int size = await fileOperations.fileSize(filePath);
       sendResponse('213 $size');
@@ -691,16 +756,22 @@ class FtpSession {
   }
 
   String _formatMlsdFacts(FileSystemEntity entity, FileStat stat) {
-    String type = stat.type == FileSystemEntityType.directory ? "dir" : "file";
+    final isDir = stat.type == FileSystemEntityType.directory;
+    String type = isDir ? "dir" : "file";
     String modify = DateFormat("yyyyMMddHHmmss")
         .format(stat.modified.toUtc()); // Use UTC time
-    String size = stat.size.toString();
     String name = entity.path.split(Platform.pathSeparator).last;
+    // RFC 3659 §7.5.5: size fact is undefined for directories, omit it
+    String sizeFact = isDir ? '' : 'size=${stat.size};';
 
-    return "type=$type;modify=$modify;size=$size; $name\r\n";
+    return "type=$type;modify=$modify;$sizeFact $name\r\n";
   }
 
   void handleMdtm(String argument) {
+    if (argument.isEmpty) {
+      sendResponse('501 Syntax error in parameters');
+      return;
+    }
     try {
       if (!fileOperations.exists(argument)) {
         sendResponse('550 File not found');
@@ -719,6 +790,50 @@ class FtpSession {
     } catch (e) {
       sendResponse('550 Could not get modification time');
       logger.generalLog('Error getting modification time: $e');
+    }
+  }
+
+  /// STAT with pathname: list file/directory info over the control connection
+  /// (RFC 959 §4.1.3). Uses 213 for status replies sent over control.
+  Future<void> statPath(String path) async {
+    try {
+      final dirContents = await fileOperations.listDirectory(path);
+      sendResponse('213-Status of $path:');
+      for (FileSystemEntity entity in dirContents) {
+        try {
+          var stat = await entity.stat();
+          String permissions = _formatPermissions(stat);
+          String fileSize = stat.size.toString();
+          String modificationTime = _formatModificationTime(stat.modified);
+          String fileName = entity.path.split(Platform.pathSeparator).last;
+          sendResponse(
+              ' $permissions 1 ftp ftp $fileSize $modificationTime $fileName');
+        } catch (_) {
+          continue;
+        }
+      }
+      sendResponse('213 End of status');
+    } catch (e) {
+      // If path is a file, try to stat it directly
+      try {
+        String fullPath = fileOperations.resolvePath(path);
+        File file = File(fullPath);
+        if (await file.exists()) {
+          var stat = await file.stat();
+          String permissions = _formatPermissions(stat);
+          String fileSize = stat.size.toString();
+          String modificationTime = _formatModificationTime(stat.modified);
+          String fileName = file.path.split(Platform.pathSeparator).last;
+          sendResponse('213-Status of $path:');
+          sendResponse(
+              ' $permissions 1 ftp ftp $fileSize $modificationTime $fileName');
+          sendResponse('213 End of status');
+        } else {
+          sendResponse('450 No such file or directory');
+        }
+      } catch (_) {
+        sendResponse('450 No such file or directory');
+      }
     }
   }
 

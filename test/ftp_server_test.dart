@@ -214,9 +214,11 @@ void main() {
             "cd /${basename(sharedDirectories.first)}\nmkdir test_dir\nls");
       }
 
-      // Use outputHandler for expected MKD output
-      expect(output,
-          contains(outputHandler.getExpectedMakeDirectoryOutput('test_dir')));
+      // Use outputHandler for expected MKD output (RFC 959: absolute path)
+      expect(
+          output,
+          contains(outputHandler.getExpectedMakeDirectoryOutput(
+              '/${basename(sharedDirectories.first)}/test_dir')));
       expect(output, contains('test_dir'));
       expect(Directory('${sharedDirectories.first}/test_dir').existsSync(),
           isTrue);
@@ -517,7 +519,10 @@ void main() {
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin("mkdir special!@#\$%^&*()_dir\nls");
       } else {
-        expect(output, contains('257 "special!@#\$%^&*()_dir" created'));
+        expect(
+            output,
+            contains(
+                '257 "/${basename(sharedDirectories.first)}/special!@#\$%^&*()_dir" created'));
       }
       expect(output, contains('special!@#\$%^&*()_dir'));
     });
@@ -754,8 +759,10 @@ void main() {
       }
 
       // Use outputHandler for expected outputs
-      expect(output,
-          contains(outputHandler.getExpectedMakeDirectoryOutput(dirName)));
+      expect(
+          output,
+          contains(outputHandler.getExpectedMakeDirectoryOutput(
+              '/${basename(sharedDirectories.first)}/$dirName')));
       expect(
           output,
           contains(outputHandler.getExpectedDirectoryChangeOutput(
@@ -1119,8 +1126,10 @@ void main() {
       }
 
       // Use outputHandler for expected MKD output
-      expect(output,
-          contains(outputHandler.getExpectedMakeDirectoryOutput(dirName)));
+      expect(
+          output,
+          contains(outputHandler.getExpectedMakeDirectoryOutput(
+              '/${basename(sharedDirectories.first)}/$dirName')));
       expect(output, contains(dirName));
     });
   });
@@ -1195,8 +1204,8 @@ void main() {
             // Use outputHandler for expected outputs
             expect(
                 output,
-                contains(
-                    outputHandler.getExpectedMakeDirectoryOutput(dirName)));
+                contains(outputHandler.getExpectedMakeDirectoryOutput(
+                    '/${basename(sharedDirectories.first)}/$dirName')));
             expect(output, contains(dirName)); // Check listing contains the dir
             expect(
                 output,
@@ -1219,8 +1228,8 @@ void main() {
             // Use outputHandler for expected outputs
             expect(
                 output,
-                contains(
-                    outputHandler.getExpectedMakeDirectoryOutput(dirName)));
+                contains(outputHandler.getExpectedMakeDirectoryOutput(
+                    '/${basename(sharedDirectories.first)}/$dirName')));
             expect(output, contains(dirName)); // Check listing contains the dir
             expect(
                 output,
@@ -1374,8 +1383,10 @@ void main() {
 
       // Verify MKD succeeds because the lenient check resolves '2025-04-27' to '<mappedTempDir>/photos/2025-04-27'
       // Use outputHandler for expected MKD output
-      expect(output,
-          contains(outputHandler.getExpectedMakeDirectoryOutput('2025-04-27')));
+      expect(
+          output,
+          contains(outputHandler
+              .getExpectedMakeDirectoryOutput('/photos/2025-04-27')));
 
       // Verify subsequent CWD succeeds
       // Use outputHandler for expected CD output
@@ -1451,13 +1462,17 @@ void main() {
 
       // Use outputHandler for expected outputs
       expect(
-          output, contains(outputHandler.getExpectedMakeDirectoryOutput(dir1)));
+          output,
+          contains(
+              outputHandler.getExpectedMakeDirectoryOutput('/photos/$dir1')));
       expect(
           output,
           contains(outputHandler.getExpectedDirectoryChangeOutput(
               '/photos/$dir1'))); // Note the virtual path!
       expect(
-          output, contains(outputHandler.getExpectedMakeDirectoryOutput(dir2)));
+          output,
+          contains(outputHandler
+              .getExpectedMakeDirectoryOutput('/photos/$dir1/$dir2')));
 
       // Ensure the final LS lists the content of the created directory
       expect(output, contains(dir2)); // Check if the subdirectory is listed
