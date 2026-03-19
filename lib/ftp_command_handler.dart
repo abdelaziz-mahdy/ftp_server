@@ -294,8 +294,14 @@ class FTPCommandHandler {
       // RFC 2428 §4: after EPSV ALL, server must refuse PORT/PASV/LPRT
       session.epsvAllMode = true;
       session.sendResponse('200 EPSV ALL command successful');
-    } else {
+    } else if (argument.isEmpty || argument == '1') {
+      // Empty = server chooses; '1' = IPv4
       await session.enterExtendedPassiveMode();
+    } else if (argument == '2') {
+      // IPv6 not supported
+      session.sendResponse('522 Network protocol not supported, use (1)');
+    } else {
+      session.sendResponse('501 Syntax error in parameters');
     }
   }
 
@@ -425,7 +431,7 @@ class FTPCommandHandler {
   /// The control connection remains open for a new USER command.
   void handleRein(FtpSession session) {
     session.reinitialize();
-    session.sendResponse('220 Service ready for new user');
+    session.sendResponse('200 REIN command successful');
   }
 
   /// SITE: Execute site-specific commands (RFC 959).

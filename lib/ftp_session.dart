@@ -216,8 +216,18 @@ class FtpSession {
         sendResponse('501 Syntax error in PORT parameters');
         return;
       }
-      String ip = parts.take(4).join('.');
-      int port = int.parse(parts[4]) * 256 + int.parse(parts[5]);
+      // Validate all 6 parts are valid byte values (0-255)
+      final values = <int>[];
+      for (final part in parts.take(6)) {
+        final v = int.tryParse(part.trim());
+        if (v == null || v < 0 || v > 255) {
+          sendResponse('501 Syntax error in PORT parameters');
+          return;
+        }
+        values.add(v);
+      }
+      String ip = values.take(4).join('.');
+      int port = values[4] * 256 + values[5];
       dataSocket = await Socket.connect(ip, port);
       sendResponse('200 Active mode connection established');
     } catch (e) {
@@ -576,11 +586,20 @@ class FtpSession {
       sendResponse('426 Transfer aborted');
       sendResponse('226 ABOR command successful');
     } else {
-      sendResponse('226 ABOR command successful');
+      // RFC 959: 225 if data connection open but no transfer; 226 otherwise
+      if (dataSocket != null || dataListener != null) {
+        sendResponse('225 Data connection open; no transfer in progress');
+      } else {
+        sendResponse('226 ABOR command successful');
+      }
     }
   }
 
   void changeDirectory(String dirname) {
+    if (dirname.isEmpty) {
+      sendResponse('501 Syntax error in parameters');
+      return;
+    }
     try {
       fileOperations.changeDirectory(dirname);
       sendResponse(
@@ -623,6 +642,10 @@ class FtpSession {
   }
 
   Future<void> removeDirectory(String dirname) async {
+    if (dirname.isEmpty) {
+      sendResponse('501 Syntax error in parameters');
+      return;
+    }
     try {
       await fileOperations.deleteDirectory(dirname);
       sendResponse('250 Directory deleted');
@@ -633,6 +656,10 @@ class FtpSession {
   }
 
   Future<void> deleteFile(String filePath) async {
+    if (filePath.isEmpty) {
+      sendResponse('501 Syntax error in parameters');
+      return;
+    }
     try {
       await fileOperations.deleteFile(filePath);
       sendResponse('250 File deleted');
@@ -643,6 +670,10 @@ class FtpSession {
   }
 
   Future<void> fileSize(String filePath) async {
+    if (filePath.isEmpty) {
+      sendResponse('501 Syntax error in parameters');
+      return;
+    }
     try {
       int size = await fileOperations.fileSize(filePath);
       sendResponse('213 $size');
@@ -720,16 +751,22 @@ class FtpSession {
   }
 
   String _formatMlsdFacts(FileSystemEntity entity, FileStat stat) {
-    String type = stat.type == FileSystemEntityType.directory ? "dir" : "file";
+    final isDir = stat.type == FileSystemEntityType.directory;
+    String type = isDir ? "dir" : "file";
     String modify = DateFormat("yyyyMMddHHmmss")
         .format(stat.modified.toUtc()); // Use UTC time
-    String size = stat.size.toString();
     String name = entity.path.split(Platform.pathSeparator).last;
+    // RFC 3659 §7.5.5: size fact is undefined for directories, omit it
+    String sizeFact = isDir ? '' : 'size=${stat.size};';
 
-    return "type=$type;modify=$modify;size=$size; $name\r\n";
+    return "type=$type;modify=$modify;$sizeFact $name\r\n";
   }
 
   void handleMdtm(String argument) {
+    if (argument.isEmpty) {
+      sendResponse('501 Syntax error in parameters');
+      return;
+    }
     try {
       if (!fileOperations.exists(argument)) {
         sendResponse('550 File not found');

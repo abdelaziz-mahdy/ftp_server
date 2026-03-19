@@ -547,7 +547,7 @@ void main() {
       final c = await FtpTestClient.connect(port);
       await c.login();
       final r = await c.command('REIN');
-      expect(r, startsWith('220'));
+      expect(r, startsWith('200'));
       await c.close();
     });
 
@@ -557,7 +557,7 @@ void main() {
       // Verify logged in
       expect(await c.command('PWD'), startsWith('257'));
       // Reinitialize
-      expect(await c.command('REIN'), startsWith('220'));
+      expect(await c.command('REIN'), startsWith('200'));
       // Commands now require auth
       expect(await c.command('PWD'), startsWith('530'));
       await c.close();
@@ -566,7 +566,7 @@ void main() {
     test('REIN allows new login on same connection', () async {
       final c = await FtpTestClient.connect(port);
       await c.login();
-      expect(await c.command('REIN'), startsWith('220'));
+      expect(await c.command('REIN'), startsWith('200'));
       // Login again on the same connection
       await c.login();
       expect(await c.command('PWD'), startsWith('257'));
@@ -579,7 +579,7 @@ void main() {
       // Start a rename sequence
       expect(await c.command('RNFR hello.txt'), startsWith('350'));
       // Reinitialize — should clear the pending rename
-      expect(await c.command('REIN'), startsWith('220'));
+      expect(await c.command('REIN'), startsWith('200'));
       // Login again
       await c.login();
       // RNTO should fail with 503 because RNFR was cleared by REIN
@@ -591,7 +591,7 @@ void main() {
       final c = await FtpTestClient.connect(port);
       // Don't login — REIN should still work pre-auth
       final r = await c.command('REIN');
-      expect(r, startsWith('220'));
+      expect(r, startsWith('200'));
       await c.close();
     });
 
@@ -603,7 +603,7 @@ void main() {
       final pwdBefore = await c.command('PWD');
       expect(pwdBefore, contains('subdir'));
       // Reinitialize
-      expect(await c.command('REIN'), startsWith('220'));
+      expect(await c.command('REIN'), startsWith('200'));
       // Login again
       await c.login();
       // PWD should be back at root, not subdir
