@@ -7,7 +7,7 @@ class FTPCommandHandler {
 
   FTPCommandHandler(this.logger);
 
-  /// Commands that are allowed before authentication
+  /// Commands that are allowed before authentication (RFC 959)
   static const _preAuthCommands = {
     'USER',
     'PASS',
@@ -16,6 +16,8 @@ class FTPCommandHandler {
     'SYST',
     'NOOP',
     'OPTS',
+    'REIN',
+    'ACCT',
   };
 
   Future<void> handleCommand(String commandLine, FtpSession session) async {
@@ -144,7 +146,7 @@ class FTPCommandHandler {
         handleMode(argument, session);
         break;
       case 'ALLO':
-        session.sendResponse('202 ALLO command not needed');
+        handleAllo(argument, session);
         break;
       case 'STAT':
         session.sendResponse('211 Server is running');
@@ -153,15 +155,13 @@ class FTPCommandHandler {
         handleHelp(session);
         break;
       case 'SITE':
-        session.sendResponse('502 SITE command not implemented');
+        handleSite(argument, session);
         break;
       case 'ACCT':
-        session.sendResponse('202 ACCT command not needed');
+        handleAcct(argument, session);
         break;
       case 'REIN':
-        session.isAuthenticated = false;
-        session.cachedUsername = null;
-        session.sendResponse('220 Service ready for new user');
+        handleRein(session);
         break;
       default:
         session.sendResponse('502 Command not implemented');
@@ -355,11 +355,72 @@ class FTPCommandHandler {
     }
   }
 
+  /// ALLO: Reserve storage space (RFC 959).
+  /// This server does not require pre-allocation, so the command is accepted
+  /// as a no-op. The argument (byte count) is validated for correct syntax.
+  /// Optional second argument form: `ALLO <bytes> R <record-size>`
+  void handleAllo(String argument, FtpSession session) {
+    if (argument.isEmpty) {
+      session.sendResponse('501 Syntax error in parameters');
+      return;
+    }
+    // Parse: <decimal-bytes> [SP R SP <decimal-record-size>]
+    final parts = argument.split(RegExp(r'\s+'));
+    final bytes = int.tryParse(parts[0]);
+    if (bytes == null || bytes < 0) {
+      session.sendResponse('501 Syntax error in parameters');
+      return;
+    }
+    if (parts.length > 1) {
+      if (parts.length != 3 ||
+          parts[1].toUpperCase() != 'R' ||
+          int.tryParse(parts[2]) == null) {
+        session.sendResponse('501 Syntax error in parameters');
+        return;
+      }
+    }
+    session.sendResponse('200 ALLO command OK (no storage allocation needed)');
+  }
+
+  /// ACCT: Provide account information (RFC 959).
+  /// This server does not use accounts, so the command is accepted as
+  /// superfluous. The argument is validated for non-empty syntax.
+  void handleAcct(String argument, FtpSession session) {
+    if (argument.isEmpty) {
+      session.sendResponse('501 Syntax error in parameters');
+      return;
+    }
+    // This server does not require account information
+    session.sendResponse('202 ACCT command superfluous');
+  }
+
+  /// REIN: Reinitialize session (RFC 959).
+  /// Flushes all user/account information and transfer parameters.
+  /// Any transfer in progress is allowed to complete.
+  /// The control connection remains open for a new USER command.
+  void handleRein(FtpSession session) {
+    session.reinitialize();
+    session.sendResponse('220 Service ready for new user');
+  }
+
+  /// SITE: Execute site-specific commands (RFC 959).
+  /// This server does not implement any site-specific commands.
+  void handleSite(String argument, FtpSession session) {
+    if (argument.isEmpty) {
+      session.sendResponse('501 Syntax error in parameters');
+      return;
+    }
+    // No site-specific commands are implemented
+    session.sendResponse('502 SITE command not implemented');
+  }
+
   void handleHelp(FtpSession session) {
     session.sendResponse('214-The following commands are supported:');
-    session.sendResponse(' USER PASS QUIT PASV PORT EPSV LIST NLST RETR STOR');
-    session.sendResponse(' CWD CDUP MKD RMD DELE PWD TYPE SIZE FEAT OPTS SYST');
-    session.sendResponse(' NOOP ABOR MLSD MDTM RNFR RNTO STRU MODE ALLO HELP');
+    session.sendResponse(' USER PASS ACCT QUIT REIN PASV PORT EPSV');
+    session.sendResponse(' LIST NLST RETR STOR CWD CDUP MKD RMD DELE');
+    session.sendResponse(' PWD TYPE SIZE FEAT OPTS SYST NOOP ABOR');
+    session.sendResponse(' MLSD MDTM RNFR RNTO STRU MODE ALLO STAT');
+    session.sendResponse(' SITE HELP');
     session.sendResponse('214 End');
   }
 }
