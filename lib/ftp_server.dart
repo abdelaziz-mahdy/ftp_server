@@ -36,12 +36,11 @@ class FtpServer {
   /// The file operations backend to use (VirtualFileOperations, PhysicalFileOperations, or custom).
   final FileOperations fileOperations;
 
-  ///Create a List to collect new sessions.
-  ///When you call _server?.stop() it should disconnect all active connections.
+  /// Active sessions. Sessions are automatically removed when they disconnect.
   final List<FtpSession> _sessionList = [];
 
   /// Get the list of current active sessions.
-  List<FtpSession> get activeSessions => _sessionList;
+  List<FtpSession> get activeSessions => List.unmodifiable(_sessionList);
 
   /// Creates an FTP server with the provided configurations.
   ///
@@ -49,8 +48,6 @@ class FtpServer {
   /// The [fileOperations] must be provided and handles all file/directory logic.
   /// The [serverType] determines the mode (read-only or read and write) of the server.
   /// Optional parameters include [username], [password], and [logFunction].
-  ///
-  /// BREAKING CHANGE: `sharedDirectories` and `startingDirectory` are removed. All directory logic is now handled by the provided [fileOperations].
   FtpServer(this.port,
       {this.username,
       this.password,
@@ -59,22 +56,30 @@ class FtpServer {
       Function(String)? logFunction})
       : logger = LoggerHandler(logFunction);
 
+  FtpSession _createSession(Socket socket) {
+    late FtpSession session;
+    session = FtpSession(
+      socket,
+      username: username,
+      password: password,
+      fileOperations: fileOperations,
+      serverType: serverType,
+      logger: logger,
+      onDisconnect: () {
+        _sessionList.remove(session);
+      },
+    );
+    _sessionList.add(session);
+    return session;
+  }
+
   Future<void> start() async {
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
     logger.generalLog('FTP Server is running on port $port');
     await for (var socket in _server!) {
       logger.generalLog(
           'New client connected from ${socket.remoteAddress.address}:${socket.remotePort}');
-      var session = FtpSession(
-        socket,
-        username: username,
-        password: password,
-        fileOperations: fileOperations,
-        serverType: serverType,
-        logger: logger,
-      );
-      //Fill sessionList with new sessions.
-      _sessionList.add(session);
+      _createSession(socket);
     }
   }
 
@@ -84,22 +89,12 @@ class FtpServer {
     _server!.listen((socket) {
       logger.generalLog(
           'New client connected from ${socket.remoteAddress.address}:${socket.remotePort}');
-      var session = FtpSession(
-        socket,
-        username: username,
-        password: password,
-        fileOperations: fileOperations,
-        serverType: serverType,
-        logger: logger,
-      );
-      //Fill sessionList with new sessions.
-      _sessionList.add(session);
+      _createSession(socket);
     });
   }
 
   Future<void> stop() async {
-    //Disconnect all active sessions
-    for (var session in _sessionList) {
+    for (var session in List.of(_sessionList)) {
       session.closeConnection();
     }
     _sessionList.clear();

@@ -1,6 +1,47 @@
 
 # Changelog
 
+## 2.2.0
+
+### Internal API Changes
+- `FTPCommandHandler` constructor no longer takes `controlSocket` (it was unused — all communication goes through the session)
+- `FTPCommandHandler.handleCommand` is now `async` to properly await all operations
+- `FtpSession.handleMlsd` and `handleMdtm` no longer take an extra `session` parameter
+- Error responses no longer include server filesystem paths or exception details
+
+### Bug Fixes
+- Fixed unhandled `SocketException` crashes when clients disconnect during transfers (#15)
+- Fixed `OPTS UTF8` crash when sent without ON/OFF argument
+- Fixed `EPSV ALL` not being handled (was entering passive mode instead of responding 200)
+- Fixed `ABOR` not sending required 226 follow-up response after 426 (RFC 959)
+- Fixed `PASS` accepted before `USER` when no credentials configured
+- Fixed passive socket file descriptor leak when clients send multiple PASV/EPSV commands
+- Fixed session list memory leak — sessions now auto-remove on disconnect
+- Fixed fire-and-forget async in MKD, RMD, DELE, RNTO, RENAME handlers — all now properly awaited
+- Fixed `handleRnto` rethrowing exceptions without sending response to client
+- Fixed `_getIpAddress` only matching 192.x.x.x networks — now supports 10.x and 172.x, and prefers control socket address
+- Fixed `LIST -la` / `LIST -a` failing — flag arguments are now stripped before directory lookup
+- Fixed pipelined commands (multiple commands in one TCP segment) being silently dropped
+
+### New Commands
+- `NLST` — returns bare filenames only, separated from LIST (was aliased to LIST)
+- `HELP` — returns list of supported commands
+- `STAT` — returns server status
+- `STRU` — accepts F (File), rejects others with 504
+- `MODE` — accepts S (Stream), rejects others with 504
+- `ALLO` — returns 202 (not needed)
+- `ACCT` — returns 202 (not needed)
+- `REIN` — resets authentication state
+- `SITE` — returns 502 (not implemented)
+
+### Improvements
+- Authentication enforcement: commands require login when credentials are configured
+- `TYPE` now accepts `TYPE A N` form (ASCII Non-print) per RFC 959
+- `FEAT` now advertises MLSD capability
+- `USER` validates non-empty argument
+- Error responses sanitized — no server path or exception leakage to clients
+- `activeSessions` now returns unmodifiable list
+
 ## 2.1.1
 - Updated README documentation to include new rename commands
 
