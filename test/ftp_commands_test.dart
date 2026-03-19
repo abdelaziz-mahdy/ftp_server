@@ -392,8 +392,9 @@ void main() {
       expect(r, contains('MDTM'));
       expect(r, contains('MLSD'));
       expect(r, contains('EPSV'));
-      expect(r, contains('PASV'));
       expect(r, contains('UTF8'));
+      // PASV is a base RFC 959 command, not an extension per RFC 2389
+      expect(r, isNot(contains('PASV')));
       expect(r, startsWith('211'));
       await c.close();
     });
@@ -756,6 +757,174 @@ void main() {
       expect(response, contains('200'));
       dataReady.close();
       await socket.close();
+    });
+  });
+
+  group('RFC compliance fixes', () {
+    test('RETR with empty argument returns 501', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      final r = await c.command('RETR');
+      expect(r, startsWith('501'));
+      await c.close();
+    });
+
+    test('RETR nonexistent file returns 550 without 150', () async {
+      // The server should check file existence before opening data connection
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      final r = await c.command('RETR nonexistent_file.txt');
+      // Should get 550 directly, not 150 then 550
+      expect(r, startsWith('550'));
+      await c.close();
+    });
+
+    test('STOR with empty argument returns 501', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      final r = await c.command('STOR');
+      expect(r, startsWith('501'));
+      await c.close();
+    });
+
+    test('CWD response uses virtual path, not physical', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      final r = await c.command('CWD subdir');
+      expect(r, startsWith('250'));
+      // Should not contain system temp path
+      expect(r, isNot(contains('/var')));
+      expect(r, isNot(contains('/tmp')));
+      expect(r, isNot(contains('AppData')));
+      await c.close();
+    });
+
+    test('CDUP response uses virtual path', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      await c.command('CWD subdir');
+      final r = await c.command('CDUP');
+      expect(r, startsWith('250'));
+      expect(r, isNot(contains('/var')));
+      expect(r, isNot(contains('/tmp')));
+      await c.close();
+    });
+
+    test('MKD response contains absolute FTP path', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      final r = await c.command('MKD rfc_test_dir');
+      expect(r, startsWith('257'));
+      // Should contain a path starting with /
+      expect(r, contains('/'));
+      expect(r, contains('rfc_test_dir'));
+      // Cleanup
+      await c.command('RMD rfc_test_dir');
+      await c.close();
+    });
+
+    test('FEAT does not list PASV (base RFC 959 command)', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      c.send('FEAT');
+      final feat = await c.readMultiLineResponse();
+      expect(feat, isNot(contains('PASV')));
+      expect(feat, contains('EPSV'));
+      expect(feat, contains('SIZE'));
+      await c.close();
+    });
+
+    test('EPSV ALL prevents subsequent PORT', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      expect(await c.command('EPSV ALL'), startsWith('200'));
+      final r = await c.command('PORT 127,0,0,1,200,10');
+      expect(r, startsWith('503'));
+      await c.close();
+    });
+
+    test('EPSV ALL prevents subsequent PASV', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      expect(await c.command('EPSV ALL'), startsWith('200'));
+      final r = await c.command('PASV');
+      expect(r, startsWith('503'));
+      await c.close();
+    });
+
+    test('EPSV still works after EPSV ALL', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      expect(await c.command('EPSV ALL'), startsWith('200'));
+      final r = await c.command('EPSV');
+      expect(r, startsWith('229'));
+      await c.command('QUIT');
+      await c.close();
+    });
+  });
+
+  group('Partial credential configs', () {
+    late FtpServer usernameOnlyServer;
+    const usernameOnlyPort = 2251;
+
+    setUpAll(() async {
+      usernameOnlyServer = FtpServer(
+        usernameOnlyPort,
+        username: 'admin',
+        password: null,
+        fileOperations: VirtualFileOperations([tempDir.path],
+            startingDirectory: p.basename(tempDir.path)),
+        serverType: ServerType.readAndWrite,
+        logFunction: (msg) {},
+      );
+      await usernameOnlyServer.startInBackground();
+    });
+
+    tearDownAll(() async {
+      await usernameOnlyServer.stop();
+    });
+
+    test('Username-only server: correct username authenticates', () async {
+      final c = await FtpTestClient.connect(usernameOnlyPort);
+      expect(await c.command('USER admin'), startsWith('331'));
+      expect(await c.command('PASS anything'), startsWith('230'));
+      await c.close();
+    });
+
+    test('Username-only server: wrong username fails', () async {
+      final c = await FtpTestClient.connect(usernameOnlyPort);
+      expect(await c.command('USER wrong'), startsWith('331'));
+      expect(await c.command('PASS anything'), startsWith('530'));
+      await c.close();
+    });
+  });
+
+  group('No-auth server', () {
+    late FtpServer noAuthServer;
+    const noAuthPort = 2252;
+
+    setUpAll(() async {
+      noAuthServer = FtpServer(
+        noAuthPort,
+        fileOperations: VirtualFileOperations([tempDir.path],
+            startingDirectory: p.basename(tempDir.path)),
+        serverType: ServerType.readAndWrite,
+        logFunction: (msg) {},
+      );
+      await noAuthServer.startInBackground();
+    });
+
+    tearDownAll(() async {
+      await noAuthServer.stop();
+    });
+
+    test('No-auth server: USER returns 230 directly', () async {
+      final c = await FtpTestClient.connect(noAuthPort);
+      final r = await c.command('USER anonymous');
+      expect(r, startsWith('230'));
+      // Should be able to use commands immediately without PASS
+      expect(await c.command('PWD'), startsWith('257'));
+      await c.close();
     });
   });
 }

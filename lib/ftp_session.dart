@@ -24,6 +24,9 @@ class FtpSession {
   bool transferInProgress = false;
   Future? _gettingDataSocket;
 
+  /// RFC 2428: after EPSV ALL, PORT/PASV/LPRT must be refused.
+  bool epsvAllMode = false;
+
   /// Callback invoked when this session's connection is closed.
   /// Used by FtpServer to remove the session from its active list.
   void Function()? onDisconnect;
@@ -100,6 +103,7 @@ class FtpSession {
     isAuthenticated = false;
     cachedUsername = null;
     pendingRenameFrom = null;
+    epsvAllMode = false;
 
     // Reset working directory to root
     fileOperations.currentDirectory = fileOperations.rootDirectory;
@@ -174,7 +178,12 @@ class FtpSession {
             'Timeout reached while waiting for client data socket');
       });
     }
-    return result.then((value) => dataSocket = value);
+    return result.then((value) {
+      dataSocket = value;
+    }).catchError((Object e) {
+      // dataListener was closed before a client connected (e.g. session ended)
+      logger.generalLog('Data connection wait cancelled: $e');
+    });
   }
 
   Future<void> enterPassiveMode() async {
@@ -373,6 +382,24 @@ class FtpSession {
   }
 
   Future<void> retrieveFile(String filename) async {
+    if (filename.isEmpty) {
+      sendResponse('501 Syntax error in parameters');
+      return;
+    }
+
+    // Check file existence before opening data connection to avoid
+    // sending 550 after 150 (RFC 959: validate before preliminary reply)
+    if (!fileOperations.exists(filename)) {
+      sendResponse('550 File not found');
+      return;
+    }
+    String fullPath = fileOperations.resolvePath(filename);
+    File file = File(fullPath);
+    if (!await file.exists()) {
+      sendResponse('550 File not found');
+      return;
+    }
+
     if (!await openDataConnection()) {
       return;
     }
@@ -380,15 +407,6 @@ class FtpSession {
     try {
       transferInProgress = true;
 
-      if (!fileOperations.exists(filename)) {
-        sendResponse('550 File not found');
-        transferInProgress = false;
-        await _closeDataSocket();
-        return;
-      }
-      String fullPath = fileOperations.resolvePath(filename);
-
-      File file = File(fullPath);
       if (await file.exists()) {
         Stream<List<int>> fileStream = file.openRead();
 
@@ -423,10 +441,6 @@ class FtpSession {
           },
           cancelOnError: true,
         );
-      } else {
-        sendResponse('550 File not found');
-        transferInProgress = false;
-        await _closeDataSocket();
       }
     } catch (e) {
       logger.generalLog('Exception in retrieveFile: $e');
@@ -437,6 +451,11 @@ class FtpSession {
   }
 
   Future<void> storeFile(String filename) async {
+    if (filename.isEmpty) {
+      sendResponse('501 Syntax error in parameters');
+      return;
+    }
+
     if (!await openDataConnection()) {
       return;
     }
@@ -565,7 +584,7 @@ class FtpSession {
     try {
       fileOperations.changeDirectory(dirname);
       sendResponse(
-          '250 Directory changed to ${fileOperations.currentDirectory}');
+          '250 Directory changed to ${fileOperations.getCurrentDirectory()}');
     } catch (e) {
       sendResponse('550 Access denied or directory not found');
       logger.generalLog('Error changing directory: $e');
@@ -576,7 +595,7 @@ class FtpSession {
     try {
       fileOperations.changeToParentDirectory();
       sendResponse(
-          '250 Directory changed to ${fileOperations.currentDirectory}');
+          '250 Directory changed to ${fileOperations.getCurrentDirectory()}');
     } catch (e) {
       sendResponse('550 Access denied or directory not found');
       logger.generalLog('Error changing to parent directory: $e');
@@ -586,7 +605,17 @@ class FtpSession {
   Future<void> makeDirectory(String dirname) async {
     try {
       await fileOperations.createDirectory(dirname);
-      sendResponse('257 "$dirname" created');
+      // RFC 959: 257 response must contain the absolute FTP pathname.
+      // Temporarily change into the new dir to get its resolved virtual path,
+      // then change back to the original directory.
+      final savedDir = fileOperations.getCurrentDirectory();
+      try {
+        fileOperations.changeDirectory(dirname);
+        final absPath = fileOperations.getCurrentDirectory();
+        sendResponse('257 "$absPath" created');
+      } finally {
+        fileOperations.changeDirectory(savedDir);
+      }
     } catch (e) {
       sendResponse('550 Failed to create directory');
       logger.generalLog('Error creating directory: $e');
