@@ -815,8 +815,8 @@ void main() {
       await c.login();
       final r = await c.command('MKD rfc_test_dir');
       expect(r, startsWith('257'));
-      // Should contain a path starting with /
-      expect(r, contains('/'));
+      // Should contain a path separator (/ on Unix, \ on Windows)
+      expect(r, anyOf(contains('/'), contains('\\')));
       expect(r, contains('rfc_test_dir'));
       // Cleanup
       await c.command('RMD rfc_test_dir');
