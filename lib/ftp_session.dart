@@ -92,6 +92,35 @@ class FtpSession {
     }
   }
 
+  /// Reinitialize the session to its initial state (RFC 959 REIN).
+  /// Resets authentication, transfer parameters, data connections, and
+  /// working directory. If a transfer is in progress, data connections
+  /// are left open until the transfer completes naturally.
+  void reinitialize() {
+    isAuthenticated = false;
+    cachedUsername = null;
+    pendingRenameFrom = null;
+
+    // Reset working directory to root
+    fileOperations.currentDirectory = fileOperations.rootDirectory;
+
+    if (!transferInProgress) {
+      // Only close data connections if no transfer is active.
+      // RFC 959: "allow any transfer in progress to be completed"
+      try {
+        dataSocket?.close();
+      } catch (_) {}
+      try {
+        dataListener?.close();
+      } catch (_) {}
+      dataSocket = null;
+      dataListener = null;
+      _gettingDataSocket = null;
+    }
+    // If a transfer IS in progress, data connections remain open.
+    // They will be cleaned up when the transfer completes.
+  }
+
   void sendResponse(String message) {
     logger.logResponse(message);
     try {

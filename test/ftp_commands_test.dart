@@ -336,10 +336,10 @@ void main() {
       await c.close();
     });
 
-    test('ALLO returns 202', () async {
+    test('ALLO with argument returns 200', () async {
       final c = await FtpTestClient.connect(port);
       await c.login();
-      expect(await c.command('ALLO 1024'), startsWith('202'));
+      expect(await c.command('ALLO 1024'), startsWith('200'));
       await c.close();
     });
   });
@@ -439,34 +439,200 @@ void main() {
     });
   });
 
-  group('STAT/SITE/ACCT/REIN', () {
+  group('STAT', () {
     test('STAT returns server status', () async {
       final c = await FtpTestClient.connect(port);
       await c.login();
       expect(await c.command('STAT'), startsWith('211'));
       await c.close();
     });
+  });
 
-    test('SITE returns 502', () async {
+  group('ALLO', () {
+    test('ALLO with valid byte count returns 200', () async {
       final c = await FtpTestClient.connect(port);
       await c.login();
-      expect(await c.command('SITE CHMOD 755 file'), startsWith('502'));
+      final r = await c.command('ALLO 1024');
+      expect(r, startsWith('200'));
       await c.close();
     });
 
-    test('ACCT returns 202', () async {
+    test('ALLO with record size returns 200', () async {
       final c = await FtpTestClient.connect(port);
       await c.login();
-      expect(await c.command('ACCT info'), startsWith('202'));
+      final r = await c.command('ALLO 1024 R 512');
+      expect(r, startsWith('200'));
       await c.close();
     });
 
-    test('REIN resets authentication', () async {
+    test('ALLO with no argument returns 501', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      expect(await c.command('ALLO'), startsWith('501'));
+      await c.close();
+    });
+
+    test('ALLO with non-numeric argument returns 501', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      expect(await c.command('ALLO abc'), startsWith('501'));
+      await c.close();
+    });
+
+    test('ALLO with negative number returns 501', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      expect(await c.command('ALLO -1'), startsWith('501'));
+      await c.close();
+    });
+
+    test('ALLO with malformed record size returns 501', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      expect(await c.command('ALLO 1024 R'), startsWith('501'));
+      await c.close();
+    });
+
+    test('ALLO with invalid R argument returns 501', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      expect(await c.command('ALLO 1024 X 512'), startsWith('501'));
+      await c.close();
+    });
+
+    test('ALLO with non-numeric record size returns 501', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      expect(await c.command('ALLO 1024 R abc'), startsWith('501'));
+      await c.close();
+    });
+
+    test('ALLO with zero bytes returns 200', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      final r = await c.command('ALLO 0');
+      expect(r, startsWith('200'));
+      await c.close();
+    });
+  });
+
+  group('ACCT', () {
+    test('ACCT with argument returns 202', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      final r = await c.command('ACCT myaccount');
+      expect(r, startsWith('202'));
+      await c.close();
+    });
+
+    test('ACCT with no argument returns 501', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      expect(await c.command('ACCT'), startsWith('501'));
+      await c.close();
+    });
+
+    test('ACCT allowed before authentication', () async {
+      final c = await FtpTestClient.connect(port);
+      // Don't login — ACCT should still be accepted pre-auth
+      final r = await c.command('ACCT myaccount');
+      expect(r, startsWith('202'));
+      await c.close();
+    });
+  });
+
+  group('REIN', () {
+    test('REIN returns 220', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      final r = await c.command('REIN');
+      expect(r, startsWith('220'));
+      await c.close();
+    });
+
+    test('REIN resets authentication state', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      // Verify logged in
+      expect(await c.command('PWD'), startsWith('257'));
+      // Reinitialize
+      expect(await c.command('REIN'), startsWith('220'));
+      // Commands now require auth
+      expect(await c.command('PWD'), startsWith('530'));
+      await c.close();
+    });
+
+    test('REIN allows new login on same connection', () async {
       final c = await FtpTestClient.connect(port);
       await c.login();
       expect(await c.command('REIN'), startsWith('220'));
-      // After REIN, commands should require auth
-      expect(await c.command('PWD'), startsWith('530'));
+      // Login again on the same connection
+      await c.login();
+      expect(await c.command('PWD'), startsWith('257'));
+      await c.close();
+    });
+
+    test('REIN clears pending rename state', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      // Start a rename sequence
+      expect(await c.command('RNFR hello.txt'), startsWith('350'));
+      // Reinitialize — should clear the pending rename
+      expect(await c.command('REIN'), startsWith('220'));
+      // Login again
+      await c.login();
+      // RNTO should fail with 503 because RNFR was cleared by REIN
+      expect(await c.command('RNTO newname.txt'), startsWith('503'));
+      await c.close();
+    });
+
+    test('REIN allowed before authentication', () async {
+      final c = await FtpTestClient.connect(port);
+      // Don't login — REIN should still work pre-auth
+      final r = await c.command('REIN');
+      expect(r, startsWith('220'));
+      await c.close();
+    });
+
+    test('REIN resets working directory to root', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      // Change to a subdirectory
+      expect(await c.command('CWD subdir'), startsWith('250'));
+      final pwdBefore = await c.command('PWD');
+      expect(pwdBefore, contains('subdir'));
+      // Reinitialize
+      expect(await c.command('REIN'), startsWith('220'));
+      // Login again
+      await c.login();
+      // PWD should be back at root, not subdir
+      final pwdAfter = await c.command('PWD');
+      expect(pwdAfter, isNot(contains('subdir')));
+      await c.close();
+    });
+  });
+
+  group('SITE', () {
+    test('SITE with subcommand returns 502', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      final r = await c.command('SITE CHMOD 755 file.txt');
+      expect(r, startsWith('502'));
+      await c.close();
+    });
+
+    test('SITE with no argument returns 501', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      expect(await c.command('SITE'), startsWith('501'));
+      await c.close();
+    });
+
+    test('SITE with any subcommand returns 502', () async {
+      final c = await FtpTestClient.connect(port);
+      await c.login();
+      expect(await c.command('SITE HELP'), startsWith('502'));
+      expect(await c.command('SITE QUOTA'), startsWith('502'));
       await c.close();
     });
   });
