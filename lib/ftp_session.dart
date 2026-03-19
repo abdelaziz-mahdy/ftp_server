@@ -50,6 +50,7 @@ class FtpSession {
   }
 
   final StringBuffer _commandBuffer = StringBuffer();
+  Future<void> _commandQueue = Future.value();
 
   void processCommand(List<int> data) {
     try {
@@ -62,7 +63,15 @@ class FtpSession {
       for (final line in lines.sublist(0, lines.length - 1)) {
         final trimmed = line.trim();
         if (trimmed.isEmpty) continue;
-        commandHandler.handleCommand(trimmed, this);
+        // Chain commands sequentially so async handlers complete before the next runs
+        _commandQueue = _commandQueue.then((_) async {
+          try {
+            await commandHandler.handleCommand(trimmed, this);
+          } catch (e, s) {
+            logger.generalLog("error: $e stack: $s");
+            sendResponse('500 Internal server error');
+          }
+        });
       }
     } catch (e, s) {
       logger.generalLog("error: $e stack: $s ,input bytes $data");

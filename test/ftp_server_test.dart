@@ -1239,6 +1239,15 @@ void main() {
   });
 
   group('Server termination', () {
+    tearDown(() async {
+      try {
+        await server.stop();
+      } catch (_) {}
+      try {
+        ftpClient.kill();
+      } catch (_) {}
+    });
+
     test(
         'Close method terminates active sessions and clears activeSessions list',
         () async {
@@ -1252,18 +1261,14 @@ void main() {
         logFunction: (String message) => print(message),
       );
       await server.startInBackground();
-      // Create a test client and connect to the server
+      // Create a test client that stays connected (don't use execFTPCmdOnWin which quits)
       ftpClient = await Process.start(
         Platform.isWindows ? 'ftp' : 'bash',
         Platform.isWindows ? ['-n', '-v'] : ['-c', 'ftp -n -v'],
         runInShell: true,
       );
-      if (Platform.isWindows) {
-        await execFTPCmdOnWin('pwd');
-      } else {
-        // Authenticate the test client
-        await connectAndAuthenticate(ftpClient, logFilePath);
-      }
+      // Authenticate the test client (keeps connection open)
+      await connectAndAuthenticate(ftpClient, logFilePath);
       await Future.delayed(
           const Duration(milliseconds: 500)); // Wait for log to be written
       // Ensure there's an active session
