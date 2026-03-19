@@ -67,9 +67,19 @@ class FtpSession {
         _commandQueue = _commandQueue.then((_) async {
           try {
             await commandHandler.handleCommand(trimmed, this);
+            // Flush after each command so the response is sent before the
+            // next command runs. Without this, microtask-chained responses
+            // can pile up in the socket buffer and confuse some FTP clients.
+            try {
+              await controlSocket.flush();
+            } catch (_) {
+              // Socket may already be closed (e.g. after QUIT)
+            }
           } catch (e, s) {
             logger.generalLog("error: $e stack: $s");
-            sendResponse('500 Internal server error');
+            try {
+              sendResponse('500 Internal server error');
+            } catch (_) {}
           }
         });
       }

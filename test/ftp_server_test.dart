@@ -21,10 +21,9 @@ void main() {
   final Directory clientTempDir =
       Directory.systemTemp.createTempSync('ftp_test0');
 
-  Future<String> execFTPCmdOnWin(String commands) async {
+  Future<String> execFTPCmdOnWin(String commands,
+      {String user = 'test', String password = 'password'}) async {
     const String ftpHost = '127.0.0.1 $port';
-    const String user = 'test';
-    const String password = 'password';
 
     String fullCommands = '''
     open $ftpHost
@@ -172,7 +171,7 @@ void main() {
 
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
-        output = await execFTPCmdOnWin("cd ..\n ls");
+        output = await execFTPCmdOnWin("cd ..\ndir");
       }
 
       String listing = await outputHandler.generateDirectoryListing(
@@ -807,7 +806,7 @@ void main() {
         var output = await readAllOutput(logFilePath);
         if (Platform.isWindows) {
           output = await execFTPCmdOnWin(
-              "cd ${basename(sharedDirectories.first)}\n ls");
+              "cd ${basename(sharedDirectories.first)}\ndir");
         }
 
         String listing = await outputHandler.generateDirectoryListing(
@@ -838,7 +837,7 @@ void main() {
 
         var output = await readAllOutput(logFilePath);
         if (Platform.isWindows) {
-          output = await execFTPCmdOnWin("cd /\n ls");
+          output = await execFTPCmdOnWin("cd /\ndir");
         }
 
         String listing = await outputHandler.generateDirectoryListing(
@@ -873,7 +872,7 @@ void main() {
         if (Platform.isWindows) {
           // Ensure we are in the correct starting directory before using relative path
           output = await execFTPCmdOnWin(
-              "cd ${basename(sharedDirectories.first)}\nls test_dir");
+              "cd ${basename(sharedDirectories.first)}\ndir test_dir");
         }
 
         // Create VFS instance with the correct starting directory for generating expected output
@@ -919,7 +918,7 @@ void main() {
         var output = await readAllOutput(logFilePath);
         if (Platform.isWindows) {
           output = await execFTPCmdOnWin(
-              "cd ${basename(sharedDirectories.first)}\n ls test_dir");
+              "cd ${basename(sharedDirectories.first)}\ndir test_dir");
         }
 
         String listing = await outputHandler.generateDirectoryListing(
@@ -1243,9 +1242,6 @@ void main() {
       try {
         await server.stop();
       } catch (_) {}
-      try {
-        ftpClient.kill();
-      } catch (_) {}
     });
 
     test(
@@ -1261,16 +1257,17 @@ void main() {
         logFunction: (String message) => print(message),
       );
       await server.startInBackground();
-      // Create a test client that stays connected (don't use execFTPCmdOnWin which quits)
-      ftpClient = await Process.start(
-        Platform.isWindows ? 'ftp' : 'bash',
-        Platform.isWindows ? ['-n', '-v'] : ['-c', 'ftp -n -v'],
-        runInShell: true,
-      );
-      // Authenticate the test client (keeps connection open)
-      await connectAndAuthenticate(ftpClient, logFilePath);
-      await Future.delayed(
-          const Duration(milliseconds: 500)); // Wait for log to be written
+      // Use a raw socket to keep the connection alive reliably on all platforms
+      final socket = await Socket.connect('127.0.0.1', port);
+      // Read the 220 welcome message
+      await Future.delayed(const Duration(milliseconds: 300));
+      // Authenticate
+      socket.write('USER test\r\n');
+      await socket.flush();
+      await Future.delayed(const Duration(milliseconds: 200));
+      socket.write('PASS password\r\n');
+      await socket.flush();
+      await Future.delayed(const Duration(milliseconds: 500));
       // Ensure there's an active session
       expect(server.activeSessions.isNotEmpty, isTrue,
           reason: 'No active sessions found after client connected');
@@ -1280,6 +1277,8 @@ void main() {
       // Verify that all active sessions are terminated
       expect(server.activeSessions.isEmpty, isTrue,
           reason: 'Active sessions list is not cleared after server stop');
+      // Clean up the socket
+      socket.destroy();
     });
   });
 
@@ -1362,7 +1361,9 @@ void main() {
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin(
-            "pwd\ncd 2025-04-27/ILCE-7M3_4529168/133119/\ncd /\ncd 2025-04-27\nmkdir 2025-04-27\ncd 2025-04-27");
+            "pwd\ncd 2025-04-27/ILCE-7M3_4529168/133119/\ncd /\ncd 2025-04-27\nmkdir 2025-04-27\ncd 2025-04-27",
+            user: 'yxz',
+            password: '123456');
       }
 
       // Verify initial CWD attempts fail because the directory doesn't exist physically
@@ -1408,7 +1409,9 @@ void main() {
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin(
-            "cd /photos\npwd\nls\ncd 2023-albums\npwd\nls");
+            "cd /photos\npwd\ndir\ncd 2023-albums\npwd\ndir",
+            user: 'yxz',
+            password: '123456');
       }
 
       // Use outputHandler for expected CD outputs
@@ -1441,7 +1444,9 @@ void main() {
       var output = await readAllOutput(logFilePath);
       if (Platform.isWindows) {
         output = await execFTPCmdOnWin(
-            "cd /\nmkdir $dir1\ncd $dir1\nmkdir $dir2\nls");
+            "cd /\nmkdir $dir1\ncd $dir1\nmkdir $dir2\ndir",
+            user: 'yxz',
+            password: '123456');
       }
 
       // Use outputHandler for expected outputs
