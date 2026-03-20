@@ -54,6 +54,8 @@ class _FtpServerHomeState extends State<FtpServerHome> {
   FtpSecurityMode securityMode = FtpSecurityMode.none;
   String? certPath;
   String? keyPath;
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   String get backendWarning => usePhysical
       ? 'Physical (Single Directory): You are sharing one folder as the FTP root. You can add, edit, or delete files and folders directly inside this root.'
       : 'Virtual (Multiple Directories): You are sharing several folders as top-level directories. You cannot add, edit, or delete files directly at the root, only inside the shared folders.';
@@ -186,8 +188,10 @@ class _FtpServerHomeState extends State<FtpServerHome> {
         fileOperations: fileOps,
         serverType: ServerType.readAndWrite,
         logFunction: (p0) => print(p0),
-        username: null,
-        password: null,
+        username:
+            _usernameController.text.isEmpty ? null : _usernameController.text,
+        password:
+            _passwordController.text.isEmpty ? null : _passwordController.text,
         securityMode: securityMode,
         tlsConfig: tlsConfig,
       );
@@ -373,6 +377,50 @@ class _FtpServerHomeState extends State<FtpServerHome> {
                           ],
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Authentication',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _usernameController,
+                            enabled: !isServerRunning,
+                            decoration: const InputDecoration(
+                              labelText: 'Username (optional)',
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _passwordController,
+                            enabled: !isServerRunning,
+                            obscureText: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Password (optional)',
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Leave empty for anonymous access.',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
                     ),
                     const SizedBox(height: 16),
                     Row(

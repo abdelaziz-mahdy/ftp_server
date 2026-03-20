@@ -705,6 +705,20 @@ class FtpSession {
         dataSocket = null;
       }
     }
+    // Close the data listener (plain or secure) to release the port
+    // and ensure proper TLS close_notify on secure connections
+    try {
+      dataListener?.close();
+    } catch (e) {
+      logger.generalLog('Error closing data listener: $e');
+    }
+    dataListener = null;
+    try {
+      _secureDataListener?.close();
+    } catch (e) {
+      logger.generalLog('Error closing secure data listener: $e');
+    }
+    _secureDataListener = null;
   }
 
   void abortTransfer() async {
