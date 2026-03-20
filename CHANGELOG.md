@@ -1,6 +1,11 @@
 
 # Changelog
 
+## 2.3.1
+
+- Updated README with comprehensive documentation for all features
+- Updated package description
+
 ## 2.3.0
 
 ### FTPS Support (RFC 4217 / RFC 2228)

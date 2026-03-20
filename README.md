@@ -1,6 +1,6 @@
 # Dart FTP Server
 
-A simple, extensible FTP server implementation in Dart. Supports both read-only and read-and-write modes, with pluggable file system backends for flexible directory exposure and security.
+A standards-compliant FTP/FTPS server in Dart. Supports plain FTP and encrypted FTPS (explicit and implicit TLS), read-only and read-write modes, with pluggable file system backends.
 
 ---
 
@@ -35,48 +35,42 @@ import 'package:ftp_server/server_type.dart';
 import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 
 void main() async {
-  final fileOps = VirtualFileOperations([
-    '/home/user/ftp',
-    '/home/user/other',
-  ]);
-
   final server = FtpServer(
-    21, // port
-    username: 'user',
-    password: 'pass',
-    fileOperations: fileOps,
-    serverType: ServerType.readAndWrite, // or ServerType.readOnly
+    21,
+    fileOperations: VirtualFileOperations(['/home/user/shared']),
+    serverType: ServerType.readAndWrite,
   );
 
   await server.start();
 }
 ```
 
-- See [File Sharing Backends](#5-file-sharing-backends) for how to use a single directory (Physical backend).
-- For more advanced usage, see the sections below.
+That's it — an anonymous FTP server sharing a directory. Add `username`/`password` for authentication, or `securityMode`/`tlsConfig` for FTPS. See below for details.
 
 ---
 
 ## 2. Features
 
-- **Passive and Active Modes**: Supports both passive and active data connections.
-- **File Operations**: Retrieve, store, delete, rename, and list files.
-- **Directory Operations**: Change, make, remove, and list directories.
-- **Read-Only Mode**: Disable write operations for enhanced security.
-- **Authentication**: Optional username/password authentication with pre-auth command enforcement.
-- **Standards Compliant**: Implements the following IETF standards:
+- **FTP and FTPS**: Plain FTP, explicit FTPS (AUTH TLS), and implicit FTPS
+- **Passive and Active Modes**: Both passive (PASV/EPSV) and active (PORT) data connections
+- **File Operations**: Retrieve, store, delete, rename, and list files
+- **Directory Operations**: Change, make, remove, and list directories
+- **Read-Only Mode**: Disable all write operations for security
+- **Authentication**: Optional username/password with flexible credential configs
+- **Pluggable Backends**: Virtual (multiple directories) or Physical (single root)
+- **Standards Compliant**:
   - [RFC 959](https://www.rfc-editor.org/rfc/rfc959) — File Transfer Protocol (core)
+  - [RFC 2228](https://www.rfc-editor.org/rfc/rfc2228) — FTP Security Extensions
   - [RFC 2389](https://www.rfc-editor.org/rfc/rfc2389) — Feature negotiation (FEAT/OPTS)
   - [RFC 2428](https://www.rfc-editor.org/rfc/rfc2428) — Extended passive mode (EPSV)
-  - [RFC 3659](https://www.rfc-editor.org/rfc/rfc3659) — Extensions (MLSD, MDTM, SIZE)
+  - [RFC 3659](https://www.rfc-editor.org/rfc/rfc3659) — Extensions (MLST, MDTM, SIZE)
   - [RFC 4217](https://www.rfc-editor.org/rfc/rfc4217) — Securing FTP with TLS (FTPS)
-  - [RFC 2228](https://www.rfc-editor.org/rfc/rfc2228) — FTP Security Extensions
 
 ---
 
 ## 3. Compatibility
 
-Tested on macOS. CI/CD test cases ensure compatibility with Linux and Windows.
+Tested on **macOS**, **Linux**, and **Windows**. CI/CD runs 231 tests on all three platforms on every commit.
 
 ---
 
@@ -84,103 +78,161 @@ Tested on macOS. CI/CD test cases ensure compatibility with Linux and Windows.
 
 ### 4.1 Starting the Server
 
-See [Quick Start](#1-quick-start) above for a basic example.
-
-#### Using PhysicalFileOperations
-
-If you want to use a single physical directory as the FTP root (with no virtual mapping):
+#### Basic (anonymous, no auth)
 
 ```dart
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
-import 'package:ftp_server/file_operations/physical_file_operations.dart';
+import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 
 void main() async {
-  final fileOps = PhysicalFileOperations('/home/user/ftp_root');
-
   final server = FtpServer(
-    21, // port
-    username: 'user',
-    password: 'pass',
-    fileOperations: fileOps,
-    serverType: ServerType.readAndWrite, // or ServerType.readOnly
+    21,
+    fileOperations: VirtualFileOperations(['/home/user/shared']),
+    serverType: ServerType.readAndWrite,
   );
-
   await server.start();
 }
 ```
 
-### 4.2 Running in the Background
+#### With authentication
 
-You can run the FTP server in the background using the provided method:
+```dart
+final server = FtpServer(
+  21,
+  username: 'admin',
+  password: 'secret',
+  fileOperations: VirtualFileOperations(['/home/user/shared']),
+  serverType: ServerType.readAndWrite,
+);
+```
+
+#### Using PhysicalFileOperations (single directory)
+
+```dart
+import 'package:ftp_server/file_operations/physical_file_operations.dart';
+
+final server = FtpServer(
+  21,
+  fileOperations: PhysicalFileOperations('/home/user/ftp_root'),
+  serverType: ServerType.readAndWrite,
+);
+```
+
+### 4.2 Running in the Background
 
 ```dart
 await server.startInBackground();
+// Your app continues running while the FTP server handles connections
 ```
 
-This allows your Dart application to continue running other code while the FTP server handles connections in the background.
+To stop:
+
+```dart
+await server.stop();
+```
 
 ### 4.3 Supported FTP Commands
 
-| Command              | Description                                                 |
-| -------------------- | ----------------------------------------------------------- |
-| `USER <username>`    | Set the username for authentication.                        |
-| `PASS <password>`    | Set the password for authentication.                        |
-| `QUIT`               | Close the control connection.                               |
-| `PASV`               | Enter passive mode.                                         |
-| `EPSV`               | Enter extended passive mode.                                |
-| `PORT <host-port>`   | Enter active mode.                                          |
-| `LIST [<directory>]` | List files with details (permissions, size, date).          |
-| `NLST [<directory>]` | List filenames only.                                        |
-| `MLSD [<directory>]` | List directory in machine-readable format.                  |
-| `RETR <filename>`    | Retrieve the specified file.                                |
-| `STOR <filename>`    | Store a file.                                               |
-| `CWD <directory>`    | Change the current directory.                               |
-| `CDUP`               | Change to the parent directory.                             |
-| `MKD <directory>`    | Make a new directory.                                       |
-| `RMD <directory>`    | Remove a directory.                                         |
-| `DELE <filename>`    | Delete a file.                                              |
-| `PWD`                | Print the current directory.                                |
-| `SYST`               | Return system type.                                         |
-| `NOOP`               | No operation (keep connection alive).                       |
-| `TYPE <type>`        | Set transfer type (A for ASCII, I for binary).              |
-| `SIZE <filename>`    | Return the size of the specified file.                      |
-| `MDTM <filename>`    | Return the last modification time of a file.                |
-| `FEAT`               | List supported features.                                    |
-| `OPTS <option>`      | Set options (e.g., `OPTS UTF8 ON`).                         |
-| `RNFR <filename>`    | Rename from (specify source file/directory for rename).     |
-| `RNTO <filename>`    | Rename to (specify destination file/directory for rename).  |
-| `RENAME <old> <new>` | Rename a file or directory (high-level command).            |
-| `STRU <code>`        | Set file structure (only F/File supported).                 |
-| `MODE <code>`        | Set transfer mode (only S/Stream supported).                |
-| `STAT`               | Return server status.                                       |
-| `HELP`               | List supported commands.                                    |
-| `ABOR`               | Abort current transfer.                                     |
-| `REIN`               | Reset session (logout without disconnecting).               |
-| `ALLO`               | Allocate storage (accepted, not required).                  |
-| `ACCT`               | Account info (accepted, not required).                      |
-| `SITE`               | Site-specific commands (not implemented).                   |
-| `AUTH <mechanism>`   | Upgrade to TLS (explicit FTPS).                             |
-| `PBSZ <size>`       | Set protection buffer size (always 0 for TLS).              |
-| `PROT <level>`      | Set data channel protection (P=private, C=clear).           |
-| `CCC`               | Clear command channel (not supported, returns 534).         |
+| Command | Description |
+|---|---|
+| **Authentication** | |
+| `USER <username>` | Set username. Returns 230 directly if no auth configured. |
+| `PASS <password>` | Set password. Supports username-only or password-only configs. |
+| `ACCT <info>` | Account info (accepted, not required). |
+| `REIN` | Reset session — logout without disconnecting. |
+| `QUIT` | Close the connection. |
+| **Directory Navigation** | |
+| `PWD` | Print current directory (absolute FTP path). |
+| `CWD <directory>` | Change directory. |
+| `CDUP` | Change to parent directory. |
+| `MKD <directory>` | Create directory. Response includes absolute path. |
+| `RMD <directory>` | Remove directory. |
+| **File Operations** | |
+| `LIST [<path>]` | List files with details (permissions, size, date). |
+| `NLST [<path>]` | List filenames only. |
+| `MLSD [<path>]` | Machine-readable directory listing (RFC 3659). |
+| `STAT [<path>]` | File/directory status over control connection. |
+| `RETR <filename>` | Download a file. |
+| `STOR <filename>` | Upload a file. |
+| `DELE <filename>` | Delete a file. |
+| `RNFR <filename>` | Rename from (start rename sequence). |
+| `RNTO <filename>` | Rename to (complete rename sequence). |
+| `SIZE <filename>` | Get file size in bytes. |
+| `MDTM <filename>` | Get last modification time (UTC). |
+| **Data Connection** | |
+| `PASV` | Enter passive mode. |
+| `EPSV [<protocol>]` | Enter extended passive mode (RFC 2428). |
+| `PORT <h1,h2,h3,h4,p1,p2>` | Enter active mode. |
+| `ABOR` | Abort current transfer. |
+| `TYPE <type>` | Set transfer type (A=ASCII, I=binary). |
+| `STRU <code>` | Set file structure (F=file only). |
+| `MODE <code>` | Set transfer mode (S=stream only). |
+| `ALLO <bytes> [R <size>]` | Allocate storage (accepted, not required). |
+| **Security (FTPS)** | |
+| `AUTH TLS` | Upgrade control connection to TLS (explicit FTPS). |
+| `PBSZ 0` | Set protection buffer size (required before PROT). |
+| `PROT P\|C` | Set data protection: P=private (encrypted), C=clear. |
+| `CCC` | Clear command channel (not supported — returns 534). |
+| **Server Info** | |
+| `SYST` | Return system type (UNIX Type: L8). |
+| `FEAT` | List supported features and extensions. |
+| `OPTS <option>` | Set options (e.g., `OPTS UTF8 ON`). |
+| `HELP` | List all supported commands. |
+| `NOOP` | No operation (keep-alive). |
+| `SITE <cmd>` | Site-specific commands (not implemented — returns 502). |
 
 ### 4.4 Authentication
 
-To enable authentication, provide the `username` and `password` parameters when creating the `FtpServer` instance. The server will then require clients to log in using these credentials.
+Authentication is **optional**. The server supports several configurations:
+
+| Configuration | Behavior |
+|---|---|
+| No credentials | Anonymous access. `USER` returns 230 immediately. |
+| Username + password | Both must match. `USER` returns 331, then `PASS` required. |
+| Username only | Any password accepted if username matches. |
+| Password only | Any username accepted if password matches. |
+
+```dart
+// Anonymous (no auth)
+FtpServer(21, fileOperations: fileOps, serverType: serverType);
+
+// Full credentials
+FtpServer(21, username: 'admin', password: 'secret', ...);
+
+// Username only (password ignored)
+FtpServer(21, username: 'admin', ...);
+```
+
+When credentials are configured, commands like `LIST`, `RETR`, `STOR`, etc. require authentication. Pre-auth commands (`USER`, `PASS`, `QUIT`, `FEAT`, `SYST`, `NOOP`, `OPTS`, `AUTH`, `PBSZ`, `PROT`) always work.
 
 ### 4.5 Read-Only Mode
 
-To run the server in read-only mode, set the `serverType` parameter to `ServerType.readOnly`. In this mode, commands that modify the filesystem (e.g., `STOR`, `DELE`, `MKD`, `RMD`) will be disabled.
+```dart
+final server = FtpServer(
+  21,
+  fileOperations: fileOps,
+  serverType: ServerType.readOnly, // STOR, DELE, MKD, RMD disabled
+);
+```
+
+Write commands return `550 Command not allowed in read-only mode`.
 
 ### 4.6 FTPS (TLS/SSL)
 
-The server supports FTPS per RFC 4217. Three security modes are available:
+The server supports FTPS per [RFC 4217](https://www.rfc-editor.org/rfc/rfc4217). Three security modes:
+
+| Mode | Description | Typical Port |
+|---|---|---|
+| `FtpSecurityMode.none` | Plain FTP (default) | 21 |
+| `FtpSecurityMode.explicit` | Plain connection, client upgrades via `AUTH TLS` | 21 |
+| `FtpSecurityMode.implicit` | TLS from connection start | 990 |
+
+#### Explicit FTPS
+
+Client connects on a plain port and upgrades to TLS:
 
 ```dart
-import 'package:ftp_server/ftp_server.dart';
-
-// Explicit FTPS (client upgrades via AUTH TLS)
 final server = FtpServer(
   21,
   fileOperations: fileOps,
@@ -191,8 +243,13 @@ final server = FtpServer(
     keyFilePath: '/path/to/key.pem',
   ),
 );
+```
 
-// Implicit FTPS (TLS from connection start, typically port 990)
+#### Implicit FTPS
+
+All connections are TLS-encrypted from the start:
+
+```dart
 final server = FtpServer(
   990,
   fileOperations: fileOps,
@@ -205,57 +262,106 @@ final server = FtpServer(
 );
 ```
 
-Set `requireEncryptedData: true` to enforce encrypted data channels (automatic for implicit mode).
+#### TLS Configuration Options
+
+```dart
+// Simple: PEM files
+TlsConfig(
+  certFilePath: 'cert.pem',
+  keyFilePath: 'key.pem',
+)
+
+// Advanced: pre-built SecurityContext
+TlsConfig(
+  securityContext: myCustomContext,
+)
+
+// Mutual TLS (client certificates)
+TlsConfig(
+  certFilePath: 'cert.pem',
+  keyFilePath: 'key.pem',
+  requireClientCert: true,
+  trustedCertificatesPath: 'ca.pem',
+)
+```
+
+#### Enforcing Encrypted Data Channels
+
+By default, clients choose whether to encrypt data channels (`PROT P` or `PROT C`). To require encryption:
+
+```dart
+FtpServer(
+  21,
+  fileOperations: fileOps,
+  serverType: ServerType.readAndWrite,
+  securityMode: FtpSecurityMode.explicit,
+  tlsConfig: tlsConfig,
+  requireEncryptedData: true, // Refuse PROT C, require PROT P
+);
+```
+
+For implicit mode, `requireEncryptedData` is automatically set to `true`.
+
+#### Known Limitations
+
+- **CCC** (Clear Command Channel): Returns 534. Dart's `SecureSocket` cannot be downgraded to plain TCP.
+- **REIN under TLS**: Returns 502. Same Dart limitation — TLS cannot be unwrapped.
+- **FileZilla/GnuTLS**: May warn "TLS connection was non-properly terminated" on data channels. This is a client-side GnuTLS issue; data transfers complete successfully.
 
 ---
 
 ## 5. File Sharing Backends
 
-This project provides two ways to share files and folders over FTP:
-
 ### 5.1 Quick Comparison
 
-| Feature                      | Virtual (Multiple Directories)   | Physical (Single Directory)        |
-| ---------------------------- | -------------------------------- | ---------------------------------- |
-| Number of shared folders     | Multiple                         | One                                |
-| Can add/edit/delete at root? | No                               | Yes                                |
-| Root meaning                 | Virtual root (not a real folder) | The folder you chose as the root   |
-| Best for                     | Sharing several separate folders | Sharing one folder and its content |
+| Feature | Virtual | Physical |
+|---|---|---|
+| Shared folders | Multiple | One |
+| Write at root? | No | Yes |
+| Root meaning | Virtual (not a real folder) | The actual folder |
+| Best for | Sharing several separate folders | Sharing one folder tree |
 
 ### 5.2 Virtual (Multiple Directories)
 
-- Lets you share several folders, and each appears as a separate top-level folder when users connect.
-- Users cannot add, edit, or delete files directly at the root ("/"). They can only work inside the folders you shared.
-- Example: If you share `/photos` and `/docs`, users will see two folders: `photos` and `docs` at the top level.
-- **Use this if:** You want to share multiple folders and keep them separate.
+Shares multiple folders as top-level directories. Users cannot modify the root `/` directly.
+
+```dart
+final fileOps = VirtualFileOperations([
+  '/home/user/photos',
+  '/home/user/documents',
+]);
+// Users see: /photos/ and /documents/
+```
 
 ### 5.3 Physical (Single Directory)
 
-- Lets you share one folder as the root of the FTP server.
-- Users can add, edit, or delete files and folders directly inside this root folder.
-- Example: If you share `/home/user/ftp_root`, users will see all files and folders inside `ftp_root` and can manage them freely.
-- **Use this if:** You want to share everything inside a single folder and allow full access within it.
+Shares one folder as the FTP root. Users can create/delete files directly at root level.
+
+```dart
+final fileOps = PhysicalFileOperations('/home/user/ftp_root');
+// Users see the contents of ftp_root directly
+```
 
 ### 5.4 Choosing a Backend
 
-- Use **VirtualFileOperations** if you want to expose multiple directories as top-level folders or need to restrict access to specific directories.
-- Use **PhysicalFileOperations** for direct, simple access to a single directory tree, with no virtual mapping, and if you need to allow operations at the root directory.
+- **VirtualFileOperations**: Multiple directories, restricted root, better isolation
+- **PhysicalFileOperations**: Single directory, full root access, simpler
 
 ### 5.5 Key Points
 
-- Both implementations **enforce boundaries**: you cannot access or modify files outside the allowed root(s).
-- **Neither implementation allows deleting the root directory** (`/`). Attempting to do so will throw an error.
-- **VirtualFileOperations** is stricter: it prevents any file or directory creation, deletion, or writing directly at the virtual root (`/`).
-- **PhysicalFileOperations** allows creating and writing files at its root, but not deleting it (the root is the directory you provided, not the system root).
+- Both enforce boundaries — no access outside allowed root(s)
+- Neither allows deleting the root directory
+- VirtualFileOperations prevents writes at the virtual root `/`
+- PhysicalFileOperations allows writes at root, but not deleting root itself
 
 ---
 
 ## 6. Contributing
 
-Contributions are welcome! Please fork the repository and submit a pull request with your changes. Make sure to follow the existing code style and include tests for new features.
+Contributions are welcome! Please fork the repository and submit a pull request. Follow the existing code style and include tests for new features.
 
 ---
 
 ## 7. License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+MIT License. See [LICENSE](LICENSE) for details.
