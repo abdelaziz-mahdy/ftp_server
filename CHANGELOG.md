@@ -15,7 +15,7 @@
 - Known limitations:
   - `CCC` returns 534 — Dart's `SecureSocket` cannot be unwrapped to plain TCP
   - `REIN` returns 502 under TLS — same Dart limitation
-  - Some FTP clients (e.g., FileZilla) may warn about TLS close_notify on data connections — this is a Dart `SecureSocket.close()` timing issue; data transfers complete successfully
+  - FileZilla (GnuTLS) may warn "TLS connection was non-properly terminated" on data connections — this is a client-side GnuTLS issue; the server sends close_notify correctly and data transfers complete successfully
 
 ## 2.2.0
 
