@@ -12,7 +12,10 @@
 - Mutual TLS (client certificate) support via `requireClientCert`
 - `FEAT` advertises `AUTH TLS`, `PBSZ`, `PROT` when TLS configured
 - `requireEncryptedData` option (defaults to `true` for implicit mode)
-- Known deviations: `CCC` returns 534 (Dart cannot unwrap TLS), `REIN` returns 502 under TLS
+- Known limitations:
+  - `CCC` returns 534 — Dart's `SecureSocket` cannot be unwrapped to plain TCP
+  - `REIN` returns 502 under TLS — same Dart limitation
+  - Some FTP clients (e.g., FileZilla) may warn about TLS close_notify on data connections — this is a Dart `SecureSocket.close()` timing issue; data transfers complete successfully
 
 ## 2.2.0
 

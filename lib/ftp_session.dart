@@ -682,6 +682,12 @@ class FtpSession {
     await _closeDataSocket();
   }
 
+  /// Closes the data socket and data listeners after a transfer.
+  ///
+  /// Note: Dart's `SecureSocket.close()` may not always send a TLS
+  /// close_notify alert before the TCP FIN, causing some clients
+  /// (e.g., FileZilla/GnuTLS) to warn about improper TLS termination.
+  /// Data transfers still complete successfully.
   Future<void> _closeDataSocket() async {
     if (dataSocket != null) {
       try {
