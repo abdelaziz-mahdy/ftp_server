@@ -1,5 +1,6 @@
 import 'package:ftp_server/ftp_session.dart';
 import 'package:ftp_server/server_type.dart';
+import 'package:ftp_server/tls_config.dart';
 import 'logger_handler.dart';
 
 class FTPCommandHandler {
@@ -7,7 +8,7 @@ class FTPCommandHandler {
 
   FTPCommandHandler(this.logger);
 
-  /// Commands that are allowed before authentication (RFC 959)
+  /// Commands that are allowed before authentication (RFC 959, RFC 4217)
   static const _preAuthCommands = {
     'USER',
     'PASS',
@@ -18,6 +19,10 @@ class FTPCommandHandler {
     'OPTS',
     'REIN',
     'ACCT',
+    'AUTH',
+    'PBSZ',
+    'PROT',
+    'CCC',
   };
 
   Future<void> handleCommand(String commandLine, FtpSession session) async {
@@ -44,6 +49,18 @@ class FTPCommandHandler {
         break;
       case 'QUIT':
         await handleQuit(session);
+        break;
+      case 'AUTH':
+        await handleAuth(argument, session);
+        break;
+      case 'PBSZ':
+        handlePbsz(argument, session);
+        break;
+      case 'PROT':
+        handleProt(argument, session);
+        break;
+      case 'CCC':
+        session.sendResponse('534 CCC denied by server policy');
         break;
       case 'PASV':
         if (session.epsvAllMode) {
@@ -221,6 +238,101 @@ class FTPCommandHandler {
     session.closeConnection();
   }
 
+  /// AUTH: Authenticate / negotiate TLS (RFC 4217 §4, RFC 2228).
+  Future<void> handleAuth(String argument, FtpSession session) async {
+    // Mode none: TLS not supported
+    if (session.securityMode == FtpSecurityMode.none) {
+      session.sendResponse('504 Security mechanism not understood');
+      return;
+    }
+    // Implicit mode: AUTH refused by policy (connection is already TLS)
+    if (session.securityMode == FtpSecurityMode.implicit) {
+      session.sendResponse('534 AUTH not available on implicit TLS connection');
+      return;
+    }
+    // Already upgraded: policy refusal (RFC 2228 §3: 534 for policy denial)
+    if (session.tlsActive) {
+      session.sendResponse('534 TLS already active');
+      return;
+    }
+    // Validate mechanism
+    final mechanism = argument.toUpperCase();
+    if (mechanism != 'TLS' && mechanism != 'TLS-C') {
+      session.sendResponse('504 Security mechanism not understood');
+      return;
+    }
+
+    session.sendResponse('234 Proceed with TLS negotiation');
+
+    try {
+      await session.upgradeToTls();
+      // RFC 4217 §4: reset transfer parameters after AUTH
+      session.reinitialize();
+      session.tlsActive = true;
+    } catch (e) {
+      logger.generalLog('TLS upgrade failed: $e');
+      session.closeConnection();
+    }
+  }
+
+  /// PBSZ: Protection Buffer Size (RFC 4217 §8).
+  /// For TLS, must be 0.
+  void handlePbsz(String argument, FtpSession session) {
+    if (!session.tlsActive) {
+      session.sendResponse('503 AUTH TLS required first');
+      return;
+    }
+    if (argument.isEmpty) {
+      session.sendResponse('501 Syntax error in parameters');
+      return;
+    }
+    final value = int.tryParse(argument);
+    if (value == null || value != 0) {
+      session.sendResponse('501 PBSZ must be 0 for TLS');
+      return;
+    }
+    session.pbszReceived = true;
+    session.sendResponse('200 PBSZ 0 OK');
+  }
+
+  /// PROT: Data Channel Protection Level (RFC 4217 §9).
+  void handleProt(String argument, FtpSession session) {
+    if (!session.tlsActive) {
+      session.sendResponse('503 AUTH TLS required first');
+      return;
+    }
+    if (!session.pbszReceived) {
+      session.sendResponse('503 PBSZ required before PROT');
+      return;
+    }
+    if (argument.isEmpty) {
+      session.sendResponse('501 Syntax error in parameters');
+      return;
+    }
+    final level = argument.toUpperCase();
+    switch (level) {
+      case 'P':
+        session.protectionLevel = ProtectionLevel.private_;
+        session.sendResponse('200 Data protection set to Private');
+        break;
+      case 'C':
+        if (session.requireEncryptedData) {
+          session.sendResponse('534 PROT C denied by server policy');
+        } else {
+          session.protectionLevel = ProtectionLevel.clear;
+          session.sendResponse('200 Data protection set to Clear');
+        }
+        break;
+      case 'S':
+      case 'E':
+        session.sendResponse('504 Protection level not supported');
+        break;
+      default:
+        session.sendResponse('504 Protection level not supported');
+        break;
+    }
+  }
+
   /// Strips LIST flags (e.g., -la, -a) that clients like FileZilla send.
   /// Only strips tokens that look like flags (start with '-' and contain
   /// no path separators), preserving valid paths like "-backups".
@@ -283,9 +395,15 @@ class FTPCommandHandler {
     session.sendResponse('211-Features:');
     session.sendResponse(' SIZE');
     session.sendResponse(' MDTM');
-    session.sendResponse(' MLSD');
+    // RFC 3659 §7.8: advertise MLST with supported facts (MLSD is implied)
+    session.sendResponse(' MLST type*;size*;modify*;');
     session.sendResponse(' EPSV');
     session.sendResponse(' UTF8');
+    if (session.securityMode != FtpSecurityMode.none) {
+      session.sendResponse(' AUTH TLS');
+      session.sendResponse(' PBSZ');
+      session.sendResponse(' PROT');
+    }
     session.sendResponse('211 End');
   }
 
@@ -429,7 +547,15 @@ class FTPCommandHandler {
   /// Flushes all user/account information and transfer parameters.
   /// Any transfer in progress is allowed to complete.
   /// The control connection remains open for a new USER command.
+  ///
+  /// Deliberate deviation from RFC 4217 §11: when TLS is active, REIN
+  /// returns 502 because Dart's SecureSocket cannot be downgraded to
+  /// a plain Socket.
   void handleRein(FtpSession session) {
+    if (session.tlsActive) {
+      session.sendResponse('502 REIN not available when TLS is active');
+      return;
+    }
     session.reinitialize();
     session.sendResponse('200 REIN command successful');
   }
@@ -462,7 +588,7 @@ class FTPCommandHandler {
     session.sendResponse(' LIST NLST RETR STOR CWD CDUP MKD RMD DELE');
     session.sendResponse(' PWD TYPE SIZE FEAT OPTS SYST NOOP ABOR');
     session.sendResponse(' MLSD MDTM RNFR RNTO STRU MODE ALLO STAT');
-    session.sendResponse(' SITE HELP');
+    session.sendResponse(' AUTH PBSZ PROT CCC SITE HELP');
     session.sendResponse('214 End');
   }
 }

@@ -1,6 +1,22 @@
 
 # Changelog
 
+## 2.3.0
+
+### FTPS Support (RFC 4217 / RFC 2228)
+- **Explicit FTPS**: `AUTH TLS`/`AUTH TLS-C` upgrade on standard port
+- **Implicit FTPS**: TLS from connection start via `SecureServerSocket`
+- **Data channel encryption**: `PROT P` (private) and `PROT C` (clear) with configurable enforcement
+- New commands: `AUTH`, `PBSZ`, `PROT`, `CCC`
+- `TlsConfig` class for certificate configuration (PEM files or pre-built `SecurityContext`)
+- Mutual TLS (client certificate) support via `requireClientCert`
+- `FEAT` advertises `AUTH TLS`, `PBSZ`, `PROT` when TLS configured
+- `requireEncryptedData` option (defaults to `true` for implicit mode)
+- Known limitations:
+  - `CCC` returns 534 — Dart's `SecureSocket` cannot be unwrapped to plain TCP
+  - `REIN` returns 502 under TLS — same Dart limitation
+  - FileZilla (GnuTLS) may warn "TLS connection was non-properly terminated" on data connections — this is a client-side GnuTLS issue; the server sends close_notify correctly and data transfers complete successfully
+
 ## 2.2.0
 
 This release focuses on **RFC compliance** and **stability**. The server now follows RFC 959, RFC 2389, RFC 2428, and RFC 3659 for all implemented commands.
