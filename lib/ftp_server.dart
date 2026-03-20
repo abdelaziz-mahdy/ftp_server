@@ -1,5 +1,7 @@
 library;
 
+export 'package:ftp_server/tls_config.dart';
+
 import 'dart:io';
 import 'package:ftp_server/ftp_session.dart';
 import 'package:ftp_server/server_type.dart';

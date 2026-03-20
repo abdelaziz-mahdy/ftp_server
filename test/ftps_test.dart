@@ -6,7 +6,6 @@ import 'dart:io';
 import 'package:ftp_server/file_operations/virtual_file_operations.dart';
 import 'package:ftp_server/ftp_server.dart';
 import 'package:ftp_server/server_type.dart';
-import 'package:ftp_server/tls_config.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 

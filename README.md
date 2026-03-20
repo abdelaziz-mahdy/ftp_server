@@ -15,6 +15,7 @@ A simple, extensible FTP server implementation in Dart. Supports both read-only 
    - [Supported FTP Commands](#43-supported-ftp-commands)
    - [Authentication](#44-authentication)
    - [Read-Only Mode](#45-read-only-mode)
+   - [FTPS (TLS/SSL)](#46-ftps-tlsssl)
 5. [File Sharing Backends](#5-file-sharing-backends)
    - [Quick Comparison](#51-quick-comparison)
    - [Virtual (Multiple Directories)](#52-virtual-multiple-directories)
@@ -68,6 +69,8 @@ void main() async {
   - [RFC 2389](https://www.rfc-editor.org/rfc/rfc2389) — Feature negotiation (FEAT/OPTS)
   - [RFC 2428](https://www.rfc-editor.org/rfc/rfc2428) — Extended passive mode (EPSV)
   - [RFC 3659](https://www.rfc-editor.org/rfc/rfc3659) — Extensions (MLSD, MDTM, SIZE)
+  - [RFC 4217](https://www.rfc-editor.org/rfc/rfc4217) — Securing FTP with TLS (FTPS)
+  - [RFC 2228](https://www.rfc-editor.org/rfc/rfc2228) — FTP Security Extensions
 
 ---
 
@@ -157,6 +160,10 @@ This allows your Dart application to continue running other code while the FTP s
 | `ALLO`               | Allocate storage (accepted, not required).                  |
 | `ACCT`               | Account info (accepted, not required).                      |
 | `SITE`               | Site-specific commands (not implemented).                   |
+| `AUTH <mechanism>`   | Upgrade to TLS (explicit FTPS).                             |
+| `PBSZ <size>`       | Set protection buffer size (always 0 for TLS).              |
+| `PROT <level>`      | Set data channel protection (P=private, C=clear).           |
+| `CCC`               | Clear command channel (not supported, returns 534).         |
 
 ### 4.4 Authentication
 
@@ -165,6 +172,40 @@ To enable authentication, provide the `username` and `password` parameters when 
 ### 4.5 Read-Only Mode
 
 To run the server in read-only mode, set the `serverType` parameter to `ServerType.readOnly`. In this mode, commands that modify the filesystem (e.g., `STOR`, `DELE`, `MKD`, `RMD`) will be disabled.
+
+### 4.6 FTPS (TLS/SSL)
+
+The server supports FTPS per RFC 4217. Three security modes are available:
+
+```dart
+import 'package:ftp_server/ftp_server.dart';
+
+// Explicit FTPS (client upgrades via AUTH TLS)
+final server = FtpServer(
+  21,
+  fileOperations: fileOps,
+  serverType: ServerType.readAndWrite,
+  securityMode: FtpSecurityMode.explicit,
+  tlsConfig: TlsConfig(
+    certFilePath: '/path/to/cert.pem',
+    keyFilePath: '/path/to/key.pem',
+  ),
+);
+
+// Implicit FTPS (TLS from connection start, typically port 990)
+final server = FtpServer(
+  990,
+  fileOperations: fileOps,
+  serverType: ServerType.readAndWrite,
+  securityMode: FtpSecurityMode.implicit,
+  tlsConfig: TlsConfig(
+    certFilePath: '/path/to/cert.pem',
+    keyFilePath: '/path/to/key.pem',
+  ),
+);
+```
+
+Set `requireEncryptedData: true` to enforce encrypted data channels (automatic for implicit mode).
 
 ---
 
