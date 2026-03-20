@@ -2,16 +2,20 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 import 'package:ftp_server/server_type.dart';
+import 'package:ftp_server/tls_config.dart';
 import 'package:intl/intl.dart';
 import 'ftp_command_handler.dart';
 import 'logger_handler.dart';
 import 'file_operations/file_operations.dart';
 
 class FtpSession {
-  final Socket controlSocket;
+  Socket _controlSocket;
+  Socket get controlSocket => _controlSocket;
+
   bool isAuthenticated = false;
   final FTPCommandHandler commandHandler;
   ServerSocket? dataListener;
+  SecureServerSocket? _secureDataListener;
   Socket? dataSocket;
   final String? username;
   final String? password;
@@ -27,22 +31,54 @@ class FtpSession {
   /// RFC 2428: after EPSV ALL, PORT/PASV/LPRT must be refused.
   bool epsvAllMode = false;
 
+  // --- TLS state ---
+
+  /// Whether the control connection is TLS-encrypted.
+  bool tlsActive;
+
+  /// Whether PBSZ has been received (gate for PROT).
+  bool pbszReceived;
+
+  /// Data channel protection level.
+  ProtectionLevel protectionLevel;
+
+  /// SecurityContext for upgrading sockets (control and data).
+  final SecurityContext? securityContext;
+
+  /// Whether the server requires encrypted data connections.
+  final bool requireEncryptedData;
+
+  /// The security mode for this session.
+  final FtpSecurityMode securityMode;
+
   /// Callback invoked when this session's connection is closed.
   /// Used by FtpServer to remove the session from its active list.
   void Function()? onDisconnect;
 
-  FtpSession(this.controlSocket,
-      {this.username,
-      this.password,
-      required FileOperations fileOperations,
-      required this.serverType,
-      required this.logger,
-      this.onDisconnect})
-      : fileOperations = fileOperations.copy(),
-        commandHandler = FTPCommandHandler(logger) {
+  FtpSession(
+    this._controlSocket, {
+    this.username,
+    this.password,
+    required FileOperations fileOperations,
+    required this.serverType,
+    required this.logger,
+    this.securityContext,
+    this.securityMode = FtpSecurityMode.none,
+    this.requireEncryptedData = false,
+    this.tlsActive = false,
+    this.onDisconnect,
+  })  : fileOperations = fileOperations.copy(),
+        commandHandler = FTPCommandHandler(logger),
+        pbszReceived = tlsActive,
+        protectionLevel =
+            tlsActive ? ProtectionLevel.private_ : ProtectionLevel.clear {
     sendResponse('220 Welcome to the FTP server');
     logger.generalLog('FtpSession created. Ready to process commands.');
-    controlSocket.listen(
+    _attachControlListener();
+  }
+
+  void _attachControlListener() {
+    _controlSocket.listen(
       processCommand,
       onDone: closeConnection,
       onError: (error) {
@@ -50,6 +86,17 @@ class FtpSession {
         closeConnection();
       },
     );
+  }
+
+  /// Upgrade the control connection to TLS using SecureSocket.secureServer().
+  /// Re-attaches the command listener on the new secure socket.
+  Future<void> upgradeToTls() async {
+    final secureSocket = await SecureSocket.secureServer(
+      _controlSocket,
+      securityContext!,
+    );
+    _controlSocket = secureSocket;
+    _attachControlListener();
   }
 
   final StringBuffer _commandBuffer = StringBuffer();
@@ -105,6 +152,11 @@ class FtpSession {
     pendingRenameFrom = null;
     epsvAllMode = false;
 
+    // Reset TLS negotiation state (but NOT tlsActive, securityContext,
+    // securityMode, requireEncryptedData — those are connection-level).
+    pbszReceived = false;
+    protectionLevel = ProtectionLevel.clear;
+
     // Reset working directory to root
     fileOperations.currentDirectory = fileOperations.rootDirectory;
 
@@ -117,8 +169,12 @@ class FtpSession {
       try {
         dataListener?.close();
       } catch (_) {}
+      try {
+        _secureDataListener?.close();
+      } catch (_) {}
       dataSocket = null;
       dataListener = null;
+      _secureDataListener = null;
       _gettingDataSocket = null;
     }
     // If a transfer IS in progress, data connections remain open.
@@ -128,7 +184,7 @@ class FtpSession {
   void sendResponse(String message) {
     logger.logResponse(message);
     try {
-      controlSocket.write('$message\r\n');
+      _controlSocket.write('$message\r\n');
     } catch (e) {
       logger.generalLog('Error sending response: $e');
     }
@@ -136,7 +192,7 @@ class FtpSession {
 
   void closeConnection() {
     try {
-      controlSocket.close();
+      _controlSocket.close();
     } catch (e) {
       logger.generalLog('Error closing control socket: $e');
     }
@@ -150,10 +206,27 @@ class FtpSession {
     } catch (e) {
       logger.generalLog('Error closing data listener: $e');
     }
+    try {
+      _secureDataListener?.close();
+    } catch (e) {
+      logger.generalLog('Error closing secure data listener: $e');
+    }
     dataSocket = null;
     dataListener = null;
+    _secureDataListener = null;
     logger.generalLog('Connection closed');
     onDisconnect?.call();
+  }
+
+  /// Check whether a data transfer is allowed given the current PROT setting.
+  /// Returns true if allowed, false if denied (and sends 521 response).
+  bool checkDataProtection() {
+    if (requireEncryptedData && protectionLevel != ProtectionLevel.private_) {
+      sendResponse(
+          '521 Data connection cannot be opened with current PROT setting');
+      return false;
+    }
+    return true;
   }
 
   Future<bool> openDataConnection() async {
@@ -171,12 +244,25 @@ class FtpSession {
   }
 
   Future<void> waitForClientDataSocket({Duration? timeout}) {
-    var result = dataListener!.first;
-    if (timeout != null) {
-      result = result.timeout(timeout, onTimeout: () {
-        throw TimeoutException(
-            'Timeout reached while waiting for client data socket');
-      });
+    Future<Socket> result;
+    if (_secureDataListener != null) {
+      var secureResult = _secureDataListener!.first;
+      if (timeout != null) {
+        secureResult = secureResult.timeout(timeout, onTimeout: () {
+          throw TimeoutException(
+              'Timeout reached while waiting for client data socket');
+        });
+      }
+      result = secureResult;
+    } else {
+      var plainResult = dataListener!.first;
+      if (timeout != null) {
+        plainResult = plainResult.timeout(timeout, onTimeout: () {
+          throw TimeoutException(
+              'Timeout reached while waiting for client data socket');
+        });
+      }
+      result = plainResult;
     }
     return result.then((value) {
       dataSocket = value;
@@ -191,21 +277,42 @@ class FtpSession {
       // Close any previous passive listener to avoid leaking sockets
       dataListener?.close();
       dataListener = null;
+      _secureDataListener?.close();
+      _secureDataListener = null;
       dataSocket?.close();
       dataSocket = null;
 
-      dataListener = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
-      int port = dataListener!.port;
-      int p1 = port >> 8;
-      int p2 = port & 0xFF;
-      var address = (await _getIpAddress()).replaceAll('.', ',');
-      sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
+      if (protectionLevel == ProtectionLevel.private_ &&
+          securityContext != null) {
+        _secureDataListener = await SecureServerSocket.bind(
+          InternetAddress.anyIPv4,
+          0,
+          securityContext!,
+        );
+        int port = _secureDataListener!.port;
+        int p1 = port >> 8;
+        int p2 = port & 0xFF;
+        var address = (await _getIpAddress()).replaceAll('.', ',');
+        sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
+      } else {
+        dataListener = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
+        int port = dataListener!.port;
+        int p1 = port >> 8;
+        int p2 = port & 0xFF;
+        var address = (await _getIpAddress()).replaceAll('.', ',');
+        sendResponse('227 Entering Passive Mode ($address,$p1,$p2)');
+      }
 
       _gettingDataSocket =
           waitForClientDataSocket(timeout: Duration(seconds: 30));
     } catch (e) {
-      sendResponse('425 Can\'t enter passive mode');
-      logger.generalLog('Error entering passive mode: $e');
+      if (e is TlsException || e is HandshakeException) {
+        sendResponse('522 TLS negotiation failed on data connection');
+        logger.generalLog('TLS negotiation failed on data connection: $e');
+      } else {
+        sendResponse('425 Can\'t enter passive mode');
+        logger.generalLog('Error entering passive mode: $e');
+      }
     }
   }
 
@@ -228,18 +335,33 @@ class FtpSession {
       }
       String ip = values.take(4).join('.');
       int port = values[4] * 256 + values[5];
-      dataSocket = await Socket.connect(ip, port);
+
+      if (protectionLevel == ProtectionLevel.private_ &&
+          securityContext != null) {
+        dataSocket = await SecureSocket.connect(
+          ip,
+          port,
+          context: securityContext!,
+        );
+      } else {
+        dataSocket = await Socket.connect(ip, port);
+      }
       sendResponse('200 Active mode connection established');
     } catch (e) {
-      sendResponse('425 Can\'t enter active mode');
-      logger.generalLog('Error entering active mode: $e');
+      if (e is TlsException || e is HandshakeException) {
+        sendResponse('522 TLS negotiation failed on data connection');
+        logger.generalLog('TLS negotiation failed on data connection: $e');
+      } else {
+        sendResponse('425 Can\'t enter active mode');
+        logger.generalLog('Error entering active mode: $e');
+      }
     }
   }
 
   Future<String> _getIpAddress() async {
     // Use the control socket's local address if available
     try {
-      final addr = controlSocket.address;
+      final addr = _controlSocket.address;
       if (addr.type == InternetAddressType.IPv4 &&
           !addr.isLoopback &&
           addr.address != '0.0.0.0') {
@@ -277,6 +399,8 @@ class FtpSession {
   }
 
   Future<void> listDirectory(String path) async {
+    if (!checkDataProtection()) return;
+
     if (!await openDataConnection()) {
       return;
     }
@@ -335,6 +459,8 @@ class FtpSession {
 
   /// NLST: list only filenames, one per line (RFC 959).
   Future<void> listDirectoryNames(String path) async {
+    if (!checkDataProtection()) return;
+
     if (!await openDataConnection()) {
       return;
     }
@@ -410,6 +536,8 @@ class FtpSession {
       return;
     }
 
+    if (!checkDataProtection()) return;
+
     if (!await openDataConnection()) {
       return;
     }
@@ -465,6 +593,8 @@ class FtpSession {
       sendResponse('501 Syntax error in parameters');
       return;
     }
+
+    if (!checkDataProtection()) return;
 
     if (!await openDataConnection()) {
       return;
@@ -583,6 +713,13 @@ class FtpSession {
         logger.generalLog('Error closing data listener during abort: $e');
       }
       dataListener = null;
+      try {
+        _secureDataListener?.close();
+      } catch (e) {
+        logger
+            .generalLog('Error closing secure data listener during abort: $e');
+      }
+      _secureDataListener = null;
       // RFC 959: ABOR during transfer requires 426 followed by 226
       sendResponse('426 Transfer aborted');
       sendResponse('226 ABOR command successful');
@@ -693,22 +830,42 @@ class FtpSession {
       // Close any previous passive listener to avoid leaking sockets
       dataListener?.close();
       dataListener = null;
+      _secureDataListener?.close();
+      _secureDataListener = null;
       dataSocket?.close();
       dataSocket = null;
 
-      dataListener = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
-      int port = dataListener!.port;
-      sendResponse('229 Entering Extended Passive Mode (|||$port|)');
+      if (protectionLevel == ProtectionLevel.private_ &&
+          securityContext != null) {
+        _secureDataListener = await SecureServerSocket.bind(
+          InternetAddress.anyIPv4,
+          0,
+          securityContext!,
+        );
+        int port = _secureDataListener!.port;
+        sendResponse('229 Entering Extended Passive Mode (|||$port|)');
+      } else {
+        dataListener = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
+        int port = dataListener!.port;
+        sendResponse('229 Entering Extended Passive Mode (|||$port|)');
+      }
 
       _gettingDataSocket =
           waitForClientDataSocket(timeout: Duration(seconds: 30));
     } catch (e) {
-      sendResponse('425 Can\'t enter extended passive mode');
-      logger.generalLog('Error entering extended passive mode: $e');
+      if (e is TlsException || e is HandshakeException) {
+        sendResponse('522 TLS negotiation failed on data connection');
+        logger.generalLog('TLS negotiation failed on data connection: $e');
+      } else {
+        sendResponse('425 Can\'t enter extended passive mode');
+        logger.generalLog('Error entering extended passive mode: $e');
+      }
     }
   }
 
   Future<void> handleMlsd(String argument) async {
+    if (!checkDataProtection()) return;
+
     if (!await openDataConnection()) {
       return;
     }
