@@ -77,8 +77,10 @@ class FtpSession {
     _attachControlListener();
   }
 
+  StreamSubscription? _controlSub;
+
   void _attachControlListener() {
-    _controlSocket.listen(
+    _controlSub = _controlSocket.listen(
       processCommand,
       onDone: closeConnection,
       onError: (error) {
@@ -91,6 +93,13 @@ class FtpSession {
   /// Upgrade the control connection to TLS using SecureSocket.secureServer().
   /// Re-attaches the command listener on the new secure socket.
   Future<void> upgradeToTls() async {
+    // Flush the pending 234 response before starting the TLS handshake,
+    // otherwise SecureSocket.secureServer() may consume the socket before
+    // the plain-text response reaches the client.
+    await _controlSocket.flush();
+    // Pause the existing listener so the underlying socket stays open while
+    // SecureSocket.secureServer() performs the TLS handshake.
+    _controlSub?.pause();
     final secureSocket = await SecureSocket.secureServer(
       _controlSocket,
       securityContext!,
