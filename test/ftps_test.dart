@@ -477,4 +477,329 @@ void main() {
       await c.close();
     });
   });
+
+  // ── Implicit mode integration ───────────────────────────────────────
+
+  group('Implicit mode integration', () {
+    late FtpServer server;
+    const int port = 2264;
+
+    setUpAll(() async {
+      server = FtpServer(
+        port,
+        username: 'testuser',
+        password: 'testpass',
+        fileOperations: VirtualFileOperations([tempDir.path],
+            startingDirectory: p.basename(tempDir.path)),
+        serverType: ServerType.readAndWrite,
+        securityMode: FtpSecurityMode.implicit,
+        tlsConfig: TlsConfig(certFilePath: certPath, keyFilePath: keyPath),
+        logFunction: (msg) {},
+      );
+      await server.startInBackground();
+    });
+
+    tearDownAll(() async {
+      await server.stop();
+    });
+
+    test('Connect and authenticate over TLS', () async {
+      final socket = await SecureSocket.connect(
+        '127.0.0.1',
+        port,
+        onBadCertificate: (_) => true,
+      );
+      final client = FtpTlsTestClient._(socket);
+      final welcome = await client.readResponse();
+      expect(welcome, startsWith('220'));
+
+      final userResp = await client.command('USER testuser');
+      expect(userResp, startsWith('331'));
+
+      final passResp = await client.command('PASS testpass');
+      expect(passResp, startsWith('230'));
+
+      final pwdResp = await client.command('PWD');
+      expect(pwdResp, startsWith('257'));
+
+      await client.close();
+    });
+
+    test('Data transfer over TLS', () async {
+      final socket = await SecureSocket.connect(
+        '127.0.0.1',
+        port,
+        onBadCertificate: (_) => true,
+      );
+      final client = FtpTlsTestClient._(socket);
+      await client.readResponse(); // 220
+
+      await client.login();
+
+      final pbszResp = await client.command('PBSZ 0');
+      expect(pbszResp, startsWith('200'));
+
+      final protResp = await client.command('PROT P');
+      expect(protResp, startsWith('200'));
+
+      final epsvResp = await client.command('EPSV');
+      expect(epsvResp, startsWith('229'));
+      final match = RegExp(r'\|\|\|(\d+)\|').firstMatch(epsvResp);
+      expect(match, isNotNull);
+      final dataPort = int.parse(match!.group(1)!);
+
+      // Send LIST, then connect to data port
+      client.send('LIST');
+
+      final dataSocket = await SecureSocket.connect(
+        '127.0.0.1',
+        dataPort,
+        onBadCertificate: (_) => true,
+      );
+
+      final dataBuffer = StringBuffer();
+      await for (final chunk in dataSocket) {
+        dataBuffer.write(utf8.decode(chunk));
+      }
+
+      // Data socket closes when transfer is done
+      final listData = dataBuffer.toString();
+      expect(listData, isNotEmpty);
+
+      // Read 150 and 226 from control connection
+      final r1 = await client.readResponse();
+      if (r1.startsWith('150')) {
+        final r2 = await client.readResponse();
+        expect(r2, startsWith('226'));
+      } else {
+        expect(r1, startsWith('226'));
+      }
+
+      await client.close();
+    });
+  });
+
+  // ── Explicit mode full flow ─────────────────────────────────────────
+
+  group('Explicit mode full flow', () {
+    late FtpServer server;
+    const int flowPort = 2265;
+
+    setUpAll(() async {
+      server = FtpServer(
+        flowPort,
+        username: 'testuser',
+        password: 'testpass',
+        fileOperations: VirtualFileOperations([tempDir.path],
+            startingDirectory: p.basename(tempDir.path)),
+        serverType: ServerType.readAndWrite,
+        securityMode: FtpSecurityMode.explicit,
+        tlsConfig: TlsConfig(certFilePath: certPath, keyFilePath: keyPath),
+        logFunction: (msg) {},
+      );
+      await server.startInBackground();
+    });
+
+    tearDownAll(() async {
+      await server.stop();
+    });
+
+    test('Full encrypted flow with PROT P', () async {
+      final c = await FtpTlsTestClient.connect(flowPort);
+
+      // AUTH TLS + upgrade
+      final authResp = await c.command('AUTH TLS');
+      expect(authResp, startsWith('234'));
+      await c.upgradeTls();
+
+      // Authenticate
+      final userResp = await c.command('USER testuser');
+      expect(userResp, startsWith('331'));
+      final passResp = await c.command('PASS testpass');
+      expect(passResp, startsWith('230'));
+
+      // Set up protected data channel
+      final pbszResp = await c.command('PBSZ 0');
+      expect(pbszResp, startsWith('200'));
+      final protResp = await c.command('PROT P');
+      expect(protResp, startsWith('200'));
+
+      // EPSV to get data port
+      final epsvResp = await c.command('EPSV');
+      expect(epsvResp, startsWith('229'));
+      final match = RegExp(r'\|\|\|(\d+)\|').firstMatch(epsvResp);
+      expect(match, isNotNull);
+      final dataPort = int.parse(match!.group(1)!);
+
+      // Send LIST, connect to data port with TLS
+      c.send('LIST');
+
+      final dataSocket = await SecureSocket.connect(
+        '127.0.0.1',
+        dataPort,
+        onBadCertificate: (_) => true,
+      );
+
+      final dataBuffer = StringBuffer();
+      await for (final chunk in dataSocket) {
+        dataBuffer.write(utf8.decode(chunk));
+      }
+      expect(dataBuffer.toString(), isNotEmpty);
+
+      final r1 = await c.readResponse();
+      if (r1.startsWith('150')) {
+        final r2 = await c.readResponse();
+        expect(r2, startsWith('226'));
+      } else {
+        expect(r1, startsWith('226'));
+      }
+
+      await c.close();
+    });
+
+    test('Clear data channel with PROT C', () async {
+      final c = await FtpTlsTestClient.connect(flowPort);
+
+      // AUTH TLS + upgrade
+      final authResp = await c.command('AUTH TLS');
+      expect(authResp, startsWith('234'));
+      await c.upgradeTls();
+
+      // Authenticate
+      await c.login();
+
+      // Set up clear data channel
+      final pbszResp = await c.command('PBSZ 0');
+      expect(pbszResp, startsWith('200'));
+      final protResp = await c.command('PROT C');
+      expect(protResp, startsWith('200'));
+
+      // EPSV to get data port
+      final epsvResp = await c.command('EPSV');
+      expect(epsvResp, startsWith('229'));
+      final match = RegExp(r'\|\|\|(\d+)\|').firstMatch(epsvResp);
+      expect(match, isNotNull);
+      final dataPort = int.parse(match!.group(1)!);
+
+      // Send LIST, connect to data port with plain socket
+      c.send('LIST');
+
+      final dataSocket = await Socket.connect('127.0.0.1', dataPort);
+
+      final dataBuffer = StringBuffer();
+      await for (final chunk in dataSocket) {
+        dataBuffer.write(utf8.decode(chunk));
+      }
+      expect(dataBuffer.toString(), isNotEmpty);
+
+      final r1 = await c.readResponse();
+      if (r1.startsWith('150')) {
+        final r2 = await c.readResponse();
+        expect(r2, startsWith('226'));
+      } else {
+        expect(r1, startsWith('226'));
+      }
+
+      await c.close();
+    });
+  });
+
+  // ── TLS error handling ──────────────────────────────────────────────
+
+  group('TLS error handling', () {
+    late FtpServer server;
+    const int port = 2266;
+
+    setUpAll(() async {
+      server = FtpServer(
+        port,
+        username: 'testuser',
+        password: 'testpass',
+        fileOperations: VirtualFileOperations([tempDir.path],
+            startingDirectory: p.basename(tempDir.path)),
+        serverType: ServerType.readAndWrite,
+        securityMode: FtpSecurityMode.explicit,
+        tlsConfig: TlsConfig(certFilePath: certPath, keyFilePath: keyPath),
+        logFunction: (msg) {},
+      );
+      await server.startInBackground();
+    });
+
+    tearDownAll(() async {
+      await server.stop();
+    });
+
+    test('TLS handshake failure — server survives', () async {
+      // Connect and request AUTH TLS, then close without completing handshake
+      final rawSocket = await Socket.connect('127.0.0.1', port);
+      final buf = StringBuffer();
+      rawSocket.listen((data) {
+        buf.write(utf8.decode(data));
+      });
+      // Wait for 220 welcome
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      rawSocket.write('AUTH TLS\r\n');
+      await Future.delayed(const Duration(milliseconds: 500));
+      // 234 should be in buffer — now close without TLS handshake
+      await rawSocket.close();
+      rawSocket.destroy();
+
+      // Wait briefly for server to handle the broken connection
+      await Future.delayed(const Duration(seconds: 1));
+
+      // Server should still accept new connections
+      final c = await FtpTlsTestClient.connect(port);
+      final syst = await c.command('SYST');
+      expect(syst, startsWith('215'));
+      await c.close();
+    });
+  });
+
+  // ── Concurrent sessions ─────────────────────────────────────────────
+
+  group('Concurrent sessions', () {
+    late FtpServer server;
+    const int port = 2267;
+
+    setUpAll(() async {
+      server = FtpServer(
+        port,
+        username: 'testuser',
+        password: 'testpass',
+        fileOperations: VirtualFileOperations([tempDir.path],
+            startingDirectory: p.basename(tempDir.path)),
+        serverType: ServerType.readAndWrite,
+        securityMode: FtpSecurityMode.explicit,
+        tlsConfig: TlsConfig(certFilePath: certPath, keyFilePath: keyPath),
+        logFunction: (msg) {},
+      );
+      await server.startInBackground();
+    });
+
+    tearDownAll(() async {
+      await server.stop();
+    });
+
+    test('One TLS, one plain — both work independently', () async {
+      // Client A: does AUTH TLS + upgrade
+      final clientA = await FtpTlsTestClient.connect(port);
+      final authResp = await clientA.command('AUTH TLS');
+      expect(authResp, startsWith('234'));
+      await clientA.upgradeTls();
+
+      // Client B: stays plain
+      final clientB = await FtpTlsTestClient.connect(port);
+
+      // Both send SYST independently
+      final systA = await clientA.command('SYST');
+      expect(systA, startsWith('215'));
+
+      final systB = await clientB.command('SYST');
+      expect(systB, startsWith('215'));
+
+      await clientA.close();
+      await clientB.close();
+    });
+  });
 }
