@@ -51,6 +51,9 @@ class _FtpServerHomeState extends State<FtpServerHome> {
   ReceivePort? receivePort;
   int? port;
   bool usePhysical = false;
+  FtpSecurityMode securityMode = FtpSecurityMode.none;
+  String? certPath;
+  String? keyPath;
   String get backendWarning => usePhysical
       ? 'Physical (Single Directory): You are sharing one folder as the FTP root. You can add, edit, or delete files and folders directly inside this root.'
       : 'Virtual (Multiple Directories): You are sharing several folders as top-level directories. You cannot add, edit, or delete files directly at the root, only inside the shared folders.';
@@ -121,6 +124,16 @@ class _FtpServerHomeState extends State<FtpServerHome> {
           ? PhysicalFileOperations(directoryPath)
           : VirtualFileOperations([directoryPath]);
 
+      TlsConfig? tlsConfig;
+      if (securityMode != FtpSecurityMode.none &&
+          certPath != null &&
+          keyPath != null) {
+        tlsConfig = TlsConfig(
+          certFilePath: certPath!,
+          keyFilePath: keyPath!,
+        );
+      }
+
       var server = FtpServer(
         port ?? Random().nextInt(65535),
         fileOperations: fileOps,
@@ -128,16 +141,19 @@ class _FtpServerHomeState extends State<FtpServerHome> {
         logFunction: (p0) => print(p0),
         username: null,
         password: null,
+        securityMode: securityMode,
+        tlsConfig: tlsConfig,
       );
 
       Future serverFuture = server.start();
       ftpServer = server;
       var address = await getIpAddress();
 
+      final protocol = securityMode == FtpSecurityMode.none ? 'ftp' : 'ftps';
       setState(() {
         serverStatus = 'Server is running';
         connectionInfo =
-            'Connect using FTP client:\nftp://$address:${server.port}';
+            'Connect using FTP client:\n$protocol://$address:${server.port}';
         isLoading = false;
       });
 
@@ -347,6 +363,112 @@ class _FtpServerHomeState extends State<FtpServerHome> {
                       ),
                       textAlign: TextAlign.left,
                     ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Security (FTPS)',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Tooltip(
+                      message:
+                          'None: Plain FTP.\nExplicit: Client upgrades via AUTH TLS.\nImplicit: TLS from connection start.',
+                      child: DropdownButtonFormField<FtpSecurityMode>(
+                        initialValue: securityMode,
+                        decoration: const InputDecoration(
+                          labelText: 'Security Mode',
+                          border: OutlineInputBorder(),
+                          contentPadding:
+                              EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: FtpSecurityMode.none,
+                            child: Text('None (plain FTP)'),
+                          ),
+                          DropdownMenuItem(
+                            value: FtpSecurityMode.explicit,
+                            child: Text('Explicit FTPS (AUTH TLS)'),
+                          ),
+                          DropdownMenuItem(
+                            value: FtpSecurityMode.implicit,
+                            child: Text('Implicit FTPS (TLS from start)'),
+                          ),
+                        ],
+                        onChanged: isServerRunning
+                            ? null
+                            : (val) {
+                                if (val != null) {
+                                  setState(() => securityMode = val);
+                                }
+                              },
+                      ),
+                    ),
+                    if (securityMode != FtpSecurityMode.none) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              certPath ?? 'No certificate selected',
+                              style: const TextStyle(fontSize: 13),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          TextButton.icon(
+                            icon: const Icon(Icons.file_open, size: 18),
+                            label: const Text('Cert'),
+                            onPressed: isServerRunning
+                                ? null
+                                : () async {
+                                    final result =
+                                        await FilePicker.platform.pickFiles(
+                                      type: FileType.any,
+                                    );
+                                    if (result != null) {
+                                      setState(() =>
+                                          certPath = result.files.single.path);
+                                    }
+                                  },
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              keyPath ?? 'No private key selected',
+                              style: const TextStyle(fontSize: 13),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          TextButton.icon(
+                            icon: const Icon(Icons.file_open, size: 18),
+                            label: const Text('Key'),
+                            onPressed: isServerRunning
+                                ? null
+                                : () async {
+                                    final result =
+                                        await FilePicker.platform.pickFiles(
+                                      type: FileType.any,
+                                    );
+                                    if (result != null) {
+                                      setState(() =>
+                                          keyPath = result.files.single.path);
+                                    }
+                                  },
+                          ),
+                        ],
+                      ),
+                      if (securityMode != FtpSecurityMode.none &&
+                          (certPath == null || keyPath == null))
+                        const Text(
+                          'Certificate and key files are required for FTPS.',
+                          style: TextStyle(color: Colors.red, fontSize: 12),
+                        ),
+                    ],
                     const SizedBox(height: 24),
                     isLoading
                         ? const Center(child: CircularProgressIndicator())
