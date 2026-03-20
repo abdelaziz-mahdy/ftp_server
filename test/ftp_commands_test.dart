@@ -390,7 +390,8 @@ void main() {
       final r = await c.readMultiLineResponse();
       expect(r, contains('SIZE'));
       expect(r, contains('MDTM'));
-      expect(r, contains('MLSD'));
+      // RFC 3659 §7.8: MLST advertised with fact list (MLSD is implied)
+      expect(r, contains('MLST'));
       expect(r, contains('EPSV'));
       expect(r, contains('UTF8'));
       // PASV is a base RFC 959 command, not an extension per RFC 2389

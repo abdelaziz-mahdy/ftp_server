@@ -245,14 +245,14 @@ class FTPCommandHandler {
       session.sendResponse('504 Security mechanism not understood');
       return;
     }
-    // Implicit mode: AUTH not needed (connection is already TLS)
+    // Implicit mode: AUTH refused by policy (connection is already TLS)
     if (session.securityMode == FtpSecurityMode.implicit) {
-      session.sendResponse('504 AUTH not needed on implicit TLS connection');
+      session.sendResponse('534 AUTH not available on implicit TLS connection');
       return;
     }
-    // Already upgraded
+    // Already upgraded: policy refusal (RFC 2228 §3: 534 for policy denial)
     if (session.tlsActive) {
-      session.sendResponse('503 TLS already active');
+      session.sendResponse('534 TLS already active');
       return;
     }
     // Validate mechanism
@@ -395,7 +395,8 @@ class FTPCommandHandler {
     session.sendResponse('211-Features:');
     session.sendResponse(' SIZE');
     session.sendResponse(' MDTM');
-    session.sendResponse(' MLSD');
+    // RFC 3659 §7.8: advertise MLST with supported facts (MLSD is implied)
+    session.sendResponse(' MLST type*;size*;modify*;');
     session.sendResponse(' EPSV');
     session.sendResponse(' UTF8');
     if (session.securityMode != FtpSecurityMode.none) {

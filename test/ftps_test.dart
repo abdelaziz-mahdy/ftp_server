@@ -257,7 +257,8 @@ void main() {
         await c.readResponse(); // 234
         await c.upgradeTls();
         final r = await c.command('AUTH TLS');
-        expect(r, startsWith('503'));
+        // RFC 2228 §3: 534 for policy denial (not 503 sequencing error)
+        expect(r, startsWith('534'));
         await c.close();
       });
 
@@ -521,6 +522,20 @@ void main() {
       final pwdResp = await client.command('PWD');
       expect(pwdResp, startsWith('257'));
 
+      await client.close();
+    });
+
+    test('AUTH TLS refused on implicit connection (534)', () async {
+      final socket = await SecureSocket.connect(
+        '127.0.0.1',
+        port,
+        onBadCertificate: (_) => true,
+      );
+      final client = FtpTlsTestClient._(socket);
+      await client.readResponse(); // 220
+      // RFC 2228 §3: 534 policy denial — AUTH not needed on implicit TLS
+      final r = await client.command('AUTH TLS');
+      expect(r, startsWith('534'));
       await client.close();
     });
 
