@@ -65,6 +65,53 @@ class _FtpServerHomeState extends State<FtpServerHome> {
       _requestPermission();
     }
     _loadDirectory();
+    _ensureDefaultCerts();
+  }
+
+  /// Generate a default self-signed certificate for the example app.
+  /// Uses openssl if available, otherwise FTPS will require manual cert selection.
+  Future<void> _ensureDefaultCerts() async {
+    final dir =
+        Directory('${Directory.systemTemp.path}/ftp_server_example_certs');
+    final certFile = File('${dir.path}/cert.pem');
+    final keyFile = File('${dir.path}/key.pem');
+
+    if (certFile.existsSync() && keyFile.existsSync()) {
+      setState(() {
+        certPath = certFile.path;
+        keyPath = keyFile.path;
+      });
+      return;
+    }
+
+    try {
+      if (!dir.existsSync()) dir.createSync(recursive: true);
+      final result = await Process.run('openssl', [
+        'req',
+        '-x509',
+        '-newkey',
+        'rsa:2048',
+        '-keyout',
+        keyFile.path,
+        '-out',
+        certFile.path,
+        '-days',
+        '365',
+        '-nodes',
+        '-subj',
+        '/CN=localhost',
+      ]);
+      if (result.exitCode == 0 && certFile.existsSync()) {
+        setState(() {
+          certPath = certFile.path;
+          keyPath = keyFile.path;
+        });
+        print('Generated default development certificate at ${dir.path}');
+      }
+    } catch (e) {
+      print(
+          'openssl not available — select certificate files manually for FTPS');
+    }
   }
 
   Future<void> _requestPermission() async {
@@ -463,9 +510,17 @@ class _FtpServerHomeState extends State<FtpServerHome> {
                         ],
                       ),
                       if (securityMode != FtpSecurityMode.none &&
+                          certPath != null &&
+                          keyPath != null)
+                        const Text(
+                          'Using development certificate (auto-generated).\nProvide your own for production use.',
+                          style:
+                              TextStyle(color: Colors.blueGrey, fontSize: 12),
+                        ),
+                      if (securityMode != FtpSecurityMode.none &&
                           (certPath == null || keyPath == null))
                         const Text(
-                          'Certificate and key files are required for FTPS.',
+                          'Certificate and key files are required for FTPS.\nopenssl not found — select files manually.',
                           style: TextStyle(color: Colors.red, fontSize: 12),
                         ),
                     ],
