@@ -368,42 +368,47 @@ class FtpSession {
   }
 
   Future<String> _getIpAddress() async {
-    // Use the control socket's local address if available
+    // Step 1: Try control socket first
     try {
       final addr = _controlSocket.address;
       if (addr.type == InternetAddressType.IPv4 &&
           !addr.isLoopback &&
-          addr.address != '0.0.0.0') {
+          addr.address != '0.0.0.0' &&
+          !addr.address.startsWith('10.')) {
         return addr.address;
       }
     } catch (_) {}
 
-    // Fallback: scan network interfaces for a private IPv4 address
+    // Step 2: Scan network interfaces
     try {
-      final networkInterfaces = await NetworkInterface.list();
-      final ipList = networkInterfaces
-          .map((interface) => interface.addresses)
-          .expand((ip) => ip)
-          .where((ip) =>
-              ip.type == InternetAddressType.IPv4 &&
-              !ip.isLoopback &&
-              !ip.isLinkLocal)
-          .toList();
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+      );
 
-      if (ipList.isNotEmpty) {
-        // Prefer private network addresses
-        final privateIp = ipList.firstWhere(
-          (address) =>
-              address.address.startsWith('192.') ||
-              address.address.startsWith('10.') ||
-              address.address.startsWith('172.'),
-          orElse: () => ipList.first,
-        );
-        return privateIp.address;
+      final candidates = <({String ip, String ifaceName})>[];
+      for (final iface in interfaces) {
+        for (final addr in iface.addresses) {
+          if (!addr.isLoopback && !addr.isLinkLocal) {
+            candidates.add((ip: addr.address, ifaceName: iface.name));
+          }
+        }
       }
+
+      if (candidates.isEmpty) return '0.0.0.0';
+
+      return candidates.where((c) => c.ifaceName == 'wlan0').firstOrNull?.ip ??
+          candidates.where((c) => c.ifaceName == 'en0').firstOrNull?.ip ??
+          candidates
+              .where((c) => c.ip.startsWith('192.168.'))
+              .firstOrNull
+              ?.ip ??
+          candidates.where((c) => c.ip.startsWith('172.')).firstOrNull?.ip ??
+          candidates.where((c) => c.ip.startsWith('10.')).firstOrNull?.ip ??
+          candidates.first.ip;
     } catch (e) {
       logger.generalLog('Error getting IP address: $e');
     }
+
     return '0.0.0.0';
   }
 
