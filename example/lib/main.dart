@@ -137,7 +137,7 @@ class _FtpServerHomeState extends State<FtpServerHome> {
   }
 
   Future<String?> pickDirectory() async {
-    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+    String? selectedDirectory = await FilePicker.getDirectoryPath();
     if (selectedDirectory != null) {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString('serverDirectory', selectedDirectory);
@@ -518,8 +518,7 @@ class _FtpServerHomeState extends State<FtpServerHome> {
                             onPressed: isServerRunning
                                 ? null
                                 : () async {
-                                    final result =
-                                        await FilePicker.platform.pickFiles(
+                                    final result = await FilePicker.pickFiles(
                                       type: FileType.any,
                                     );
                                     if (result != null) {
@@ -545,8 +544,7 @@ class _FtpServerHomeState extends State<FtpServerHome> {
                             onPressed: isServerRunning
                                 ? null
                                 : () async {
-                                    final result =
-                                        await FilePicker.platform.pickFiles(
+                                    final result = await FilePicker.pickFiles(
                                       type: FileType.any,
                                     );
                                     if (result != null) {

@@ -1,0 +1,196 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    name: Build example — Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install example dependencies
+        run: flutter pub get
+        working-directory: example
+
+      - name: Build release APK
+        run: flutter build apk --release
+        working-directory: example
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: example-android
+          path: example/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+  build-macos:
+    name: Build example — macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install example dependencies
+        run: flutter pub get
+        working-directory: example
+
+      - name: Build release .app
+        run: flutter build macos --release
+        working-directory: example
+
+      - name: Zip macOS .app bundle
+        working-directory: example/build/macos/Build/Products/Release
+        run: zip -r ftp_server_example-macos.zip example.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: example-macos
+          path: example/build/macos/Build/Products/Release/ftp_server_example-macos.zip
+          if-no-files-found: error
+
+  build-windows:
+    name: Build example — Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install example dependencies
+        run: flutter pub get
+        working-directory: example
+
+      - name: Build release
+        run: flutter build windows --release
+        working-directory: example
+
+      - name: Zip Windows Release directory
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path "example\build\windows\x64\runner\Release\*" `
+            -DestinationPath "ftp_server_example-windows.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: example-windows
+          path: ftp_server_example-windows.zip
+          if-no-files-found: error
+
+  build-linux:
+    name: Build example — Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libgtk-3-dev \
+            liblzma-dev \
+            libstdc++-12-dev
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install example dependencies
+        run: flutter pub get
+        working-directory: example
+
+      - name: Build release
+        run: flutter build linux --release
+        working-directory: example
+
+      - name: Tar Linux bundle
+        working-directory: example/build/linux/x64/release
+        run: tar -czf ftp_server_example-linux.tar.gz bundle/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: example-linux
+          path: example/build/linux/x64/release/ftp_server_example-linux.tar.gz
+          if-no-files-found: error
+
+  create-release:
+    name: Create GitHub Release
+    needs:
+      - build-android
+      - build-macos
+      - build-windows
+      - build-linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Extract CHANGELOG section for this version
+        run: |
+          set -euo pipefail
+
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+
+          awk -v ver="$VERSION" '
+            $0 == "## " ver { printing = 1; next }
+            printing && /^## / { exit }
+            printing { print }
+          ' CHANGELOG.md > release-body.md
+
+          if [ ! -s release-body.md ]; then
+            echo "::error::No CHANGELOG.md section found for version ${VERSION} — expected header '## ${VERSION}'"
+            echo "::error::Add a '## ${VERSION}' entry to CHANGELOG.md before tagging."
+            exit 1
+          fi
+
+          echo "Extracted $(wc -l < release-body.md) lines from CHANGELOG.md for ${VERSION}:"
+          echo "---"
+          cat release-body.md
+          echo "---"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-body.md
+          append_body: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/example-android/app-release.apk
+            artifacts/example-macos/ftp_server_example-macos.zip
+            artifacts/example-windows/ftp_server_example-windows.zip
+            artifacts/example-linux/ftp_server_example-linux.tar.gz
