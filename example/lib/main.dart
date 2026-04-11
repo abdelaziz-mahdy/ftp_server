@@ -518,8 +518,7 @@ class _FtpServerHomeState extends State<FtpServerHome> {
                             onPressed: isServerRunning
                                 ? null
                                 : () async {
-                                    final result =
-                                        await FilePicker.pickFiles(
+                                    final result = await FilePicker.pickFiles(
                                       type: FileType.any,
                                     );
                                     if (result != null) {
@@ -545,8 +544,7 @@ class _FtpServerHomeState extends State<FtpServerHome> {
                             onPressed: isServerRunning
                                 ? null
                                 : () async {
-                                    final result =
-                                        await FilePicker.pickFiles(
+                                    final result = await FilePicker.pickFiles(
                                       type: FileType.any,
                                     );
                                     if (result != null) {
