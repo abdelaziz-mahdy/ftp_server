@@ -1,0 +1,137 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    name: Build example — Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install example dependencies
+        run: flutter pub get
+        working-directory: example
+
+      - name: Build release APK
+        run: flutter build apk --release
+        working-directory: example
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: example-android
+          path: example/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+  build-macos:
+    name: Build example — macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install example dependencies
+        run: flutter pub get
+        working-directory: example
+
+      - name: Build release .app
+        run: flutter build macos --release
+        working-directory: example
+
+      - name: Zip macOS .app bundle
+        working-directory: example/build/macos/Build/Products/Release
+        run: zip -r ftp_server_example-macos.zip example.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: example-macos
+          path: example/build/macos/Build/Products/Release/ftp_server_example-macos.zip
+          if-no-files-found: error
+
+  build-windows:
+    name: Build example — Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install example dependencies
+        run: flutter pub get
+        working-directory: example
+
+      - name: Build release
+        run: flutter build windows --release
+        working-directory: example
+
+      - name: Zip Windows Release directory
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path "example\build\windows\x64\runner\Release\*" `
+            -DestinationPath "ftp_server_example-windows.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: example-windows
+          path: ftp_server_example-windows.zip
+          if-no-files-found: error
+
+  build-linux:
+    name: Build example — Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libgtk-3-dev \
+            liblzma-dev \
+            libstdc++-12-dev
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install example dependencies
+        run: flutter pub get
+        working-directory: example
+
+      - name: Build release
+        run: flutter build linux --release
+        working-directory: example
+
+      - name: Tar Linux bundle
+        working-directory: example/build/linux/x64/release
+        run: tar -czf ftp_server_example-linux.tar.gz bundle/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: example-linux
+          path: example/build/linux/x64/release/ftp_server_example-linux.tar.gz
+          if-no-files-found: error
