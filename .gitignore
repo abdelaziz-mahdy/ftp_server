@@ -27,3 +27,6 @@ migrate_working_dir/
 **/doc/api/
 .dart_tool/
 build/
+
+# Claude Code / superpowers working docs — local only, never committed
+docs/superpowers/
