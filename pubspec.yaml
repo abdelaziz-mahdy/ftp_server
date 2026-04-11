@@ -1,6 +1,6 @@
 name: ftp_server
 description: "Standards-compliant FTP/FTPS server in Dart. Supports plain FTP and encrypted FTPS (explicit/implicit TLS), read-only and read-write modes, with pluggable file system backends."
-version: 2.3.1
+version: 2.3.2
 homepage: https://github.com/abdelaziz-mahdy/ftp_server
 
 environment:

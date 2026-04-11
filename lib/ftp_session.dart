@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'ftp_command_handler.dart';
 import 'logger_handler.dart';
 import 'file_operations/file_operations.dart';
+import 'src/pasv_ip_selector.dart';
 
 class FtpSession {
   Socket _controlSocket;
@@ -368,43 +369,39 @@ class FtpSession {
   }
 
   Future<String> _getIpAddress() async {
-    // Use the control socket's local address if available
+    // Step 1: capture the control socket's local address, if it is IPv4 and
+    // not loopback. The actual "is this address usable?" decision (rejecting
+    // 0.0.0.0 / 10.x) lives inside [selectPasvIp] so it can be unit tested.
+    String? controlSocketAddress;
     try {
       final addr = _controlSocket.address;
-      if (addr.type == InternetAddressType.IPv4 &&
-          !addr.isLoopback &&
-          addr.address != '0.0.0.0') {
-        return addr.address;
+      if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+        controlSocketAddress = addr.address;
       }
     } catch (_) {}
 
-    // Fallback: scan network interfaces for a private IPv4 address
+    // Step 2: enumerate non-loopback, non-link-local IPv4 candidates from
+    // every interface on the host.
+    final candidates = <PasvIpCandidate>[];
     try {
-      final networkInterfaces = await NetworkInterface.list();
-      final ipList = networkInterfaces
-          .map((interface) => interface.addresses)
-          .expand((ip) => ip)
-          .where((ip) =>
-              ip.type == InternetAddressType.IPv4 &&
-              !ip.isLoopback &&
-              !ip.isLinkLocal)
-          .toList();
-
-      if (ipList.isNotEmpty) {
-        // Prefer private network addresses
-        final privateIp = ipList.firstWhere(
-          (address) =>
-              address.address.startsWith('192.') ||
-              address.address.startsWith('10.') ||
-              address.address.startsWith('172.'),
-          orElse: () => ipList.first,
-        );
-        return privateIp.address;
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+      );
+      for (final iface in interfaces) {
+        for (final addr in iface.addresses) {
+          if (!addr.isLoopback && !addr.isLinkLocal) {
+            candidates.add((ip: addr.address, ifaceName: iface.name));
+          }
+        }
       }
     } catch (e) {
       logger.generalLog('Error getting IP address: $e');
     }
-    return '0.0.0.0';
+
+    return selectPasvIp(
+      controlSocketAddress: controlSocketAddress,
+      candidates: candidates,
+    );
   }
 
   Future<void> listDirectory(String path) async {
