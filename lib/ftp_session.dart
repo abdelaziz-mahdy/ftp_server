@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'ftp_command_handler.dart';
 import 'logger_handler.dart';
 import 'file_operations/file_operations.dart';
+import 'src/pasv_ip_selector.dart';
 
 class FtpSession {
   Socket _controlSocket;
@@ -368,24 +369,24 @@ class FtpSession {
   }
 
   Future<String> _getIpAddress() async {
-    // Step 1: Try control socket first
+    // Step 1: capture the control socket's local address, if it is IPv4 and
+    // not loopback. The actual "is this address usable?" decision (rejecting
+    // 0.0.0.0 / 10.x) lives inside [selectPasvIp] so it can be unit tested.
+    String? controlSocketAddress;
     try {
       final addr = _controlSocket.address;
-      if (addr.type == InternetAddressType.IPv4 &&
-          !addr.isLoopback &&
-          addr.address != '0.0.0.0' &&
-          !addr.address.startsWith('10.')) {
-        return addr.address;
+      if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+        controlSocketAddress = addr.address;
       }
     } catch (_) {}
 
-    // Step 2: Scan network interfaces
+    // Step 2: enumerate non-loopback, non-link-local IPv4 candidates from
+    // every interface on the host.
+    final candidates = <PasvIpCandidate>[];
     try {
       final interfaces = await NetworkInterface.list(
         type: InternetAddressType.IPv4,
       );
-
-      final candidates = <({String ip, String ifaceName})>[];
       for (final iface in interfaces) {
         for (final addr in iface.addresses) {
           if (!addr.isLoopback && !addr.isLinkLocal) {
@@ -393,23 +394,14 @@ class FtpSession {
           }
         }
       }
-
-      if (candidates.isEmpty) return '0.0.0.0';
-
-      return candidates.where((c) => c.ifaceName == 'wlan0').firstOrNull?.ip ??
-          candidates.where((c) => c.ifaceName == 'en0').firstOrNull?.ip ??
-          candidates
-              .where((c) => c.ip.startsWith('192.168.'))
-              .firstOrNull
-              ?.ip ??
-          candidates.where((c) => c.ip.startsWith('172.')).firstOrNull?.ip ??
-          candidates.where((c) => c.ip.startsWith('10.')).firstOrNull?.ip ??
-          candidates.first.ip;
     } catch (e) {
       logger.generalLog('Error getting IP address: $e');
     }
 
-    return '0.0.0.0';
+    return selectPasvIp(
+      controlSocketAddress: controlSocketAddress,
+      candidates: candidates,
+    );
   }
 
   Future<void> listDirectory(String path) async {

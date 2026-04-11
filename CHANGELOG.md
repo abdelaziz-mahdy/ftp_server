@@ -1,6 +1,10 @@
 
 # Changelog
 
+## 2.3.2
+
+- Fixed `PASV`/`EPSV` advertising the wrong local IP on Android and other multi-interface hosts, where the carrier-internal `10.x` address could be returned instead of the WiFi address. Interface scan now prefers `wlan0` → `en0` → `192.168.*` → `172.*` → `10.*`. Thanks to [@usman-flutter-dev](https://github.com/usman-flutter-dev) (#29).
+
 ## 2.3.1
 
 - Updated README with comprehensive documentation for all features
