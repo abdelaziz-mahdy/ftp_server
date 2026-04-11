@@ -135,3 +135,56 @@ jobs:
           name: example-linux
           path: example/build/linux/x64/release/ftp_server_example-linux.tar.gz
           if-no-files-found: error
+
+  create-release:
+    name: Create GitHub Release
+    needs:
+      - build-android
+      - build-macos
+      - build-windows
+      - build-linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Extract CHANGELOG section for this version
+        run: |
+          set -euo pipefail
+
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+
+          awk -v ver="$VERSION" '
+            $0 == "## " ver { printing = 1; next }
+            printing && /^## / { exit }
+            printing { print }
+          ' CHANGELOG.md > release-body.md
+
+          if [ ! -s release-body.md ]; then
+            echo "::error::No CHANGELOG.md section found for version ${VERSION} — expected header '## ${VERSION}'"
+            echo "::error::Add a '## ${VERSION}' entry to CHANGELOG.md before tagging."
+            exit 1
+          fi
+
+          echo "Extracted $(wc -l < release-body.md) lines from CHANGELOG.md for ${VERSION}:"
+          echo "---"
+          cat release-body.md
+          echo "---"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-body.md
+          append_body: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/example-android/app-release.apk
+            artifacts/example-macos/ftp_server_example-macos.zip
+            artifacts/example-windows/ftp_server_example-windows.zip
+            artifacts/example-linux/ftp_server_example-linux.tar.gz
