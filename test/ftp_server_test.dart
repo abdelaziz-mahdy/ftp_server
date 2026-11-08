@@ -87,14 +87,24 @@ void main() {
     await ftpClient.stdin.flush();
   }
 
-  Future<String> readAllOutput(String logFilePath) async {
-    await Future.delayed(
-        const Duration(milliseconds: 500)); // Wait for log to be written
+  late Process ftpClient;
+
+  /// Returns everything the ftp client wrote to [logFilePath].
+  ///
+  /// Every caller sends `quit` first, so wait for the client process to exit
+  /// (all of its output has then been produced) instead of guessing with a
+  /// fixed delay, which was too short on loaded CI runners. Falls back after
+  /// 10 seconds if the client doesn't exit.
+  Future<String> readAllOutput(String logFilePath, {Process? client}) async {
+    await (client ?? ftpClient)
+        .exitCode
+        .timeout(const Duration(seconds: 10), onTimeout: () => -1);
+    // Let the stdout/stderr listeners append the last chunks to the log.
+    await Future.delayed(const Duration(milliseconds: 200));
     return File(logFilePath).readAsStringSync();
   }
 
   late FtpServer server;
-  late Process ftpClient;
   final String logFilePath = '${sharedDirectories.first}/ftpsession.log';
 
   group('FTP Server Read and Write Mode', () {
@@ -1233,7 +1243,8 @@ void main() {
             await ftpClients[i].stdin.flush();
 
             // Check the output for client `i`
-            var output = await readAllOutput(logFilePaths[i]);
+            var output =
+                await readAllOutput(logFilePaths[i], client: ftpClients[i]);
 
             // Use outputHandler for expected outputs
             expect(
