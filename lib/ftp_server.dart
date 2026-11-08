@@ -1,6 +1,7 @@
 library;
 
 export 'package:ftp_server/tls_config.dart';
+export 'package:ftp_server/self_signed_certificate.dart';
 
 import 'dart:io';
 import 'package:ftp_server/ftp_session.dart';
