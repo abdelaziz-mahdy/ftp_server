@@ -272,9 +272,14 @@ void main() {
       const testPath = 'test_file_ret.txt';
       File('${sharedDirectories.first}/$testPath')
           .writeAsStringSync('Hello, FTP!');
+      // Download into the client temp dir: on Ubuntu 26.04 the tnftp AppArmor
+      // profile makes $HOME (and so the CI checkout) read-only for the client.
+      final localTarget = Platform.isWindows
+          ? 'test_file_ret.txt'
+          : '${clientTempDir.path}/test_file_ret.txt';
       ftpClient.stdin.writeln('pwd');
       ftpClient.stdin.writeln('ls');
-      ftpClient.stdin.writeln('get test_file_ret.txt test_file_ret.txt');
+      ftpClient.stdin.writeln('get test_file_ret.txt $localTarget');
       ftpClient.stdin.writeln('ls');
       ftpClient.stdin.writeln('quit');
       await ftpClient.stdin.flush();
@@ -293,8 +298,8 @@ void main() {
             contains(outputHandler.getExpectedTransferCompleteOutput()));
       }
       expect(File('${sharedDirectories.first}/$testPath').existsSync(), isTrue);
-      if (File('./test_file_ret.txt').existsSync()) {
-        File('./test_file_ret.txt').deleteSync();
+      if (File(localTarget).existsSync()) {
+        File(localTarget).deleteSync();
       }
     });
 
@@ -714,8 +719,13 @@ void main() {
       await ftpClient.stdin.flush();
       await Future.delayed(const Duration(seconds: 2));
 
-      // Download the file
-      ftpClient.stdin.writeln('get $filename downloaded_$filename');
+      // Download the file into the client temp dir: on Ubuntu 26.04 the tnftp
+      // AppArmor profile makes $HOME (and so the CI checkout) read-only for
+      // the client. Windows keeps its own relative path (see below).
+      final downloadPath = Platform.isWindows
+          ? 'downloaded_$filename'
+          : '${clientTempDir.path}/downloaded_$filename';
+      ftpClient.stdin.writeln('get $filename $downloadPath');
       await ftpClient.stdin.flush();
       await Future.delayed(const Duration(seconds: 2));
 
@@ -777,7 +787,7 @@ void main() {
           contains(outputHandler.getExpectedDeleteDirectoryOutput(dirName)));
 
       // Verify that the downloaded file exists and has the correct content
-      final downloadedFile = File('downloaded_$filename');
+      final downloadedFile = File(downloadPath);
       expect(downloadedFile.existsSync(), isTrue);
       expect(
           downloadedFile.readAsStringSync(), contains('Sequence Test Content'));
