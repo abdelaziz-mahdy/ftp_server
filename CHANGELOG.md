@@ -1,6 +1,14 @@
 
 # Changelog
 
+## 2.3.3
+
+- Fixed encrypted (`PROT P`) data transfers hanging with FTPS clients that wait for the `150` reply before starting TLS on the data connection, such as Python's `ftplib`. TLS on the data connection is now negotiated after the `150` reply, as RFC 4217 specifies.
+- Fixed active mode (`PORT`) with `PROT P`: the server now acts as the TLS server on the data connection it opens, so encrypted active-mode transfers work.
+- The data protection level is now checked when the transfer command arrives, not at `PASV`/`PORT`.
+- A failed TLS handshake on the data connection now gets a `522` reply and the session keeps working.
+- Corrected the known limitation listed for 2.3.0: the server does not send a TLS `close_notify` when it closes a data connection, because Dart's `SecureSocket` never sends one ([dart-lang/sdk#64816](https://github.com/dart-lang/sdk/issues/64816)). FileZilla fails directory listings because of this; it is not a client-side issue. A fix for the Dart SDK is in review.
+
 ## 2.3.2
 
 - Fixed `PASV`/`EPSV` advertising the wrong local IP on Android and other multi-interface hosts, where the carrier-internal `10.x` address could be returned instead of the WiFi address. Interface scan now prefers `wlan0` → `en0` → `192.168.*` → `172.*` → `10.*`. Thanks to [@usman-flutter-dev](https://github.com/usman-flutter-dev) (#29).
