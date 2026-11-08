@@ -48,6 +48,10 @@ class FtpSession {
   /// Whether the server requires encrypted data connections.
   final bool requireEncryptedData;
 
+  /// Whether the client must present a trusted certificate on every TLS
+  /// handshake (control upgrade and data connections).
+  final bool requireClientCert;
+
   /// The security mode for this session.
   final FtpSecurityMode securityMode;
 
@@ -65,6 +69,7 @@ class FtpSession {
     this.securityContext,
     this.securityMode = FtpSecurityMode.none,
     this.requireEncryptedData = false,
+    this.requireClientCert = false,
     this.tlsActive = false,
     this.onDisconnect,
   })  : fileOperations = fileOperations.copy(),
@@ -103,6 +108,8 @@ class FtpSession {
     final secureSocket = await SecureSocket.secureServer(
       _controlSocket,
       securityContext!,
+      requestClientCertificate: requireClientCert,
+      requireClientCertificate: requireClientCert,
     );
     _controlSocket = secureSocket;
     _attachControlListener();
@@ -252,6 +259,8 @@ class FtpSession {
         dataSocket = await SecureSocket.secureServer(
           rawSocket,
           securityContext!,
+          requestClientCertificate: requireClientCert,
+          requireClientCertificate: requireClientCert,
         ).timeout(const Duration(seconds: 30));
       } catch (e) {
         logger.generalLog('TLS negotiation failed on data connection: $e');
