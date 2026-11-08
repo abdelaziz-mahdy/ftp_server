@@ -42,45 +42,71 @@ class _Lines {
   }
 }
 
+/// Runs a client connection attempt and returns its result, or null if it
+/// fails with a socket/TLS error. After a refused handshake, dart:io can
+/// report the server's connection reset later, outside any listener; this
+/// zone absorbs those expected errors so they don't fail the test. Any other
+/// error still fails it.
+Future<String?> _attempt(Future<String?> Function() body) {
+  final result = Completer<String?>();
+  runZonedGuarded(() async {
+    final value = await body();
+    if (!result.isCompleted) result.complete(value);
+  }, (error, stack) {
+    final expected = error is SocketException ||
+        error is TlsException ||
+        error is TimeoutException;
+    if (!expected) {
+      if (!result.isCompleted) result.completeError(error, stack);
+      return;
+    }
+    if (!result.isCompleted) result.complete(null);
+  });
+  return result.future;
+}
+
 /// Connects to an implicit FTPS server and returns the greeting, or null if
 /// the TLS handshake (or the connection right after it) is refused.
-Future<String?> _implicitGreeting(int port, SecurityContext ctx) async {
-  try {
-    final socket = await SecureSocket.connect('127.0.0.1', port,
-        context: ctx, onBadCertificate: (_) => true);
-    addTearDown(socket.destroy);
-    return await _Lines(socket).next();
-  } catch (_) {
-    return null;
-  }
-}
+Future<String?> _implicitGreeting(int port, SecurityContext ctx) =>
+    _attempt(() async {
+      final socket = await SecureSocket.connect('127.0.0.1', port,
+          context: ctx, onBadCertificate: (_) => true);
+      addTearDown(socket.destroy);
+      return _Lines(socket).next();
+    });
 
 /// Upgrades a plain connection with AUTH TLS and returns the NOOP reply,
 /// or null if the server refuses the TLS handshake.
-Future<String?> _explicitNoop(int port, SecurityContext ctx) async {
+Future<String?> _explicitNoop(int port, SecurityContext ctx) =>
+    _attempt(() => _explicitNoopInner(port, ctx));
+
+Future<String?> _explicitNoopInner(int port, SecurityContext ctx) async {
   final plain = await Socket.connect('127.0.0.1', port);
   addTearDown(plain.destroy);
+  // When the server refuses the handshake it may reset the TCP connection.
+  // That reset can surface on the plain socket's subscription or its done
+  // future; both are expected here, so don't let them escape as unhandled.
+  plain.done.then((_) {}, onError: (_) {});
   final buffer = StringBuffer();
   final got234 = Completer<void>();
-  final sub = plain.listen((data) {
-    buffer.write(utf8.decode(data));
-    if (buffer.toString().contains('234 ') && !got234.isCompleted) {
-      got234.complete();
-    }
-  });
+  final sub = plain.listen(
+    (data) {
+      buffer.write(utf8.decode(data));
+      if (buffer.toString().contains('234 ') && !got234.isCompleted) {
+        got234.complete();
+      }
+    },
+    onError: (_) {},
+  );
   plain.write('AUTH TLS\r\n');
   await got234.future.timeout(const Duration(seconds: 5));
   sub.pause();
-  try {
-    final secure = await SecureSocket.secure(plain,
-        context: ctx, onBadCertificate: (_) => true);
-    addTearDown(secure.destroy);
-    final lines = _Lines(secure);
-    secure.write('NOOP\r\n');
-    return await lines.next();
-  } catch (_) {
-    return null;
-  }
+  final secure = await SecureSocket.secure(plain,
+      context: ctx, onBadCertificate: (_) => true);
+  addTearDown(secure.destroy);
+  final lines = _Lines(secure);
+  secure.write('NOOP\r\n');
+  return lines.next();
 }
 
 void main() {
