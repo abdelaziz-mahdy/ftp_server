@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 /// The security mode for the FTP server.
@@ -111,6 +112,21 @@ class TlsConfig {
         'requireClientCert requires trustedCertificatesPath or a pre-built securityContext',
       );
     }
+  }
+
+  /// Creates a TLS configuration from PEM-encoded strings instead of files.
+  ///
+  /// [certificatePem] is the certificate chain and [privateKeyPem] the
+  /// matching private key, for example from
+  /// `SelfSignedCertificate.generate()` or from your own storage.
+  factory TlsConfig.fromPem({
+    required String certificatePem,
+    required String privateKeyPem,
+  }) {
+    final ctx = SecurityContext()
+      ..useCertificateChainBytes(utf8.encode(certificatePem))
+      ..usePrivateKeyBytes(utf8.encode(privateKeyPem));
+    return TlsConfig(securityContext: ctx);
   }
 
   /// Builds and returns a [SecurityContext] from this configuration.

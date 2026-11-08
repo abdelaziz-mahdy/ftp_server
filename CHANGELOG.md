@@ -1,6 +1,14 @@
 
 # Changelog
 
+## 2.4.0
+
+- Added `SelfSignedCertificate` for FTPS without any setup: `SelfSignedCertificate.generate()` creates a certificate in Dart (no `openssl` or certificate files, works on Android and iOS). Store its `certificatePem` and `privateKeyPem` and pass them back on the next start so clients that trusted it once don't warn again. `sha256Fingerprint` gives the value FTP clients show when they ask the user to trust the certificate (#32).
+- Added `TlsConfig.fromPem(certificatePem:, privateKeyPem:)` to configure TLS from PEM strings instead of files.
+- Fixed `TlsConfig(requireClientCert: true)` having no effect: the server never asked clients for a certificate. Mutual TLS is now enforced on the implicit FTPS port, on `AUTH TLS`, and on encrypted data connections; clients without a certificate trusted by `trustedCertificatesPath` (or your `SecurityContext`) are refused.
+- Fixed the implicit FTPS server stopping (`start()`) or throwing an unhandled exception (`startInBackground()`) when a client failed the TLS handshake, for example by sending plain text to the implicit port. Such connections are now logged and rejected, and the server keeps serving.
+- Known limitation: besides FileZilla, curl built with OpenSSL 3 also fails FTPS directory listings ("unexpected eof while reading"), because Dart's `SecureSocket` sends no TLS `close_notify` ([dart-lang/sdk#64816](https://github.com/dart-lang/sdk/issues/64816)). Downloads and uploads are not affected.
+
 ## 2.3.3
 
 - Fixed encrypted (`PROT P`) data transfers hanging with FTPS clients that wait for the `150` reply before starting TLS on the data connection, such as Python's `ftplib`. TLS on the data connection is now negotiated after the `150` reply, as RFC 4217 specifies.

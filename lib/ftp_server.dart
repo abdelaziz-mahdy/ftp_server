@@ -1,7 +1,9 @@
 library;
 
 export 'package:ftp_server/tls_config.dart';
+export 'package:ftp_server/self_signed_certificate.dart';
 
+import 'dart:async';
 import 'dart:io';
 import 'package:ftp_server/ftp_session.dart';
 import 'package:ftp_server/server_type.dart';
@@ -53,6 +55,10 @@ class FtpServer {
   /// The built SecurityContext, created from tlsConfig when securityMode != none.
   final SecurityContext? _securityContext;
 
+  /// Whether clients must present a certificate trusted by the TLS
+  /// configuration (mutual TLS), from [TlsConfig.requireClientCert].
+  final bool _requireClientCert;
+
   /// Active sessions. Sessions are automatically removed when they disconnect.
   final List<FtpSession> _sessionList = [];
 
@@ -82,7 +88,9 @@ class FtpServer {
             : requireEncryptedData,
         _securityContext = securityMode != FtpSecurityMode.none
             ? tlsConfig?.buildContext()
-            : null {
+            : null,
+        _requireClientCert = securityMode != FtpSecurityMode.none &&
+            (tlsConfig?.requireClientCert ?? false) {
     if (securityMode != FtpSecurityMode.none && tlsConfig == null) {
       throw ArgumentError(
         'tlsConfig is required when securityMode is not none',
@@ -108,6 +116,7 @@ class FtpServer {
       securityContext: _securityContext,
       securityMode: securityMode,
       requireEncryptedData: requireEncryptedData,
+      requireClientCert: _requireClientCert,
       tlsActive: implicitMode,
       onDisconnect: () {
         _sessionList.remove(session);
@@ -118,51 +127,53 @@ class FtpServer {
   }
 
   Future<void> start() async {
-    if (securityMode == FtpSecurityMode.implicit) {
-      _secureServer = await SecureServerSocket.bind(
-        InternetAddress.anyIPv4,
-        port,
-        _securityContext!,
-      );
-      logger.generalLog('FTPS Server (implicit) is running on port $port');
-      await for (var socket in _secureServer!) {
-        logger.generalLog(
-            'New client connected from ${socket.remoteAddress.address}:${socket.remotePort}');
-        _createSession(socket);
-      }
-    } else {
-      _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
-      logger.generalLog('FTP Server is running on port $port');
-      await for (var socket in _server!) {
-        logger.generalLog(
-            'New client connected from ${socket.remoteAddress.address}:${socket.remotePort}');
-        _createSession(socket);
-      }
-    }
+    await _bindAndListen();
+    await _listenerDone?.future;
   }
 
   Future<void> startInBackground() async {
+    await _bindAndListen();
+  }
+
+  /// Completes when the listening socket closes (after [stop]).
+  Completer<void>? _listenerDone;
+
+  /// Binds the listening socket and starts accepting clients.
+  Future<void> _bindAndListen() async {
+    final Stream<Socket> connections;
     if (securityMode == FtpSecurityMode.implicit) {
       _secureServer = await SecureServerSocket.bind(
         InternetAddress.anyIPv4,
         port,
         _securityContext!,
+        requestClientCertificate: _requireClientCert,
+        requireClientCertificate: _requireClientCert,
       );
       logger.generalLog('FTPS Server (implicit) is running on port $port');
-      _secureServer!.listen((socket) {
-        logger.generalLog(
-            'New client connected from ${socket.remoteAddress.address}:${socket.remotePort}');
-        _createSession(socket);
-      });
+      connections = _secureServer!;
     } else {
       _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
       logger.generalLog('FTP Server is running on port $port');
-      _server!.listen((socket) {
+      connections = _server!;
+    }
+    final done = Completer<void>();
+    _listenerDone = done;
+    connections.listen(
+      (socket) {
         logger.generalLog(
             'New client connected from ${socket.remoteAddress.address}:${socket.remotePort}');
         _createSession(socket);
-      });
-    }
+      },
+      // On the implicit FTPS port, a client that fails the TLS handshake
+      // (no or untrusted client certificate, plain text, ...) arrives as an
+      // error event. Log it and keep accepting other clients.
+      onError: (Object error) {
+        logger.generalLog('Rejected incoming connection: $error');
+      },
+      onDone: () {
+        if (!done.isCompleted) done.complete();
+      },
+    );
   }
 
   Future<void> stop() async {
