@@ -166,7 +166,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "2.3.3"
+    version: "2.4.0"
   http:
     dependency: transitive
     description:
@@ -387,10 +387,10 @@ packages:
     dependency: transitive
     description:
       name: permission_handler_windows
-      sha256: "1a790728016f79a41216d88672dbc5df30e686e811ad4e698bfc51f76ad91f1e"
+      sha256: "210031f00c32d61038fb4175d82dd874a426bfbae2c2af774bd4e5abb5cac755"
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.1"
+    version: "0.2.4"
   petitparser:
     dependency: transitive
     description:
