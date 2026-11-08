@@ -91,11 +91,20 @@ void main() {
 
   /// Returns everything the ftp client wrote to [logFilePath].
   ///
-  /// Every caller sends `quit` first, so wait for the client process to exit
-  /// (all of its output has then been produced) instead of guessing with a
-  /// fixed delay, which was too short on loaded CI runners. Falls back after
-  /// 10 seconds if the client doesn't exit.
+  /// Every caller sends `quit` first, so on Linux/macOS wait for the client
+  /// process to exit (all of its output has then been produced) instead of
+  /// guessing with a fixed delay, which was too short on loaded CI runners.
+  /// Falls back after 10 seconds if the client doesn't exit.
+  ///
+  /// On Windows, ftp.exe started this way doesn't exit after `quit` (every
+  /// wait hit the 10 s fallback, adding ~5 minutes to CI), and the Windows
+  /// branches of these tests re-run their commands with [execFTPCmdOnWin]
+  /// and check that output instead, so keep the short fixed delay there.
   Future<String> readAllOutput(String logFilePath, {Process? client}) async {
+    if (Platform.isWindows) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      return File(logFilePath).readAsStringSync();
+    }
     await (client ?? ftpClient)
         .exitCode
         .timeout(const Duration(seconds: 10), onTimeout: () => -1);
