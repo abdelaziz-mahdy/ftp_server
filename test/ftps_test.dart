@@ -718,6 +718,209 @@ void main() {
     });
   });
 
+  // ── RFC 4217 data-channel ordering ──────────────────────────────────
+  //
+  // RFC 4217 §12.6 / §12.7: the server sends 150 once the data connection
+  // is made, and only then is TLS negotiated on it. Clients such as Python
+  // ftplib wait for the 150 before starting the handshake, so the server
+  // must not wait for a finished handshake before replying.
+  //
+  // RFC 4217 §7: the FTP client is always the TLS client, no matter which
+  // side calls connect() — so in active mode (PORT) the server connects
+  // but acts as the TLS server.
+
+  group('RFC 4217 data-channel ordering', () {
+    late FtpServer server;
+    const int port = 2268;
+
+    setUpAll(() async {
+      server = FtpServer(
+        port,
+        username: 'testuser',
+        password: 'testpass',
+        fileOperations: VirtualFileOperations([tempDir.path],
+            startingDirectory: p.basename(tempDir.path)),
+        serverType: ServerType.readAndWrite,
+        securityMode: FtpSecurityMode.explicit,
+        tlsConfig: TlsConfig(certFilePath: certPath, keyFilePath: keyPath),
+        logFunction: (msg) {},
+      );
+      await server.startInBackground();
+    });
+
+    tearDownAll(() async {
+      await server.stop();
+    });
+
+    Future<FtpTlsTestClient> connectProtP() async {
+      final c = await FtpTlsTestClient.connect(port);
+      expect(await c.command('AUTH TLS'), startsWith('234'));
+      await c.upgradeTls();
+      await c.login();
+      expect(await c.command('PBSZ 0'), startsWith('200'));
+      expect(await c.command('PROT P'), startsWith('200'));
+      return c;
+    }
+
+    Future<int> pasvPort(FtpTlsTestClient c) async {
+      final resp = await c.command('PASV');
+      expect(resp, startsWith('227'));
+      final m = RegExp(r'\(\d+,\d+,\d+,\d+,(\d+),(\d+)\)').firstMatch(resp)!;
+      return int.parse(m.group(1)!) * 256 + int.parse(m.group(2)!);
+    }
+
+    Future<int> epsvPort(FtpTlsTestClient c) async {
+      final resp = await c.command('EPSV');
+      expect(resp, startsWith('229'));
+      return int.parse(RegExp(r'\|\|\|(\d+)\|').firstMatch(resp)!.group(1)!);
+    }
+
+    Future<SecureSocket> secureAsClient(Socket raw) =>
+        SecureSocket.secure(raw, onBadCertificate: (_) => true)
+            .timeout(const Duration(seconds: 5));
+
+    Future<String> readAll(Socket s) async {
+      final bytes = await s
+          .fold<List<int>>(<int>[], (acc, chunk) => acc..addAll(chunk)).timeout(
+              const Duration(seconds: 5));
+      return utf8.decode(bytes);
+    }
+
+    test('PASV LIST: 150 is sent before the data TLS handshake', () async {
+      final c = await connectProtP();
+      final dataPort = await pasvPort(c);
+
+      final raw = await Socket.connect('127.0.0.1', dataPort);
+      c.send('LIST');
+      // Client waits for 150 before negotiating TLS (ftplib behaviour).
+      expect(await c.readResponse(), startsWith('150'));
+      final data = await secureAsClient(raw);
+      expect(await readAll(data), contains(p.basename(tempDir.path)));
+      expect(await c.readResponse(), startsWith('226'));
+
+      await c.close();
+    });
+
+    test('EPSV RETR: 150 is sent before the data TLS handshake', () async {
+      final c = await connectProtP();
+      expect(await c.command('TYPE I'), startsWith('200'));
+      final dataPort = await epsvPort(c);
+
+      final raw = await Socket.connect('127.0.0.1', dataPort);
+      c.send('RETR hello.txt');
+      expect(await c.readResponse(), startsWith('150'));
+      final data = await secureAsClient(raw);
+      expect(await readAll(data), 'Hello!');
+      expect(await c.readResponse(), startsWith('226'));
+
+      await c.close();
+    });
+
+    test('PASV STOR: 150 is sent before the data TLS handshake', () async {
+      final c = await connectProtP();
+      expect(await c.command('TYPE I'), startsWith('200'));
+      final dataPort = await pasvPort(c);
+
+      final raw = await Socket.connect('127.0.0.1', dataPort);
+      c.send('STOR rfc4217_upload.txt');
+      expect(await c.readResponse(), startsWith('150'));
+      final data = await secureAsClient(raw);
+      data.add(utf8.encode('uploaded over TLS'));
+      await data.flush();
+      await data.close();
+      expect(await c.readResponse(), startsWith('226'));
+      expect(
+        File(p.join(tempDir.path, 'rfc4217_upload.txt')).readAsStringSync(),
+        'uploaded over TLS',
+      );
+
+      await c.close();
+    });
+
+    test('PORT LIST: server connects but is the TLS server (waits for 150)',
+        () async {
+      final c = await connectProtP();
+      final listener = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final accepted = listener.first;
+      final lp = listener.port;
+
+      expect(await c.command('PORT 127,0,0,1,${lp >> 8},${lp & 0xFF}'),
+          startsWith('200'));
+      c.send('LIST');
+      final raw = await accepted.timeout(const Duration(seconds: 5));
+      expect(await c.readResponse(), startsWith('150'));
+      // The FTP client is the TLS client even though it accepted the TCP
+      // connection (RFC 4217 §7).
+      final data = await secureAsClient(raw);
+      expect(await readAll(data), contains(p.basename(tempDir.path)));
+      expect(await c.readResponse(), startsWith('226'));
+
+      await c.close();
+    });
+
+    test('PORT LIST: client starting TLS right after accept also works',
+        () async {
+      final c = await connectProtP();
+      final listener = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final accepted = listener.first;
+      final lp = listener.port;
+
+      expect(await c.command('PORT 127,0,0,1,${lp >> 8},${lp & 0xFF}'),
+          startsWith('200'));
+      final raw = await accepted.timeout(const Duration(seconds: 5));
+      // Start the handshake before the transfer command (curl behaviour).
+      final secureFuture = secureAsClient(raw);
+      c.send('LIST');
+      final data = await secureFuture;
+      expect(await readAll(data), contains(p.basename(tempDir.path)));
+      expect(await c.readResponse(), startsWith('150'));
+      expect(await c.readResponse(), startsWith('226'));
+
+      await c.close();
+    });
+
+    test('PROT is applied at the transfer command, not at PASV', () async {
+      // RFC 4217 §9: the server checks the protection level on the command
+      // that starts the transfer (not on PORT/PASV).
+      final c = await FtpTlsTestClient.connect(port);
+      expect(await c.command('AUTH TLS'), startsWith('234'));
+      await c.upgradeTls();
+      await c.login();
+      expect(await c.command('PBSZ 0'), startsWith('200'));
+      expect(await c.command('PROT C'), startsWith('200'));
+      final dataPort = await pasvPort(c);
+      expect(await c.command('PROT P'), startsWith('200'));
+
+      final raw = await Socket.connect('127.0.0.1', dataPort);
+      c.send('LIST');
+      expect(await c.readResponse(), startsWith('150'));
+      final data = await secureAsClient(raw);
+      expect(await readAll(data), contains(p.basename(tempDir.path)));
+      expect(await c.readResponse(), startsWith('226'));
+
+      await c.close();
+    });
+
+    test('Failed data TLS handshake after 150 replies 522, session survives',
+        () async {
+      final c = await connectProtP();
+      final dataPort = await pasvPort(c);
+
+      final raw = await Socket.connect('127.0.0.1', dataPort);
+      c.send('LIST');
+      expect(await c.readResponse(), startsWith('150'));
+      // Not a TLS ClientHello: the server must reject the negotiation.
+      raw.write('this is not TLS\r\n');
+      await raw.flush();
+      expect(await c.readResponse(timeout: const Duration(seconds: 10)),
+          startsWith('522'));
+      raw.destroy();
+
+      expect(await c.command('NOOP'), startsWith('200'));
+      await c.close();
+    });
+  });
+
   // ── TLS error handling ──────────────────────────────────────────────
 
   group('TLS error handling', () {
