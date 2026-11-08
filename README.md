@@ -52,6 +52,7 @@ That's it — an anonymous FTP server sharing a directory. Add `username`/`passw
 ## 2. Features
 
 - **FTP and FTPS**: Plain FTP, explicit FTPS (AUTH TLS), and implicit FTPS
+- **Zero-Config TLS**: Generate a self-signed certificate in Dart, no `openssl` or certificate files needed
 - **Passive and Active Modes**: Both passive (PASV/EPSV) and active (PORT) data connections
 - **File Operations**: Retrieve, store, delete, rename, and list files
 - **Directory Operations**: Change, make, remove, and list directories
@@ -271,6 +272,12 @@ TlsConfig(
   keyFilePath: 'key.pem',
 )
 
+// PEM strings (no files), e.g. loaded from your app's storage
+TlsConfig.fromPem(
+  certificatePem: certPem,
+  privateKeyPem: keyPem,
+)
+
 // Advanced: pre-built SecurityContext
 TlsConfig(
   securityContext: myCustomContext,
@@ -284,6 +291,36 @@ TlsConfig(
   trustedCertificatesPath: 'ca.pem',
 )
 ```
+
+#### Self-Signed Certificate (No Setup)
+
+No certificate files or `openssl` needed — generate one in Dart (works on Android and iOS too):
+
+```dart
+final cert = SelfSignedCertificate.generate(); // ECDSA P-256, valid 10 years
+
+final server = FtpServer(
+  2121,
+  fileOperations: fileOps,
+  serverType: ServerType.readAndWrite,
+  securityMode: FtpSecurityMode.explicit,
+  tlsConfig: cert.toTlsConfig(),
+);
+
+// Show this so users can compare it with what their FTP client displays.
+print('SHA-256 fingerprint: ${cert.sha256Fingerprint}');
+```
+
+Save `cert.certificatePem` and `cert.privateKeyPem` wherever your app keeps its data and reuse them on the next start, so clients that trusted the certificate once don't warn again:
+
+```dart
+final cert = SelfSignedCertificate(
+  certificatePem: savedCertPem,
+  privateKeyPem: savedKeyPem,
+);
+```
+
+`generate` also takes `commonName`, `dnsNames` (subject alternative names, default `['localhost']`) and `validity`.
 
 #### Enforcing Encrypted Data Channels
 
@@ -306,7 +343,7 @@ For implicit mode, `requireEncryptedData` is automatically set to `true`.
 
 - **CCC** (Clear Command Channel): Returns 534. Dart's `SecureSocket` cannot be downgraded to plain TCP.
 - **REIN under TLS**: Returns 502. Same Dart limitation — TLS cannot be unwrapped.
-- **FileZilla/GnuTLS**: May warn "TLS connection was non-properly terminated" on data channels. This is a client-side GnuTLS issue; data transfers complete successfully.
+- **No TLS `close_notify` on data connections**: Dart's `SecureSocket` never sends a TLS `close_notify` before closing ([dart-lang/sdk#64816](https://github.com/dart-lang/sdk/issues/64816)), so clients that require one treat a finished directory listing as truncated. FileZilla fails listings with "The TLS connection was non-properly terminated", and curl built with OpenSSL 3 reports "unexpected eof while reading". A fix for the Dart SDK is in review.
 
 ---
 
